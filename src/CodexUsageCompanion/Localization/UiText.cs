@@ -326,6 +326,89 @@ public sealed record UiText(
         _ => "Unpin window from top"
     };
 
+    public string ShortcutsAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "鍵盤快捷鍵",
+        UiLanguage.SimplifiedChinese => "键盘快捷键",
+        _ => "Keyboard shortcuts"
+    };
+
+    public string ShortcutsTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "鍵盤快捷鍵 - Claude Codex Usage Companion",
+        UiLanguage.SimplifiedChinese => "键盘快捷键 - Claude Codex Usage Companion",
+        _ => "Keyboard shortcuts - Claude Codex Usage Companion"
+    };
+
+    public string MainWindowShortcutsGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "主視窗",
+        UiLanguage.SimplifiedChinese => "主窗口",
+        _ => "Main window"
+    };
+
+    public string SettingsWindowShortcutsGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "設定視窗",
+        UiLanguage.SimplifiedChinese => "设置窗口",
+        _ => "Settings window"
+    };
+
+    public string ShowShortcutsShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示鍵盤快捷鍵",
+        UiLanguage.SimplifiedChinese => "显示键盘快捷键",
+        _ => "Show keyboard shortcuts"
+    };
+
+    public string OpenSettingsShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "開啟設定",
+        UiLanguage.SimplifiedChinese => "打开设置",
+        _ => "Open Settings"
+    };
+
+    public string CloseWindowShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "關閉視窗",
+        UiLanguage.SimplifiedChinese => "关闭窗口",
+        _ => "Close the window"
+    };
+
+    public string SaveSettingsShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "儲存設定",
+        UiLanguage.SimplifiedChinese => "保存设置",
+        _ => "Save settings"
+    };
+
+    public string CloseSettingsShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "關閉設定",
+        UiLanguage.SimplifiedChinese => "关闭设置",
+        _ => "Close Settings"
+    };
+
+    public IReadOnlyList<ShortcutGroup> ShortcutGroups => new[]
+    {
+        new ShortcutGroup(
+            MainWindowShortcutsGroup,
+            new[]
+            {
+                new ShortcutHint("F1", ShowShortcutsShortcut),
+                new ShortcutHint("S", OpenSettingsShortcut),
+                new ShortcutHint("Ctrl+R", RefreshAction),
+                new ShortcutHint("Esc", CloseWindowShortcut)
+            }),
+        new ShortcutGroup(
+            SettingsWindowShortcutsGroup,
+            new[]
+            {
+                new ShortcutHint("Ctrl+S", SaveSettingsShortcut),
+                new ShortcutHint("Esc", CloseSettingsShortcut)
+            })
+    };
+
     public string UnsavedChangesTitle => Language switch
     {
         UiLanguage.TraditionalChinese => "尚未儲存變更",

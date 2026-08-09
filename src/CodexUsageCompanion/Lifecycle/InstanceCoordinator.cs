@@ -144,8 +144,10 @@ public sealed class InstanceCoordinator
     }
 }
 
-public sealed class ResidentLease : IDisposable
+public sealed class ResidentLease : IDisposable, IAsyncDisposable
 {
+    public static readonly TimeSpan DefaultAcceptDrainTimeout = TimeSpan.FromSeconds(2);
+
     private readonly Socket _listener;
     private readonly FileStream _ownershipLock;
     private readonly CancellationTokenSource _cancellation = new();
@@ -162,33 +164,67 @@ public sealed class ResidentLease : IDisposable
 
     public void Start()
     {
-        _acceptTask ??= AcceptLoopAsync(_cancellation.Token);
+        // Start() runs on the UI thread. Detaching from its synchronization
+        // context keeps every accept continuation on the thread pool, so
+        // disposal never has to wait for the dispatcher to run them.
+        _acceptTask ??= Task.Run(() => AcceptLoopAsync(_cancellation.Token));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        var acceptTask = BeginDispose();
+        if (acceptTask is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await acceptTask.WaitAsync(DefaultAcceptDrainTimeout).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is OperationCanceledException or SocketException or TimeoutException)
+        {
+        }
+
+        CompleteDispose();
     }
 
     public void Dispose()
     {
-        if (_disposed)
+        var acceptTask = BeginDispose();
+        if (acceptTask is null)
         {
             return;
+        }
+
+        try
+        {
+            // Bounded so a stalled accept loop can never wedge the caller.
+            acceptTask.Wait(DefaultAcceptDrainTimeout);
+        }
+        catch (AggregateException)
+        {
+        }
+
+        CompleteDispose();
+    }
+
+    private Task? BeginDispose()
+    {
+        if (_disposed)
+        {
+            return null;
         }
 
         _disposed = true;
         _cancellation.Cancel();
         _listener.Dispose();
-        if (_acceptTask is not null)
-        {
-            try
-            {
-                _acceptTask.GetAwaiter().GetResult();
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            catch (SocketException)
-            {
-            }
-        }
+        return _acceptTask ?? Task.CompletedTask;
+    }
 
+    private void CompleteDispose()
+    {
         _cancellation.Dispose();
         _ownershipLock.Dispose();
     }
@@ -200,13 +236,17 @@ public sealed class ResidentLease : IDisposable
             Socket connection;
             try
             {
-                connection = await _listener.AcceptAsync(cancellationToken);
+                connection = await _listener.AcceptAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+            catch (ObjectDisposedException)
             {
                 break;
             }
             catch (SocketException) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 break;
             }
@@ -226,7 +266,9 @@ public sealed class ResidentLease : IDisposable
             try
             {
                 var buffer = new byte[64];
-                var read = await connection.ReceiveAsync(buffer, SocketFlags.None, timeout.Token);
+                var read = await connection
+                    .ReceiveAsync(buffer, SocketFlags.None, timeout.Token)
+                    .ConfigureAwait(false);
                 if (read == 0)
                 {
                     return;

@@ -23,6 +23,7 @@ public sealed class UsageOverlayWindow : Window
     private const double FiveHourCardHeight = 78;
     private const double WeeklyCardHeight = 96;
     private const double IconSize = 14;
+    private const double HeaderGroupSpacing = 14;
     private const string CodexAccentColor = "#10A37F";
     private const string ClaudeIconBackground = "#D77655";
     private const string ClaudeIconForeground = "#FCF2EE";
@@ -40,6 +41,7 @@ public sealed class UsageOverlayWindow : Window
     private readonly TextBlock _status;
     private Button _minimizeButton = null!;
     private ToggleButton _pinButton = null!;
+    private Button _shortcutsButton = null!;
     private Button _settingsButton = null!;
     private Button _refreshButton = null!;
     private Button _closeButton = null!;
@@ -132,6 +134,7 @@ public sealed class UsageOverlayWindow : Window
 
     public event EventHandler? RefreshRequested;
     public event EventHandler? SettingsRequested;
+    public event EventHandler? ShortcutsRequested;
     public event Action<bool>? AlwaysOnTopRequested;
 
     private void HandleKeyDown(object? sender, KeyEventArgs eventArgs)
@@ -140,6 +143,13 @@ public sealed class UsageOverlayWindow : Window
         {
             eventArgs.Handled = true;
             Close();
+            return;
+        }
+
+        if (eventArgs.Key == Key.F1)
+        {
+            eventArgs.Handled = true;
+            ShortcutsRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -224,6 +234,7 @@ public sealed class UsageOverlayWindow : Window
         ApplyPosition(settings.Position);
         ToolTip.SetTip(_minimizeButton, text.MinimizeAction);
         UpdatePinButton();
+        ToolTip.SetTip(_shortcutsButton, text.ShortcutsAction);
         ToolTip.SetTip(_settingsButton, text.SettingsAction);
         ToolTip.SetTip(_refreshButton, text.RefreshAction);
         ToolTip.SetTip(_closeButton, CloseTooltip());
@@ -311,7 +322,7 @@ public sealed class UsageOverlayWindow : Window
     {
         var grid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto,Auto,Auto"),
             Height = 26
         };
         _headerTitle = new TextBlock
@@ -326,9 +337,9 @@ public sealed class UsageOverlayWindow : Window
         };
         _headerTitle.PointerPressed += HandleHeaderPointerPressed;
 
-        _minimizeButton = HeaderButton("−", _text.MinimizeAction);
-        _minimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
-        Grid.SetColumn(_minimizeButton, 1);
+        _shortcutsButton = HeaderButton("?", _text.ShortcutsAction);
+        _shortcutsButton.Click += (_, _) => ShortcutsRequested?.Invoke(this, EventArgs.Empty);
+        Grid.SetColumn(_shortcutsButton, 1);
 
         _pinButton = HeaderToggleButton(CreatePinIcon(), string.Empty);
         _pinButton.IsChecked = Topmost;
@@ -345,15 +356,22 @@ public sealed class UsageOverlayWindow : Window
         _refreshButton.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
         Grid.SetColumn(_refreshButton, 4);
 
+        _minimizeButton = HeaderButton("−", _text.MinimizeAction);
+        _minimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
+        // Sets the window controls apart from the panel actions before them.
+        _minimizeButton.Margin = new Thickness(HeaderGroupSpacing, 0, 0, 0);
+        Grid.SetColumn(_minimizeButton, 5);
+
         _closeButton = HeaderButton("×", CloseTooltip());
         _closeButton.Click += (_, _) => Close();
-        Grid.SetColumn(_closeButton, 5);
+        Grid.SetColumn(_closeButton, 6);
 
         grid.Children.Add(_headerTitle);
-        grid.Children.Add(_minimizeButton);
+        grid.Children.Add(_shortcutsButton);
         grid.Children.Add(_pinButton);
         grid.Children.Add(_settingsButton);
         grid.Children.Add(_refreshButton);
+        grid.Children.Add(_minimizeButton);
         grid.Children.Add(_closeButton);
         return grid;
     }

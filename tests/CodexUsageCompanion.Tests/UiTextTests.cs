@@ -534,4 +534,28 @@ public sealed class UiTextTests
 
         Assert.Equal(expected, text.FormatUpdateInterval(seconds));
     }
+
+    [Theory]
+    [InlineData(UiLanguage.English)]
+    [InlineData(UiLanguage.TraditionalChinese)]
+    [InlineData(UiLanguage.SimplifiedChinese)]
+    public void ShortcutGroupsCoverEveryWindowShortcut(UiLanguage language)
+    {
+        var text = UiText.For(language);
+
+        var groups = text.ShortcutGroups;
+
+        Assert.Equal(
+            new[] { text.MainWindowShortcutsGroup, text.SettingsWindowShortcutsGroup },
+            groups.Select(group => group.Title));
+        Assert.Equal(
+            new[] { "F1", "S", "Ctrl+R", "Esc" },
+            groups[0].Shortcuts.Select(shortcut => shortcut.Keys));
+        Assert.Equal(
+            new[] { "Ctrl+S", "Esc" },
+            groups[1].Shortcuts.Select(shortcut => shortcut.Keys));
+        Assert.All(
+            groups.SelectMany(group => group.Shortcuts),
+            shortcut => Assert.False(string.IsNullOrWhiteSpace(shortcut.Description)));
+    }
 }

@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-08-09
+
+### Added
+
+- Keyboard shortcuts list: a **?** button in the panel header and a **Keyboard shortcuts** item in the system-tray menu open a localized list of every shortcut, grouped by window. `F1` opens the same list, and `Esc`, `F1`, or **OK** closes it.
+- A shutdown watchdog that exits the process if the shutdown sequence has not finished within 10 seconds, so a stalled step can no longer leave a resident process holding the single-instance lock.
+
+### Changed
+
+- Reordered the panel header controls to keyboard shortcuts, pin (always-on-top), settings, refresh, minimize, and close, with wider spacing separating the two window controls from the panel actions.
+- Refreshed the README screenshots for all three languages.
+
+### Fixed
+
+- **Quit** (and closing the panel with the system tray disabled) hid the window but left the process running. Disposing the single-instance lease blocked the dispatcher thread waiting for its own accept loop, whose continuations were queued back to that same thread; the wedged dispatcher then prevented the shutdown sequence from ever calling `Shutdown()`. The accept loop now runs off the dispatcher and both disposal paths are bounded.
+
 ## [0.1.0] - 2026-08-01
 
 ### Added
@@ -39,4 +55,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - No telemetry. This app never stores or writes authentication tokens of its own; when Claude usage is enabled, it reads the OAuth access token Claude Code already stores locally and sends it only to Anthropic's official API over HTTPS.
 
+[0.1.1]: https://github.com/ychsieh95/claude-codex-usage-companion/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ychsieh95/claude-codex-usage-companion/releases/tag/v0.1.0

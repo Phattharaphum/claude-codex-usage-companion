@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/lib/log-block.sh"
 
-VERSION="v0.1.0"
+VERSION="v0.1.1"
 
 info "Preparing Git release $VERSION."
 

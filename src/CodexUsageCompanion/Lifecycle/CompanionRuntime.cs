@@ -172,7 +172,7 @@ public sealed class CompanionRuntime : IAsyncDisposable
 
         try
         {
-            _lease.Dispose();
+            await _lease.DisposeAsync();
         }
         catch (Exception exception)
         {

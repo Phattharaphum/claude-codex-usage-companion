@@ -81,6 +81,71 @@ public sealed class InstanceCoordinatorTests
         Assert.NotNull(replacement);
     }
 
+    [Fact]
+    public async Task DisposeAsyncCompletesWhenTheStartingContextNeverRunsCallbacks()
+    {
+        var coordinator = new InstanceCoordinator(SocketPath());
+        var lease = coordinator.TryAcquireResident();
+
+        Assert.NotNull(lease);
+        // The GUI starts the lease on the dispatcher thread and disposes it from
+        // the same thread during shutdown. The accept loop must never need that
+        // thread again, or disposal waits on a callback that can never run.
+        var disposal = RunWithDroppedCallbacks(() =>
+        {
+            lease.Start();
+            return lease.DisposeAsync().AsTask();
+        });
+
+        await disposal.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task DisposeCompletesWhenTheStartingContextNeverRunsCallbacks()
+    {
+        var coordinator = new InstanceCoordinator(SocketPath());
+        var lease = coordinator.TryAcquireResident();
+
+        Assert.NotNull(lease);
+        var disposal = Task.Run(() => RunWithDroppedCallbacks(() =>
+        {
+            lease.Start();
+            lease.Dispose();
+            return Task.CompletedTask;
+        }));
+
+        var completed = await Task.WhenAny(disposal, Task.Delay(TimeSpan.FromSeconds(5)));
+        Assert.Same(disposal, completed);
+    }
+
+    private static Task RunWithDroppedCallbacks(Func<Task> action)
+    {
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DroppingSynchronizationContext());
+        try
+        {
+            return action();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
     private static string SocketPath() =>
         Path.Combine(Path.GetTempPath(), $"claude-codex-usage-test-{Guid.NewGuid():N}.sock");
+
+    // Stands in for a dispatcher that is blocked and can no longer run queued
+    // continuations.
+    private sealed class DroppingSynchronizationContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+        }
+
+        public override void Send(SendOrPostCallback callback, object? state)
+        {
+            throw new InvalidOperationException("The dispatcher is blocked.");
+        }
+    }
 }

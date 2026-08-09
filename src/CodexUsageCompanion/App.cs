@@ -21,6 +21,7 @@ public sealed class App : Application
     private CompanionRuntime? _runtime;
     private UsageOverlayWindow? _window;
     private SettingsWindow? _settingsWindow;
+    private ShortcutsWindow? _shortcutsWindow;
     private TrayIcon? _trayIcon;
     private DispatcherTimer? _trayTooltipBridgeTimer;
     private readonly LinuxTrayTooltipBridge _trayTooltipBridge = new();
@@ -64,6 +65,7 @@ public sealed class App : Application
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             _window.SettingsRequested += async (_, _) => await ShowSettingsAsync();
+            _window.ShortcutsRequested += (_, _) => ShowShortcuts();
             _window.AlwaysOnTopRequested += HandleAlwaysOnTopRequested;
             _window.Closing += async (_, eventArgs) =>
             {
@@ -223,6 +225,13 @@ public sealed class App : Application
             }
         };
 
+        var shortcuts = new NativeMenuItem(_text.ShortcutsAction);
+        shortcuts.Click += (_, _) =>
+        {
+            ShowWindow();
+            ShowShortcuts();
+        };
+
         var quit = new NativeMenuItem(_text.TrayQuitAction);
         quit.Click += async (_, _) => await ShutdownAsync();
 
@@ -234,6 +243,7 @@ public sealed class App : Application
         menu.Items.Add(startOnBoot);
         menu.Items.Add(new NativeMenuItemSeparator());
         menu.Items.Add(settings);
+        menu.Items.Add(shortcuts);
         menu.Items.Add(quit);
         return menu;
     }
@@ -356,6 +366,25 @@ public sealed class App : Application
         _window.RestoreAndActivate();
     }
 
+    private void ShowShortcuts()
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        if (_shortcutsWindow is not null)
+        {
+            _shortcutsWindow.Activate();
+            return;
+        }
+
+        var dialog = new ShortcutsWindow(_settings, _text);
+        dialog.Closed += (_, _) => _shortcutsWindow = null;
+        _shortcutsWindow = dialog;
+        dialog.Show(_window);
+    }
+
     private async Task ShowSettingsAsync()
     {
         if (_window is null)
@@ -434,6 +463,8 @@ public sealed class App : Application
         ApplyTheme(_settings.Theme);
         _text = ResolveText(_settings);
         _window!.ApplySettings(_settings, _text);
+        // The shortcuts window renders localized text captured when it opened.
+        _shortcutsWindow?.Close();
         _runtime?.UpdateRefreshInterval(_settings.RefreshIntervalSeconds);
         UpdateTrayIcon();
     }
@@ -593,12 +624,14 @@ public sealed class App : Application
 
     private async Task ShutdownCoreAsync(IClassicDesktopStyleApplicationLifetime desktop)
     {
+        using var watchdog = new ShutdownWatchdog(ForceExitAfterStalledShutdown);
         try
         {
             await ShutdownSequence.RunAsync(
                 () =>
                 {
                     DisposeTrayIcon();
+                    _shortcutsWindow?.Hide();
                     _settingsWindow?.Hide();
                     _window?.Hide();
                 },
@@ -627,6 +660,14 @@ public sealed class App : Application
         {
             CompanionLog.Shared.Write("shutdown", exception);
         }
+    }
+
+    private static void ForceExitAfterStalledShutdown()
+    {
+        CompanionLog.Shared.Write(
+            "shutdown",
+            "Shutdown did not complete in time; exiting the process.");
+        Environment.Exit(0);
     }
 
     private static UiText ResolveText(CompanionSettings settings)

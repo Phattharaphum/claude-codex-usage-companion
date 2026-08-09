@@ -54,7 +54,9 @@ public sealed class CodexAppServerSessionTests
         Assert.Equal(58, state.Weekly?.RemainingPercent);
         var output = writer.ToString();
         Assert.Contains("\"method\":\"initialize\"", output);
-        Assert.Contains("\"version\":\"0.1.0\"", output);
+        // Tracks the assembly version so a release bump needs no test edit.
+        var clientVersion = typeof(CodexAppServerSession).Assembly.GetName().Version!.ToString(3);
+        Assert.Contains($"\"version\":\"{clientVersion}\"", output);
         Assert.Contains("\"method\":\"initialized\"", output);
         Assert.Contains("\"method\":\"account/rateLimits/read\"", output);
     }
