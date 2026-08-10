@@ -207,6 +207,41 @@ public sealed record UiText(
         _ => "Enable Claude usage"
     };
 
+    public string DisplayedLimitsOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示的用量限制",
+        UiLanguage.SimplifiedChinese => "显示的用量限制",
+        _ => "Displayed limits"
+    };
+
+    public string ShowClaudeSessionOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "Claude 目前工作階段",
+        UiLanguage.SimplifiedChinese => "Claude 当前会话",
+        _ => "Claude current session"
+    };
+
+    public string ShowClaudeWeeklyOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "Claude 本週用量（全部）",
+        UiLanguage.SimplifiedChinese => "Claude 本周用量（全部）",
+        _ => "Claude current week (All)"
+    };
+
+    public string ShowCodexFiveHourOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "Codex 5 小時用量限制",
+        UiLanguage.SimplifiedChinese => "Codex 5 小时用量限制",
+        _ => "Codex 5-hour limit"
+    };
+
+    public string ShowCodexWeeklyOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "Codex 每週用量限制",
+        UiLanguage.SimplifiedChinese => "Codex 每周用量限制",
+        _ => "Codex weekly limit"
+    };
+
     public string MinimizeOnStartOption => Language switch
     {
         UiLanguage.TraditionalChinese => "最小化視窗",

@@ -1,8 +1,16 @@
+using System.Text.Json.Serialization;
+
 namespace CodexUsageCompanion.Configuration;
 
 public sealed record CompanionSettings
 {
-    public bool ShowFiveHourLimit { get; init; }
+    public bool ShowClaudeSession { get; init; } = true;
+    public bool ShowClaudeWeekly { get; init; } = true;
+    public bool ShowCodexFiveHour { get; init; }
+    public bool ShowCodexWeekly { get; init; } = true;
+    [JsonPropertyName("showFiveHourLimit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyShowFiveHourLimit { get; init; }
     public bool EnableClaudeUsage { get; init; } = true;
     public bool EnableCodexUsage { get; init; } = true;
     public bool EnableSystemTray { get; init; }

@@ -162,6 +162,8 @@ public static class CompanionSettingsStore
         var usageLogFormat = UsageLogOptions.NormalizeFormat(settings.UsageLogFormat);
         return settings with
         {
+            ShowCodexFiveHour = settings.LegacyShowFiveHourLimit ?? settings.ShowCodexFiveHour,
+            LegacyShowFiveHourLimit = null,
             Language = language,
             Theme = UiThemeOptions.Normalize(settings.Theme),
             TrayIconStyle = TrayIconStyleOptions.Normalize(settings.TrayIconStyle),

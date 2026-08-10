@@ -14,7 +14,10 @@ public sealed class CompanionSettingsTests
         {
             var settings = CompanionSettingsStore.Load(path);
 
-            Assert.False(settings.ShowFiveHourLimit);
+            Assert.False(settings.ShowCodexFiveHour);
+            Assert.True(settings.ShowClaudeSession);
+            Assert.True(settings.ShowClaudeWeekly);
+            Assert.True(settings.ShowCodexWeekly);
             Assert.True(settings.EnableCodexUsage);
             Assert.True(settings.EnableClaudeUsage);
             Assert.False(settings.EnableSystemTray);
@@ -83,7 +86,8 @@ public sealed class CompanionSettingsTests
         {
             var settings = CompanionSettingsStore.Load(path);
 
-            Assert.True(settings.ShowFiveHourLimit);
+            Assert.True(settings.ShowCodexFiveHour);
+            Assert.Null(settings.LegacyShowFiveHourLimit);
             Assert.False(settings.EnableSystemTray);
             Assert.Equal(TrayIconStyleOptions.Original, settings.TrayIconStyle);
             Assert.True(settings.ShowTaskbarIcon);
@@ -121,15 +125,30 @@ public sealed class CompanionSettingsTests
                 new CompanionSettings
                 {
                     EnableCodexUsage = false,
-                    EnableClaudeUsage = false
+                    EnableClaudeUsage = false,
+                    ShowCodexFiveHour = true,
+                    ShowClaudeSession = false,
+                    ShowClaudeWeekly = false,
+                    ShowCodexWeekly = false
                 },
                 path);
             var loaded = CompanionSettingsStore.Load(path);
 
             Assert.False(saved.EnableCodexUsage);
             Assert.False(saved.EnableClaudeUsage);
+            Assert.True(saved.ShowCodexFiveHour);
+            Assert.False(saved.ShowClaudeSession);
+            Assert.False(saved.ShowClaudeWeekly);
+            Assert.False(saved.ShowCodexWeekly);
             Assert.False(loaded.EnableCodexUsage);
             Assert.False(loaded.EnableClaudeUsage);
+            Assert.True(loaded.ShowCodexFiveHour);
+            Assert.False(loaded.ShowClaudeSession);
+            Assert.False(loaded.ShowClaudeWeekly);
+            Assert.False(loaded.ShowCodexWeekly);
+            var json = File.ReadAllText(path);
+            Assert.Contains("\"showCodexFiveHour\": true", json);
+            Assert.DoesNotContain("\"showFiveHourLimit\"", json);
         }
         finally
         {

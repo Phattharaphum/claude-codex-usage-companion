@@ -21,6 +21,12 @@ This Linux port is based on [gkfriend/codex-usage-companion](https://github.com/
 | --- | --- | --- |
 | ![English usage overlay](assets/screenshots/overlay-en.png) | ![Traditional Chinese usage overlay](assets/screenshots/overlay-zh-tw.png) | ![Simplified Chinese usage overlay](assets/screenshots/overlay-zh-cn.png) |
 
+### Plasma 6 widget
+
+| Compact circles | Expanded popup |
+| --- | --- |
+| ![Plasma 6 widget compact circles](assets/screenshots/plasma-widget-circles.png) | ![Plasma 6 widget expanded popup](assets/screenshots/plasma-widget-expanded.png) |
+
 ## Requirements
 
 - Kubuntu 26.04 or another modern x64/ARM64 Linux distribution.
@@ -65,12 +71,10 @@ Claude Code has no official API for this, unlike Codex. The companion reads the 
 
 ## Install the desktop and CLI
 
-Upgrading from an older package: this project has been renamed twice (`codex-usage-companion` → `codex-claude-usage-companion` → `claude-codex-usage-companion`). Run `sudo apt remove codex-usage-companion` and/or `sudo apt remove codex-claude-usage-companion`, whichever is currently installed, before installing the new `.deb`. Each rename used a different package name, so `apt` will not replace an old install automatically, and leaving an old one installed would autostart two resident tray processes. Existing settings migrate automatically on first run of the new package, from whichever older package's settings file is found.
-
 Build or download the `.deb`, then:
 
 ```bash
-sudo apt install ./claude-codex-usage-companion_0.1.1_amd64.deb
+sudo apt install ./claude-codex-usage-companion_0.1.2_amd64.deb
 ```
 
 Launch **Claude Codex Usage Companion** from KDE's application menu, or run:
@@ -86,6 +90,20 @@ The `.deb` creates the KDE/GNOME application-menu entry at `/usr/share/applicati
 Enabling login autostart reveals a **Minimize the window** option (hidden otherwise). When both are enabled, the app launches at login without showing its window — usage still refreshes in the background — and reopening the app (from the application menu, the tray icon if enabled, or by running it again) brings the window back.
 
 Use the **⚙ Settings** button to configure the taskbar icon, system tray, tray icon style, login autostart, language, theme, window position, low-usage alerts, reset notifications, usage logging, and always-on-top behavior. **OK** applies changes and closes the window, **Cancel** discards unapplied changes, and **Apply** saves changes without closing it.
+
+## Plasma 6 widget
+
+The `.deb` also installs the **Claude Codex Usage** Plasma 6 widget. Right-click the Plasma desktop or panel, choose **Add Widgets**, search for `Claude Codex Usage`, and drag it onto the panel or desktop.
+
+The panel indicator shows separate progress values for Claude's current session and week and Codex's five-hour and weekly limits. Its configuration page offers circle and bar views, controls the refresh interval, and selects which limits appear in both the panel and expanded popup; all four limits are enabled by default. The compact layout automatically flows horizontally in a wide widget and vertically in a tall widget. Open it to see local reset times, credits, refresh status, and provider-specific errors. It calls the companion's local `status --json` command, so credentials and network access remain in the companion rather than the widget.
+
+Release builds also include a standalone `.plasmoid` package. Install one without root access with:
+
+```bash
+kpackagetool6 --type Plasma/Applet --install ./claude-codex-usage-companion-0.1.2.plasmoid
+```
+
+For a development checkout, install or update the current source package with `bash scripts/install-plasma-widget.sh`. The companion CLI must remain installed and available on `PATH`.
 
 ## CLI
 
@@ -119,7 +137,7 @@ Set `CODEX_CLI_PATH=/absolute/path/to/codex` if Codex is not on `PATH`. Set `NO_
 
 ## Install as a Codex plugin
 
-The Linux release build creates `CodexUsageCompanionMarketplace-v0.1.1-linux-x64.zip`. Extract it, add the extracted marketplace, then install and enable the plugin:
+The Linux release build creates `CodexUsageCompanionMarketplace-v0.1.2-linux-x64.zip`. Extract it, add the extracted marketplace, then install and enable the plugin:
 
 ```bash
 codex plugin marketplace add /path/to/extracted-marketplace
@@ -137,7 +155,10 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/claude-codex-usage-companion/settings.json
 
 ```json
 {
-  "showFiveHourLimit": false,
+  "showClaudeSession": true,
+  "showClaudeWeekly": true,
+  "showCodexFiveHour": false,
+  "showCodexWeekly": true,
   "enableClaudeUsage": true,
   "enableCodexUsage": true,
   "enableSystemTray": false,
@@ -185,6 +206,8 @@ Opacity is limited to `0.5`–`1.0`, margin to `0`–`64` pixels, and update int
 
 `enableClaudeUsage` and `enableCodexUsage` (both default `true`) independently show or hide each provider's section; the overlay adjusts its height automatically. Claude is polled no more than once every 180 seconds regardless of the configured update interval — see [Enable Claude usage (optional)](#enable-claude-usage-optional).
 
+The **Displayed limits** checkboxes independently control Claude's current session and week and Codex's five-hour and weekly cards. The corresponding settings are `showClaudeSession`, `showClaudeWeekly`, `showCodexFiveHour`, and `showCodexWeekly`; the Codex five-hour card defaults to hidden to preserve the app's previous layout, while the other three default to visible.
+
 ## Usage update logging
 
 Usage logging is disabled by default. When enabled, every successful refresh and refresh error is appended to the configured file. CSV is the default format, and the default path follows `${XDG_STATE_HOME:-$HOME/.local/state}/claude-codex-usage-companion/usage-history.csv`.
@@ -205,7 +228,7 @@ For ARM64:
 bash scripts/build-linux.sh linux-arm64
 ```
 
-The build runs the test suite and writes a `.deb`, portable `.tar.gz`, Codex marketplace `.zip`, and checksums under `artifacts/`.
+The build runs the test suite and writes a `.deb`, portable `.tar.gz`, Plasma `.plasmoid`, Codex marketplace `.zip`, and checksums under `artifacts/`.
 
 For a development run:
 

@@ -20,5 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\hooks\hooks.json" Link="hooks.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\packaging\plasma\com.github.ychsieh95.claude-codex-usage-companion\**\*"
+          Link="plasmoid\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

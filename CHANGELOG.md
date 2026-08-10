@@ -4,6 +4,23 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-08-10
+
+### Added
+
+- A Plasma 6 widget with compact circle or bar views and an expanded popup showing reset times, credits, and provider-specific errors.
+- Independent display toggles for Claude's current session and weekly limits and Codex's five-hour and weekly limits.
+- A standalone `.plasmoid` release artifact and a source-checkout installation script for the Plasma widget.
+
+### Changed
+
+- The overlay now computes its height from the visible usage cards and remains anchored to the configured screen corner after resizing.
+- Refreshed the README screenshots and removed the stale package-rename upgrade note.
+
+### Migration
+
+- Existing `showFiveHourLimit` settings migrate to `showCodexFiveHour`; the legacy key is removed the next time settings are saved.
+
 ## [0.1.1] - 2026-08-09
 
 ### Added
@@ -55,5 +72,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - No telemetry. This app never stores or writes authentication tokens of its own; when Claude usage is enabled, it reads the OAuth access token Claude Code already stores locally and sends it only to Anthropic's official API over HTTPS.
 
+[0.1.2]: https://github.com/ychsieh95/claude-codex-usage-companion/releases/tag/v0.1.2
 [0.1.1]: https://github.com/ychsieh95/claude-codex-usage-companion/releases/tag/v0.1.1
 [0.1.0]: https://github.com/ychsieh95/claude-codex-usage-companion/releases/tag/v0.1.0

@@ -21,6 +21,12 @@ Claude Codex Usage Companion 是一套在 Linux 上執行的本機開源 Claude 
 | --- | --- | --- |
 | ![英文用量面板](assets/screenshots/overlay-en.png) | ![繁體中文用量面板](assets/screenshots/overlay-zh-tw.png) | ![簡體中文用量面板](assets/screenshots/overlay-zh-cn.png) |
 
+### Plasma 6 小工具
+
+| 精簡圓環 | 展開彈出視窗 |
+| --- | --- |
+| ![Plasma 6 小工具精簡圓環](assets/screenshots/plasma-widget-circles.png) | ![Plasma 6 小工具展開彈出視窗](assets/screenshots/plasma-widget-expanded.png) |
+
 ## 系統需求
 
 - Kubuntu 26.04 或其他新式 x64/ARM64 Linux 發行版。
@@ -65,12 +71,10 @@ Claude Code 並沒有官方 API 可供查詢用量，這點與 Codex 不同。�
 
 ## 安裝桌面程式與 CLI
 
-從較舊的套件升級：本專案已重新命名兩次（`codex-usage-companion` → `codex-claude-usage-companion` → `claude-codex-usage-companion`）。安裝新版 `.deb` 之前，請先執行 `sudo apt remove codex-usage-companion` 及／或 `sudo apt remove codex-claude-usage-companion`（視目前安裝的版本而定）。每次重新命名都使用不同的套件名稱，因此 `apt` 不會自動取代舊版；若同時保留舊版，開機時會啟動兩個常駐系統匣程序。新套件首次執行時，會自動從偵測到的任一舊版設定檔遷移既有設定。
-
 建置或下載 `.deb`，然後執行：
 
 ```bash
-sudo apt install ./claude-codex-usage-companion_0.1.1_amd64.deb
+sudo apt install ./claude-codex-usage-companion_0.1.2_amd64.deb
 ```
 
 從 KDE 應用程式選單啟動 **Claude Codex Usage Companion**，或執行：
@@ -86,6 +90,20 @@ claude-codex-usage-companion gui
 啟用登入時自動啟動後，會顯示「**最小化視窗**」選項（未啟用時則隱藏）。兩者皆啟用時，程式會在登入時啟動並不顯示視窗——用量仍會在背景持續更新——之後只要重新開啟程式（透過應用程式選單、系統匣圖示，或再次執行程式）即可讓視窗重新顯示。
 
 使用 **⚙ 設定** 按鈕即可設定工作列圖示、系統匣、系統匣圖示樣式、登入時自動啟動、語言、主題、視窗位置、低用量通知、重置通知、用量記錄與永遠置頂行為。**確定**會套用變更並關閉視窗，**取消**會捨棄尚未套用的變更，**應用**則會儲存變更但保持視窗開啟。
+
+## Plasma 6 小工具
+
+`.deb` 也會安裝 **Claude Codex Usage** Plasma 6 小工具。在 Plasma 桌面或面板按右鍵，選擇**新增小工具**，搜尋 `Claude Codex Usage`，再將它拖曳到面板或桌面。
+
+面板指示器會分別顯示 Claude 目前工作階段與本週用量，以及 Codex 的 5 小時與每週限制。設定頁面提供圓形與長條兩種檢視，可調整重新整理間隔，並選擇要在面板及展開快顯視窗中顯示的限制；四個限制預設皆啟用。精簡版面在較寬的小工具中會水平排列，在較高的小工具中則會自動改為垂直排列。開啟後可查看本機重置時間、點數、重新整理狀態及個別錯誤。小工具會呼叫本機 companion 的 `status --json` 命令，因此憑證與網路存取仍由 companion 處理。
+
+Release 建置也會包含獨立的 `.plasmoid` 套件，可不使用 root 安裝：
+
+```bash
+kpackagetool6 --type Plasma/Applet --install ./claude-codex-usage-companion-0.1.2.plasmoid
+```
+
+若使用開發 checkout，可執行 `bash scripts/install-plasma-widget.sh` 安裝或更新目前的原始碼套件。Companion CLI 必須維持安裝，並可從 `PATH` 執行。
 
 ## CLI
 
@@ -119,7 +137,7 @@ claude-codex-usage config
 
 ## 安裝為 Codex plugin
 
-Linux release 建置會產生 `CodexUsageCompanionMarketplace-v0.1.1-linux-x64.zip`。解壓縮後，加入解壓縮的 marketplace，然後安裝並啟用 plugin：
+Linux release 建置會產生 `CodexUsageCompanionMarketplace-v0.1.2-linux-x64.zip`。解壓縮後，加入解壓縮的 marketplace，然後安裝並啟用 plugin：
 
 ```bash
 codex plugin marketplace add /path/to/extracted-marketplace
@@ -137,7 +155,10 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/claude-codex-usage-companion/settings.json
 
 ```json
 {
-  "showFiveHourLimit": false,
+  "showClaudeSession": true,
+  "showClaudeWeekly": true,
+  "showCodexFiveHour": false,
+  "showCodexWeekly": true,
   "enableClaudeUsage": true,
   "enableCodexUsage": true,
   "enableSystemTray": false,
@@ -185,6 +206,8 @@ GUI 全域提供鍵盤快捷鍵。在主視窗中，按 `F1` 列出所有快捷�
 
 `enableClaudeUsage` 與 `enableCodexUsage`（預設皆為 `true`）可各自獨立顯示或隱藏對應供應商的區塊；面板高度會自動調整。無論設定的更新間隔為何，Claude 最多每 180 秒查詢一次——詳見[啟用 Claude 用量（選用）](#啟用-claude-用量選用)。
 
+**顯示的用量限制**核取方塊可分別控制 Claude 目前工作階段、Claude 本週用量、Codex 5 小時用量與 Codex 每週用量卡片。對應設定為 `showClaudeSession`、`showClaudeWeekly`、`showCodexFiveHour` 與 `showCodexWeekly`；為保留應用程式原有版面，Codex 5 小時卡片預設隱藏，其餘三張卡片預設顯示。
+
 ## 用量更新記錄
 
 用量記錄預設為停用。啟用後，每次成功重新整理與重新整理錯誤都會附加至指定檔案。CSV 是預設格式，預設路徑遵循 `${XDG_STATE_HOME:-$HOME/.local/state}/claude-codex-usage-companion/usage-history.csv`。
@@ -205,7 +228,7 @@ ARM64：
 bash scripts/build-linux.sh linux-arm64
 ```
 
-建置程序會執行測試套件，並在 `artifacts/` 下輸出 `.deb`、可攜式 `.tar.gz`、Codex marketplace `.zip` 與校驗碼。
+建置程序會執行測試套件，並在 `artifacts/` 下輸出 `.deb`、可攜式 `.tar.gz`、Plasma `.plasmoid`、Codex marketplace `.zip` 與校驗碼。
 
 開發環境執行方式：
 

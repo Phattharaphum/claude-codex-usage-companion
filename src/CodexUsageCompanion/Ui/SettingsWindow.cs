@@ -23,6 +23,10 @@ public sealed class SettingsWindow : Window
     private readonly CheckBox _alwaysOnTop;
     private readonly CheckBox _enableClaudeUsage;
     private readonly CheckBox _enableCodexUsage;
+    private readonly CheckBox _showClaudeSession;
+    private readonly CheckBox _showClaudeWeekly;
+    private readonly CheckBox _showCodexFiveHour;
+    private readonly CheckBox _showCodexWeekly;
     private readonly CheckBox _lowUsageAlert;
     private readonly NumericUpDown _lowUsageAlertThreshold;
     private readonly CheckBox _notifyOnReset;
@@ -116,6 +120,34 @@ public sealed class SettingsWindow : Window
             Content = text.EnableCodexUsageOption,
             IsChecked = settings.EnableCodexUsage
         };
+        _showClaudeSession = new CheckBox
+        {
+            Content = text.ShowClaudeSessionOption,
+            IsChecked = settings.ShowClaudeSession,
+            Margin = new Thickness(16, 0, 0, 0)
+        };
+        _showClaudeWeekly = new CheckBox
+        {
+            Content = text.ShowClaudeWeeklyOption,
+            IsChecked = settings.ShowClaudeWeekly,
+            Margin = new Thickness(16, 0, 0, 0)
+        };
+        _showCodexFiveHour = new CheckBox
+        {
+            Content = text.ShowCodexFiveHourOption,
+            IsChecked = settings.ShowCodexFiveHour,
+            Margin = new Thickness(16, 0, 0, 0)
+        };
+        _showCodexWeekly = new CheckBox
+        {
+            Content = text.ShowCodexWeeklyOption,
+            IsChecked = settings.ShowCodexWeekly,
+            Margin = new Thickness(16, 0, 0, 0)
+        };
+        _enableClaudeUsage.IsCheckedChanged += (_, _) =>
+            UpdateDisplayedLimitControls();
+        _enableCodexUsage.IsCheckedChanged += (_, _) =>
+            UpdateDisplayedLimitControls();
         _lowUsageAlert = new CheckBox
         {
             Content = text.LowUsageAlertOption,
@@ -295,6 +327,12 @@ public sealed class SettingsWindow : Window
             Text = text.UpdateIntervalOption,
             Margin = new Thickness(0, 8, 0, 4)
         };
+        var displayedLimitsLabel = new TextBlock
+        {
+            Text = text.DisplayedLimitsOption,
+            Margin = new Thickness(0, 8, 0, 4),
+            FontWeight = FontWeight.SemiBold
+        };
         var lowUsageAlertThresholdLabel = new TextBlock
         {
             Text = text.LowUsageAlertThresholdOption,
@@ -385,6 +423,11 @@ public sealed class SettingsWindow : Window
                 CreateSectionHeader(text.UsageSettingsGroup),
                 _enableClaudeUsage,
                 _enableCodexUsage,
+                displayedLimitsLabel,
+                _showClaudeSession,
+                _showClaudeWeekly,
+                _showCodexFiveHour,
+                _showCodexWeekly,
                 updateIntervalLabel,
                 _updateInterval,
                 CreateSeparator(),
@@ -442,6 +485,7 @@ public sealed class SettingsWindow : Window
         UpdateUsageLoggingControls();
         UpdateLowUsageAlertControls();
         UpdateMinimizeOnStartControls();
+        UpdateDisplayedLimitControls();
         UpdateDateTimeFormatValidation();
         _initialSettings = CaptureSettings();
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
@@ -607,6 +651,10 @@ public sealed class SettingsWindow : Window
             AlwaysOnTop = _alwaysOnTop.IsChecked == true,
             EnableClaudeUsage = _enableClaudeUsage.IsChecked == true,
             EnableCodexUsage = _enableCodexUsage.IsChecked == true,
+            ShowClaudeSession = _showClaudeSession.IsChecked == true,
+            ShowClaudeWeekly = _showClaudeWeekly.IsChecked == true,
+            ShowCodexFiveHour = _showCodexFiveHour.IsChecked == true,
+            ShowCodexWeekly = _showCodexWeekly.IsChecked == true,
             Language = (_language.SelectedItem as LanguageChoice)?.Value ?? "en-US",
             Theme = (_theme.SelectedItem as ThemeChoice)?.Value ?? UiThemeOptions.System,
             Position = _position.SelectedItem as string ?? WindowPosition.RightBottom,
@@ -637,6 +685,17 @@ public sealed class SettingsWindow : Window
     private void UpdateLowUsageAlertControls()
     {
         _lowUsageAlertThreshold.IsEnabled = _lowUsageAlert.IsChecked == true;
+    }
+
+    private void UpdateDisplayedLimitControls()
+    {
+        var claudeEnabled = _enableClaudeUsage.IsChecked == true;
+        _showClaudeSession.IsEnabled = claudeEnabled;
+        _showClaudeWeekly.IsEnabled = claudeEnabled;
+
+        var codexEnabled = _enableCodexUsage.IsChecked == true;
+        _showCodexFiveHour.IsEnabled = codexEnabled;
+        _showCodexWeekly.IsEnabled = codexEnabled;
     }
 
     private void UpdateMinimizeOnStartControls()

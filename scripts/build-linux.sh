@@ -29,6 +29,8 @@ PUBLISH="$ARTIFACTS/publish/$RID"
 STAGING="$ARTIFACTS/deb-staging"
 MARKETPLACE="$ARTIFACTS/marketplace"
 PLUGIN="$MARKETPLACE/plugins/claude-codex-usage-companion"
+PLASMOID_ID="com.github.ychsieh95.claude-codex-usage-companion"
+PLASMOID_SOURCE="$ROOT/packaging/plasma/$PLASMOID_ID"
 
 if [[ "$ARTIFACTS" != "$ROOT/artifacts" ]]; then
   fail "Artifact directory escaped the repository."
@@ -76,7 +78,8 @@ mkdir -p \
   "$STAGING/usr/bin" \
   "$STAGING/usr/lib/claude-codex-usage-companion" \
   "$STAGING/usr/share/applications" \
-  "$STAGING/usr/share/icons/hicolor/scalable/apps"
+  "$STAGING/usr/share/icons/hicolor/scalable/apps" \
+  "$STAGING/usr/share/plasma/plasmoids/$PLASMOID_ID"
 
 install -m 755 "$PUBLISH/CodexUsageCompanion" \
   "$STAGING/usr/lib/claude-codex-usage-companion/CodexUsageCompanion"
@@ -87,6 +90,8 @@ install -m 644 "$ROOT/packaging/linux/claude-codex-usage-companion.desktop" \
   "$STAGING/usr/share/applications/claude-codex-usage-companion.desktop"
 install -m 644 "$ROOT/packaging/linux/claude-codex-usage-companion.svg" \
   "$STAGING/usr/share/icons/hicolor/scalable/apps/claude-codex-usage-companion.svg"
+cp -a "$PLASMOID_SOURCE/." \
+  "$STAGING/usr/share/plasma/plasmoids/$PLASMOID_ID/"
 chmod -R go-w "$STAGING"
 
 INSTALLED_SIZE="$(du -sk "$STAGING/usr" | cut -f1)"
@@ -98,15 +103,24 @@ INSTALLED_SIZE="$(du -sk "$STAGING/usr" | cut -f1)"
   echo "Architecture: $DEB_ARCH"
   echo "Installed-Size: $INSTALLED_SIZE"
   echo "Depends: libx11-6, libice6, libsm6, libfontconfig1, libharfbuzz0b, fonts-noto-cjk, libnotify-bin, libc6"
+  echo "Recommends: libplasma5support6"
   echo "Maintainer: ychsieh95"
   echo "Homepage: https://github.com/ychsieh95/claude-codex-usage-companion"
   echo "Description: Claude and Codex rate-limit usage companion for Linux"
-  echo " A compact Avalonia GUI and scriptable CLI for Claude and Codex account limits."
+  echo " A compact Avalonia GUI, scriptable CLI, and Plasma 6 widget for account limits."
 } > "$STAGING/DEBIAN/control"
 
 DEB="$ARTIFACTS/claude-codex-usage-companion_${VERSION}_${DEB_ARCH}.deb"
 dpkg-deb --root-owner-group --build "$STAGING" "$DEB"
 ok "Debian package created: $DEB"
+
+info "Building the Plasma 6 widget package."
+PLASMOID="$ARTIFACTS/claude-codex-usage-companion-${VERSION}.plasmoid"
+(
+  cd "$PLASMOID_SOURCE"
+  zip -q -r "$PLASMOID" .
+)
+ok "Plasma widget package created: $PLASMOID"
 
 info "Building the portable archive."
 PORTABLE_ROOT="$ARTIFACTS/portable/claude-codex-usage-companion-$VERSION-$RID"
@@ -119,6 +133,7 @@ install -m 644 "$ROOT/assets/screenshots/"*.png "$PORTABLE_ROOT/assets/screensho
 install -m 644 "$ROOT/docs/PRIVACY.md" "$PORTABLE_ROOT/PRIVACY.md"
 install -m 644 "$ROOT/docs/SECURITY.md" "$PORTABLE_ROOT/SECURITY.md"
 install -m 644 "$ROOT/LICENSE" "$PORTABLE_ROOT/LICENSE"
+install -m 644 "$PLASMOID" "$PORTABLE_ROOT/$(basename "$PLASMOID")"
 tar -C "$ARTIFACTS/portable" -czf \
   "$ARTIFACTS/claude-codex-usage-companion-$VERSION-$RID.tar.gz" \
   "$(basename "$PORTABLE_ROOT")"
@@ -157,11 +172,13 @@ ok "Marketplace archive created: $PLUGIN_ZIP"
 info "Generating SHA-256 checksums."
 sha256sum "$DEB" \
   "$ARTIFACTS/claude-codex-usage-companion-$VERSION-$RID.tar.gz" \
+  "$PLASMOID" \
   "$PLUGIN_ZIP" > "$ARTIFACTS/SHA256SUMS"
 ok "Checksums generated."
 
 echo "$DEB"
 echo "$ARTIFACTS/claude-codex-usage-companion-$VERSION-$RID.tar.gz"
+echo "$PLASMOID"
 echo "$PLUGIN_ZIP"
 echo "$ARTIFACTS/SHA256SUMS"
 ok "Linux release build completed successfully."

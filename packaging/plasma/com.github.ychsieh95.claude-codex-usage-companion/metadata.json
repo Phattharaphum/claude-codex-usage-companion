@@ -1,0 +1,27 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "ychsieh95"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Monitor Claude Code and Codex rate-limit usage",
+        "Description[zh_CN]": "监控 Claude Code 和 Codex 的用量限制",
+        "Description[zh_TW]": "監控 Claude Code 與 Codex 的用量限制",
+        "EnabledByDefault": true,
+        "FormFactors": [
+            "desktop"
+        ],
+        "Icon": "claude-codex-usage-companion",
+        "Id": "com.github.ychsieh95.claude-codex-usage-companion",
+        "License": "MIT",
+        "Name": "Claude Codex Usage",
+        "Name[zh_CN]": "Claude Codex 用量",
+        "Name[zh_TW]": "Claude Codex 用量",
+        "Version": "0.1.2",
+        "Website": "https://github.com/ychsieh95/claude-codex-usage-companion"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

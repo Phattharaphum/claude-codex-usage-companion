@@ -49,13 +49,17 @@ public sealed class UsageOverlayWindow : Window
     private readonly int _margin;
     private bool _trayEnabled;
     private bool _showTaskbarIcon;
-    private bool _showFiveHourLimit;
+    private bool _showClaudeSession;
+    private bool _showClaudeWeekly;
+    private bool _showCodexFiveHour;
+    private bool _showCodexWeekly;
     private bool _codexEnabled;
     private bool _claudeEnabled;
     private RateLimitState? _lastCodexState;
     private RateLimitState? _lastClaudeState;
     private DateTimeOffset? _lastUpdatedAt;
     private string? _lastError;
+    private bool _repositionAfterResize;
     private OverlayThemePalette _palette = OverlayThemePalette.Dark;
 
     public UsageOverlayWindow(CompanionSettings? settings = null, UiText? text = null)
@@ -66,13 +70,16 @@ public sealed class UsageOverlayWindow : Window
         _margin = settings.Margin;
         _trayEnabled = settings.EnableSystemTray;
         _showTaskbarIcon = settings.ShowTaskbarIcon;
-        _showFiveHourLimit = settings.ShowFiveHourLimit;
+        _showClaudeSession = settings.ShowClaudeSession;
+        _showClaudeWeekly = settings.ShowClaudeWeekly;
+        _showCodexFiveHour = settings.ShowCodexFiveHour;
+        _showCodexWeekly = settings.ShowCodexWeekly;
         _codexEnabled = settings.EnableCodexUsage;
         _claudeEnabled = settings.EnableClaudeUsage;
 
         Title = "Claude Codex Usage Companion";
         Width = 344;
-        Height = ComputeHeight(_codexEnabled, _showFiveHourLimit, _claudeEnabled);
+        Height = ComputeHeight();
         MinWidth = Width;
         MaxWidth = Width;
         MinHeight = Height;
@@ -123,6 +130,7 @@ public sealed class UsageOverlayWindow : Window
         _root.Child = stack;
         Content = _root;
         ActualThemeVariantChanged += (_, _) => ApplyThemePalette();
+        SizeChanged += HandleWindowSizeChanged;
 
         Opened += (_, _) =>
         {
@@ -219,7 +227,10 @@ public sealed class UsageOverlayWindow : Window
         _showTaskbarIcon = settings.ShowTaskbarIcon;
         ShowInTaskbar = _showTaskbarIcon;
         ApplyAlwaysOnTop(settings.AlwaysOnTop);
-        _showFiveHourLimit = settings.ShowFiveHourLimit;
+        _showClaudeSession = settings.ShowClaudeSession;
+        _showClaudeWeekly = settings.ShowClaudeWeekly;
+        _showCodexFiveHour = settings.ShowCodexFiveHour;
+        _showCodexWeekly = settings.ShowCodexWeekly;
         _codexEnabled = settings.EnableCodexUsage;
         _claudeEnabled = settings.EnableClaudeUsage;
         _codexFiveHourCard.Title.Text = text.FiveHourTitle;
@@ -228,10 +239,7 @@ public sealed class UsageOverlayWindow : Window
         _claudeWeeklyCard.Title.Text = text.ClaudeWeeklyTitle;
         _headerTitle.Text = text.CombinedUsageHeaderTitle;
         ApplyCardVisibility();
-        Height = ComputeHeight(_codexEnabled, _showFiveHourLimit, _claudeEnabled);
-        MinHeight = Height;
-        MaxHeight = Height;
-        ApplyPosition(settings.Position);
+        ApplySizeAndPosition(settings.Position);
         ToolTip.SetTip(_minimizeButton, text.MinimizeAction);
         UpdatePinButton();
         ToolTip.SetTip(_shortcutsButton, text.ShortcutsAction);
@@ -291,31 +299,80 @@ public sealed class UsageOverlayWindow : Window
 
     private void ApplyCardVisibility()
     {
-        _codexFiveHourCard.Container.IsVisible = _showFiveHourLimit && _codexEnabled;
-        _codexWeeklyCard.Container.IsVisible = _codexEnabled;
-        _claudeFiveHourCard.Container.IsVisible = _claudeEnabled;
-        _claudeWeeklyCard.Container.IsVisible = _claudeEnabled;
+        _codexFiveHourCard.Container.IsVisible = _showCodexFiveHour && _codexEnabled;
+        _codexWeeklyCard.Container.IsVisible = _showCodexWeekly && _codexEnabled;
+        _claudeFiveHourCard.Container.IsVisible = _showClaudeSession && _claudeEnabled;
+        _claudeWeeklyCard.Container.IsVisible = _showClaudeWeekly && _claudeEnabled;
     }
 
-    private static double ComputeHeight(bool codexEnabled, bool showFiveHourLimit, bool claudeEnabled)
+    private double ComputeHeight()
     {
         var cardHeights = new List<double>();
-        if (codexEnabled)
+        if (_codexEnabled)
         {
-            cardHeights.Add(WeeklyCardHeight);
-            if (showFiveHourLimit)
+            if (_showCodexFiveHour)
             {
                 cardHeights.Add(FiveHourCardHeight);
             }
+            if (_showCodexWeekly)
+            {
+                cardHeights.Add(WeeklyCardHeight);
+            }
         }
 
-        if (claudeEnabled)
+        if (_claudeEnabled)
         {
-            cardHeights.Add(FiveHourCardHeight);
-            cardHeights.Add(WeeklyCardHeight);
+            if (_showClaudeSession)
+            {
+                cardHeights.Add(FiveHourCardHeight);
+            }
+            if (_showClaudeWeekly)
+            {
+                cardHeights.Add(WeeklyCardHeight);
+            }
         }
 
         return BaseHeight + cardHeights.Sum() + (CardSpacing * (cardHeights.Count + 1));
+    }
+
+    private void ApplyComputedHeight()
+    {
+        var targetHeight = ComputeHeight();
+        MinHeight = Math.Min(MinHeight, targetHeight);
+        MaxHeight = Math.Max(MaxHeight, targetHeight);
+        Height = targetHeight;
+        MinHeight = targetHeight;
+        MaxHeight = targetHeight;
+    }
+
+    private void ApplySizeAndPosition(string position)
+    {
+        _position = WindowPosition.Normalize(position);
+        _repositionAfterResize = true;
+        ApplyComputedHeight();
+        PositionOnPrimaryScreen();
+        Dispatcher.UIThread.Post(
+            CompletePendingReposition,
+            DispatcherPriority.Background);
+    }
+
+    private void HandleWindowSizeChanged(object? sender, SizeChangedEventArgs eventArgs)
+    {
+        if (_repositionAfterResize)
+        {
+            PositionOnPrimaryScreen();
+        }
+    }
+
+    private void CompletePendingReposition()
+    {
+        if (!_repositionAfterResize)
+        {
+            return;
+        }
+
+        _repositionAfterResize = false;
+        PositionOnPrimaryScreen();
     }
 
     private Control CreateHeader()

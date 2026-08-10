@@ -118,6 +118,11 @@ public sealed class UiTextTests
         Assert.Equal("Author: ychsieh95 • Original project: gkfriend/codex-usage-companion", text.AuthorInfo);
         Assert.Equal("Enable Codex usage", text.EnableCodexUsageOption);
         Assert.Equal("Enable Claude usage", text.EnableClaudeUsageOption);
+        Assert.Equal("Displayed limits", text.DisplayedLimitsOption);
+        Assert.Equal("Claude current session", text.ShowClaudeSessionOption);
+        Assert.Equal("Claude current week (All)", text.ShowClaudeWeeklyOption);
+        Assert.Equal("Codex 5-hour limit", text.ShowCodexFiveHourOption);
+        Assert.Equal("Codex weekly limit", text.ShowCodexWeeklyOption);
         Assert.Equal("Show icon in the taskbar", text.ShowTaskbarIconOption);
         Assert.Equal("System tray icon style", text.TrayIconStyleOption);
         Assert.Equal("Original icon", text.OriginalTrayIconStyle);
@@ -172,6 +177,45 @@ public sealed class UiTextTests
         var text = UiText.For(language);
 
         Assert.Equal(expected, text.EnableCodexUsageOption);
+    }
+
+    [Theory]
+    [InlineData(
+        UiLanguage.English,
+        "Displayed limits",
+        "Claude current session",
+        "Claude current week (All)",
+        "Codex 5-hour limit",
+        "Codex weekly limit")]
+    [InlineData(
+        UiLanguage.TraditionalChinese,
+        "顯示的用量限制",
+        "Claude 目前工作階段",
+        "Claude 本週用量（全部）",
+        "Codex 5 小時用量限制",
+        "Codex 每週用量限制")]
+    [InlineData(
+        UiLanguage.SimplifiedChinese,
+        "显示的用量限制",
+        "Claude 当前会话",
+        "Claude 本周用量（全部）",
+        "Codex 5 小时用量限制",
+        "Codex 每周用量限制")]
+    public void DisplayedLimitOptionsAreLocalized(
+        UiLanguage language,
+        string heading,
+        string claudeSession,
+        string claudeWeekly,
+        string codexFiveHour,
+        string codexWeekly)
+    {
+        var text = UiText.For(language);
+
+        Assert.Equal(heading, text.DisplayedLimitsOption);
+        Assert.Equal(claudeSession, text.ShowClaudeSessionOption);
+        Assert.Equal(claudeWeekly, text.ShowClaudeWeeklyOption);
+        Assert.Equal(codexFiveHour, text.ShowCodexFiveHourOption);
+        Assert.Equal(codexWeekly, text.ShowCodexWeeklyOption);
     }
 
     [Theory]
