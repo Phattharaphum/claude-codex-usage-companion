@@ -67,7 +67,7 @@ codex app-server --help >/dev/null && echo "Codex app-server is available"
 
 Claude Code 用量預設會與 Codex 一起顯示。若要使用，請先安裝並登入 [Claude Code](https://code.claude.com)，執行一次 `claude` 讓它寫入 `~/.claude/.credentials.json`。若您不使用 Claude Code，可在設定中關閉**啟用 Claude 用量顯示**（或在 `settings.json` 中設定 `"enableClaudeUsage": false`）；對應的**啟用 Codex 用量顯示**核取方塊則可用同樣方式關閉 Codex 區塊。
 
-Claude Code 並沒有官方 API 可供查詢用量，這點與 Codex 不同。本程式會讀取 Claude Code 本身已儲存在本機的 OAuth access token，直接呼叫 Anthropic 自家（未公開文件記載）的用量端點——程式本身不會讀取以外的用途、寫入或重新整理該憑證檔案。若 token 已過期，會顯示錯誤訊息請您重新執行 `claude`，而不會嘗試自行重新整理該工作階段。由於該端點未公開文件記載，未來可能在未通知的情況下變更；無論設定的更新間隔為何，Claude 用量最多每 180 秒查詢一次。若 Claude 或其憑證檔案安裝在程式預設搜尋位置（`~/.local/bin`、`~/.npm-global/bin`、`~/.claude/local`）以外，請設定 `CLAUDE_CREDENTIALS_PATH=/absolute/path/to/.credentials.json` 或 `CLAUDE_CLI_PATH=/absolute/path/to/claude`。
+Claude Code 並沒有官方 API 可供查詢用量，這點與 Codex 不同。本程式會讀取 Claude Code 本身已儲存在本機的 OAuth access token，直接呼叫 Anthropic 自家（未公開文件記載）的用量端點。該 access token 僅數小時有效，且 Claude CLI 只會在自己執行時更新它，因此重新開機後儲存的 token 通常已過期。本程式因此會以與 CLI 相同的方式更新它——使用 `~/.claude/.credentials.json` 中既有的 refresh token 進行 OAuth refresh 授權——並以不可分割的方式寫回更新後的憑證，保留其餘所有欄位，同時取得 CLI 使用的同一個鎖定檔案，確保兩者不會同時輪替 token。程式不會記錄任何 token。若 refresh token 本身已過期或遭撤銷，會顯示錯誤訊息請您執行 `claude` 重新登入。由於該端點未公開文件記載，未來可能在未通知的情況下變更；無論設定的更新間隔為何，Claude 用量最多每 180 秒查詢一次。若 Claude 或其憑證檔案安裝在程式預設搜尋位置（`~/.local/bin`、`~/.npm-global/bin`、`~/.claude/local`）以外，請設定 `CLAUDE_CREDENTIALS_PATH=/absolute/path/to/.credentials.json` 或 `CLAUDE_CLI_PATH=/absolute/path/to/claude`。
 
 ## 安裝桌面程式與 CLI
 
