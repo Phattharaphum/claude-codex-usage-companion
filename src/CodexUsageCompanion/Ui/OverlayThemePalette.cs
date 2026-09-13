@@ -38,11 +38,11 @@ internal sealed record OverlayThemePalette(
 
     public static OverlayThemePalette Light { get; } = new(
         "#FFFFFFFF",
-        "#66777D77",
+        "#FFFFFFFF",
         "#35000000",
         "#FF343834",
         "#FFFFFFFF",
-        "#FFD4D9D3",
+        "#FFFFFFFF",
         "#FF202420",
         "#FF606660",
         "#FF6A706A",
