@@ -2,10 +2,11 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using CodexUsageCompanion.Lifecycle;
 
 namespace CodexUsageCompanion.RateLimits;
 
-internal sealed class AntigravityUsageClient : IAsyncDisposable
+internal sealed class AntigravityUsageClient : IAntigravityUsageReader
 {
     private const string GetUserStatusPath =
         "/exa.language_server_pb.LanguageServerService/GetUserStatus";
@@ -92,6 +93,9 @@ internal sealed class AntigravityUsageClient : IAsyncDisposable
 
         return successfulStates[0];
     }
+
+    Task<AntigravityUsageState> IAntigravityUsageReader.ReadUsageAsync(
+        CancellationToken cancellationToken) => ReadUsageAsync(cancellationToken);
 
     public ValueTask DisposeAsync()
     {

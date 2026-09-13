@@ -12,6 +12,7 @@ public sealed class CompanionRuntime : IAsyncDisposable
     private readonly UsageOverlayWindow _window;
     private readonly CodexAppServerClient? _appServerClient;
     private readonly ClaudeUsageClient? _claudeClient;
+    private readonly AntigravityRuntimeProvider _antigravityProvider;
     private readonly CancellationTokenSource _cancellation = new();
     private readonly SemaphoreSlim _codexRefreshGate = new(1, 1);
     private readonly SemaphoreSlim _claudeRefreshGate = new(1, 1);
@@ -30,16 +31,34 @@ public sealed class CompanionRuntime : IAsyncDisposable
         ResidentLease lease,
         UsageOverlayWindow window,
         CompanionSettings settings)
+        : this(lease, window, settings, null)
+    {
+    }
+
+    internal CompanionRuntime(
+        ResidentLease lease,
+        UsageOverlayWindow window,
+        CompanionSettings settings,
+        Func<IAntigravityUsageReader>? createAntigravityReader)
     {
         _lease = lease;
         _window = window;
         _refreshInterval = TimeSpan.FromSeconds(settings.RefreshIntervalSeconds);
         _appServerClient = settings.EnableCodexUsage ? new CodexAppServerClient() : null;
         _claudeClient = settings.EnableClaudeUsage ? new ClaudeUsageClient() : null;
+        _antigravityProvider = new AntigravityRuntimeProvider(
+            settings.EnableAntigravityUsage,
+            createAntigravityReader ?? (() => new AntigravityUsageClient()),
+            Program.FriendlyAntigravityError);
     }
 
     public event Action<UsageProvider, RateLimitState, DateTimeOffset>? UsageUpdated;
     public event Action<UsageProvider, string, DateTimeOffset>? UsageUpdateFailed;
+    public event Action<AntigravityUsageState?, string?, DateTimeOffset>? AntigravityUsageChanged
+    {
+        add => _antigravityProvider.UsageChanged += value;
+        remove => _antigravityProvider.UsageChanged -= value;
+    }
 
     public void Start()
     {
@@ -74,6 +93,17 @@ public sealed class CompanionRuntime : IAsyncDisposable
         if (_periodicTimer is not null)
         {
             _periodicTimer.Period = _refreshInterval;
+        }
+    }
+
+    public void UpdateSettings(CompanionSettings settings)
+    {
+        UpdateRefreshInterval(settings.RefreshIntervalSeconds);
+        if (_antigravityProvider.SetEnabled(settings.EnableAntigravityUsage) &&
+            settings.EnableAntigravityUsage &&
+            _started)
+        {
+            RequestRefresh();
         }
     }
 
@@ -147,6 +177,15 @@ public sealed class CompanionRuntime : IAsyncDisposable
                 {
                     failures.Add(exception);
                 }
+            }
+
+            try
+            {
+                await _antigravityProvider.DisposeAsync();
+            }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
             }
         }
         catch (Exception exception)
@@ -240,6 +279,7 @@ public sealed class CompanionRuntime : IAsyncDisposable
 
         _ = RefreshCodexAsync(_cancellation.Token);
         _ = RefreshClaudeAsync(_cancellation.Token);
+        _ = _antigravityProvider.RefreshAsync(_cancellation.Token);
     }
 
     private async Task RefreshCodexAsync(CancellationToken cancellationToken)

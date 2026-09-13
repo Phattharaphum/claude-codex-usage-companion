@@ -577,7 +577,7 @@ public static class Program
         return exception.Message;
     }
 
-    private static string FriendlyAntigravityError(Exception exception)
+    internal static string FriendlyAntigravityError(Exception exception)
     {
         return exception.Message switch
         {

@@ -465,7 +465,7 @@ public sealed class App : Application
         _window!.ApplySettings(_settings, _text);
         // The shortcuts window renders localized text captured when it opened.
         _shortcutsWindow?.Close();
-        _runtime?.UpdateRefreshInterval(_settings.RefreshIntervalSeconds);
+        _runtime?.UpdateSettings(_settings);
         UpdateTrayIcon();
     }
 
