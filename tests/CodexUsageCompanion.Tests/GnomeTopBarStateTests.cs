@@ -33,6 +33,7 @@ public sealed class GnomeTopBarStateTests
         Assert.Equal(88, presentation.GeminiWeeklyRemaining);
         Assert.Equal(100, presentation.ClaudeGptFiveHourRemaining);
         Assert.Equal(80, presentation.ClaudeGptWeeklyRemaining);
+        Assert.Equal(89, presentation.AntigravityRemaining);
         Assert.Equal(updatedAt.ToUnixTimeMilliseconds(), presentation.LastUpdatedUnixMilliseconds);
     }
 
@@ -52,6 +53,7 @@ public sealed class GnomeTopBarStateTests
         Assert.Null(presentation.GeminiWeeklyRemaining);
         Assert.Null(presentation.ClaudeGptFiveHourRemaining);
         Assert.Null(presentation.ClaudeGptWeeklyRemaining);
+        Assert.Equal(89, presentation.AntigravityRemaining);
     }
 
     [Fact]
@@ -68,6 +70,7 @@ public sealed class GnomeTopBarStateTests
         Assert.Null(presentation.ClaudeGptFiveHourRemaining);
         Assert.Null(presentation.ClaudeGptWeeklyRemaining);
         Assert.Null(presentation.LastUpdatedUnixMilliseconds);
+        Assert.Null(presentation.AntigravityRemaining);
     }
 
     [Fact]

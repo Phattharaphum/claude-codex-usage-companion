@@ -16,7 +16,16 @@ public sealed record GnomeTopBarState(
     int? ClaudeGptWeeklyRemaining,
     long? LastUpdatedUnixMilliseconds)
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
+
+    // Schema 2 adds the three compact meters used by the GNOME Shell
+    // indicator. Keep the individual Antigravity pools above so a future
+    // detailed view does not need to infer anything from a displayed value.
+    public bool HasClaude { get; init; }
+    public int? ClaudeFiveHourRemaining { get; init; }
+    public bool HasCodex { get; init; }
+    public int? CodexFiveHourRemaining { get; init; }
+    public int? AntigravityRemaining { get; init; }
 }
 
 public static class GnomeTopBarStateBuilder
@@ -24,23 +33,39 @@ public static class GnomeTopBarStateBuilder
     public static GnomeTopBarState Build(
         bool antigravityEnabled,
         AntigravityUsageState? state,
-        DateTimeOffset? updatedAt)
+        DateTimeOffset? updatedAt,
+        RateLimitState? claude = null,
+        RateLimitState? codex = null)
     {
-        if (!antigravityEnabled)
-        {
-            return Unavailable();
-        }
+        var gemini = antigravityEnabled ? FindPool(state, "gemini-models") : null;
+        var claudeGpt = antigravityEnabled ? FindPool(state, "claude-and-gpt-models") : null;
+        var antigravityValues = new[]
+            {
+                gemini?.FiveHour?.RemainingPercent,
+                claudeGpt?.FiveHour?.RemainingPercent
+            }
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+        int? antigravityRemaining = antigravityValues.Length == 0
+            ? null
+            : antigravityValues.Min();
 
-        var gemini = FindPool(state, "gemini-models");
-        var claudeGpt = FindPool(state, "claude-and-gpt-models");
         return new GnomeTopBarState(
             GnomeTopBarState.CurrentSchemaVersion,
-            HasAntigravity: true,
+            HasAntigravity: antigravityEnabled,
             gemini?.FiveHour?.RemainingPercent,
             gemini?.Weekly?.RemainingPercent,
             claudeGpt?.FiveHour?.RemainingPercent,
             claudeGpt?.Weekly?.RemainingPercent,
-            updatedAt?.ToUnixTimeMilliseconds());
+            antigravityEnabled ? updatedAt?.ToUnixTimeMilliseconds() : null)
+        {
+            HasClaude = claude?.FiveHour is not null,
+            ClaudeFiveHourRemaining = claude?.FiveHour?.RemainingPercent,
+            HasCodex = codex?.FiveHour is not null,
+            CodexFiveHourRemaining = codex?.FiveHour?.RemainingPercent,
+            AntigravityRemaining = antigravityRemaining
+        };
     }
 
     public static GnomeTopBarState Unavailable() => new(

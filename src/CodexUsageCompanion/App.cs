@@ -579,6 +579,8 @@ public sealed class App : Application
             _lastCodexUpdatedAt = updatedAt;
         }
 
+        UpdateGnomeTopBarState();
+
         if (_trayIcon is not null)
         {
             var tooltipText = FormatTrayTooltip();
@@ -669,7 +671,9 @@ public sealed class App : Application
         _gnomeTopBarBridge.Publish(GnomeTopBarStateBuilder.Build(
             _settings.EnableAntigravityUsage,
             _lastAntigravityUsage,
-            _lastAntigravityUpdatedAt));
+            _lastAntigravityUpdatedAt,
+            _lastClaudeUsage,
+            _lastCodexUsage));
     }
 
     private static void TryWriteUsageLog(Action write)

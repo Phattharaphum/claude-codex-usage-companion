@@ -1,6 +1,8 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import St from 'gi://St';
+import Clutter from 'gi://Clutter';
+import Cairo from 'cairo';
 
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -13,9 +15,49 @@ const APPLICATION_COMMAND = 'claude-codex-usage-companion';
 const STATE_DIRECTORY = 'claude-codex-usage-companion';
 const STATE_FILE = 'gnome-top-bar.json';
 
+const METERS = [
+    {name: 'Claude', glyph: '✳', color: [1.0, 0.31, 0.06], enabled: 'hasClaude', value: 'claudeFiveHourRemaining'},
+    {name: 'Codex', glyph: '◌', color: [0.18, 0.85, 0.61], enabled: 'hasCodex', value: 'codexFiveHourRemaining'},
+    {name: 'Antigravity', glyph: '✦', color: [0.93, 0.95, 0.08], enabled: 'hasAntigravity', value: 'antigravityRemaining'},
+];
+
+class RingMeter extends St.DrawingArea {
+    _init(value, color) {
+        super._init({style_class: 'ccuc-ring', reactive: false});
+        this._value = value;
+        this._color = color;
+        this.set_size(46, 46);
+    }
+
+    vfunc_repaint() {
+        const cr = this.get_context();
+        const [width, height] = this.get_surface_size();
+        const radius = Math.min(width, height) / 2 - 3;
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        cr.setLineWidth(4);
+        cr.setLineCap(Cairo.LineCap.ROUND);
+        cr.setSourceRGBA(0.24, 0.25, 0.27, 1);
+        cr.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        cr.stroke();
+
+        if (this._value !== null) {
+            cr.setSourceRGBA(...this._color, 1);
+            cr.arc(centerX, centerY, radius, -Math.PI / 2,
+                -Math.PI / 2 + (Math.PI * 2 * this._value / 100));
+            cr.stroke();
+        }
+
+        cr.$dispose();
+    }
+}
+
 export default class CompanionTopBarExtension extends Extension {
     enable() {
         this._state = null;
+        this._stylesheet = this.dir.get_child('stylesheet.css');
+        this.loadStylesheet(this._stylesheet);
         this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
         this._label = new St.Label({text: formatPanelText(null)});
         this._indicator.add_child(this._label);
@@ -42,6 +84,10 @@ export default class CompanionTopBarExtension extends Extension {
         this._runtimeDirectory = null;
         this._stateDirectory = null;
         this._stateFile = null;
+        if (this._stylesheet) {
+            this.unloadStylesheet(this._stylesheet);
+            this._stylesheet = null;
+        }
     }
 
     _installRuntimeMonitor() {
@@ -95,18 +141,8 @@ export default class CompanionTopBarExtension extends Extension {
 
         this._label.text = formatPanelText(this._state);
         this._indicator.menu.removeAll();
-        if (this._state?.hasAntigravity) {
-            this._addPool('Gemini Models',
-                this._state.geminiFiveHourRemaining,
-                this._state.geminiWeeklyRemaining);
-            this._addPool('Claude + GPT',
-                this._state.claudeGptFiveHourRemaining,
-                this._state.claudeGptWeeklyRemaining);
-            this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        } else {
-            this._addReadOnlyItem('Antigravity unavailable');
-            this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        }
+        this._addMeters();
+        this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
         const openUsage = new PopupMenu.PopupMenuItem('Open Usage');
         openUsage.connect('activate', () => this._runCompanion('gui'));
@@ -116,15 +152,52 @@ export default class CompanionTopBarExtension extends Extension {
         this._indicator.menu.addMenuItem(refresh);
     }
 
-    _addPool(name, fiveHour, weekly) {
-        this._addReadOnlyItem(name);
-        this._addReadOnlyItem(`  5h       ${formatPercent(fiveHour)}`);
-        this._addReadOnlyItem(`  Weekly   ${formatPercent(weekly)}`);
-    }
+    _addMeters() {
+        const item = new PopupMenu.PopupBaseMenuItem({
+            reactive: false,
+            can_focus: false,
+        });
+        const meters = new St.BoxLayout({
+            vertical: true,
+            style_class: 'ccuc-meters',
+            x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+        });
 
-    _addReadOnlyItem(text) {
-        const item = new PopupMenu.PopupMenuItem(text);
-        item.setSensitive(false);
+        for (const meter of METERS) {
+            const enabled = this._state?.[meter.enabled] === true;
+            const value = enabled ? this._state[meter.value] : null;
+            const column = new St.BoxLayout({
+                vertical: true,
+                style_class: 'ccuc-meter',
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            const overlay = new St.Widget({
+                layout_manager: new Clutter.BinLayout(),
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            overlay.add_child(new RingMeter(value, meter.color));
+            overlay.add_child(new St.Label({
+                text: meter.glyph,
+                style_class: 'ccuc-meter-glyph',
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+            column.add_child(overlay);
+            column.add_child(new St.Label({
+                text: formatPercent(value),
+                style_class: 'ccuc-meter-value',
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            column.add_child(new St.Label({
+                text: meter.name,
+                style_class: 'ccuc-meter-name',
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            meters.add_child(column);
+        }
+
+        item.add_child(meters);
         this._indicator.menu.addMenuItem(item);
     }
 

@@ -5,12 +5,13 @@ namespace CodexUsageCompanion.Tests;
 
 public sealed class GnomeExtensionPackageTests
 {
-    private const string ExtensionId = "claude-codex-usage-companion@ychsieh95.github.io";
+    private const string ExtensionId = "claude-codex-usage-companion-fork@gamephat.local";
+    private const string ExtensionSourceDirectory = "claude-codex-usage-companion@ychsieh95.github.io";
 
     [Fact]
     public void ExtensionUsesCurrentGnomeModuleApiAndEventDrivenRuntimeState()
     {
-        var root = Path.Combine(AppContext.BaseDirectory, "gnome", ExtensionId);
+        var root = Path.Combine(AppContext.BaseDirectory, "gnome", ExtensionSourceDirectory);
         using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "metadata.json")));
         var shellVersions = metadata.RootElement.GetProperty("shell-version")
             .EnumerateArray()
@@ -33,16 +34,18 @@ public sealed class GnomeExtensionPackageTests
     [Fact]
     public void ExtensionKeepsFormatterPureAndIncludesTheUserInstallScript()
     {
-        var root = Path.Combine(AppContext.BaseDirectory, "gnome", ExtensionId);
+        var root = Path.Combine(AppContext.BaseDirectory, "gnome", ExtensionSourceDirectory);
         var formatter = File.ReadAllText(Path.Combine(root, "presentation.js"));
         var test = File.ReadAllText(Path.Combine(root, "presentation.test.js"));
         var installScript = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "install-gnome-top-bar-extension.sh"));
 
-        Assert.Contains("G ${formatPercent", formatter, StringComparison.Ordinal);
-        Assert.Contains("C ${formatPercent", formatter, StringComparison.Ordinal);
-        Assert.Contains("G 89% · C 100%", test, StringComparison.Ordinal);
-        Assert.Contains("G 89% · C —", test, StringComparison.Ordinal);
+        Assert.Contains("Math.min(...values)", formatter, StringComparison.Ordinal);
+        Assert.Contains("hasClaude", formatter, StringComparison.Ordinal);
+        Assert.Contains("hasCodex", formatter, StringComparison.Ordinal);
+        Assert.Contains("◉ 89%", test, StringComparison.Ordinal);
+        Assert.Contains("◉ 21%", test, StringComparison.Ordinal);
         Assert.Contains("gnome-extensions enable", installScript, StringComparison.Ordinal);
+        Assert.Contains("stylesheet.css", installScript, StringComparison.Ordinal);
         Assert.DoesNotContain("sudo", installScript, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -5,7 +5,8 @@ function percent(value) {
 }
 
 export function normalizeState(value) {
-    if (!value || typeof value !== 'object' || value.schemaVersion !== 1) {
+    if (!value || typeof value !== 'object' ||
+        (value.schemaVersion !== 1 && value.schemaVersion !== 2)) {
         return null;
     }
 
@@ -15,15 +16,26 @@ export function normalizeState(value) {
         geminiWeeklyRemaining: percent(value.geminiWeeklyRemaining),
         claudeGptFiveHourRemaining: percent(value.claudeGptFiveHourRemaining),
         claudeGptWeeklyRemaining: percent(value.claudeGptWeeklyRemaining),
+        hasClaude: value.hasClaude === true,
+        claudeFiveHourRemaining: percent(value.claudeFiveHourRemaining),
+        hasCodex: value.hasCodex === true,
+        codexFiveHourRemaining: percent(value.codexFiveHourRemaining),
+        antigravityRemaining: percent(value.antigravityRemaining),
     };
 }
 
 export function formatPanelText(state) {
-    if (!state?.hasAntigravity) {
-        return `Antigravity ${DASH}`;
+    const values = [
+        state?.hasClaude ? state.claudeFiveHourRemaining : null,
+        state?.hasCodex ? state.codexFiveHourRemaining : null,
+        state?.hasAntigravity ? (state.antigravityRemaining ?? state.geminiFiveHourRemaining) : null,
+    ].filter(value => value !== null);
+
+    if (values.length === 0) {
+        return `Usage ${DASH}`;
     }
 
-    return `G ${formatPercent(state.geminiFiveHourRemaining)} · C ${formatPercent(state.claudeGptFiveHourRemaining)}`;
+    return `◉ ${Math.min(...values)}%`;
 }
 
 export function formatPercent(value) {
