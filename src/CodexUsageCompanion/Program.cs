@@ -319,10 +319,12 @@ public static class Program
         };
 
         var settings = CompanionSettingsStore.Load();
-        if (!settings.EnableCodexUsage && !settings.EnableClaudeUsage)
+        if (!settings.EnableCodexUsage &&
+            !settings.EnableClaudeUsage &&
+            !settings.EnableAntigravityUsage)
         {
             Console.Error.WriteLine(
-                "claude-codex-usage-companion: No usage providers enabled. Enable Claude and/or Codex in Settings.");
+                "claude-codex-usage-companion: No usage providers enabled. Enable Claude, Codex, and/or Antigravity in Settings.");
             return 1;
         }
 
@@ -331,12 +333,15 @@ public static class Program
         string? codexError = null;
         RateLimitState? claudeState = null;
         string? claudeError = null;
+        AntigravityUsageState? antigravityState = null;
+        string? antigravityError = null;
         DateTimeOffset? lastClaudeFetchAt = null;
 
         try
         {
             await using var codexClient = settings.EnableCodexUsage ? new CodexAppServerClient() : null;
             await using var claudeClient = settings.EnableClaudeUsage ? new ClaudeUsageClient() : null;
+            await using var antigravityClient = settings.EnableAntigravityUsage ? new AntigravityUsageClient() : null;
             while (!cancellation.IsCancellationRequested)
             {
                 if (codexClient is not null)
@@ -375,11 +380,23 @@ public static class Program
                     }
                 }
 
+                if (antigravityClient is not null)
+                {
+                    var refresh = await RefreshAntigravityWatchAsync(
+                        settings,
+                        antigravityState,
+                        antigravityClient.ReadUsageAsync,
+                        cancellation.Token);
+                    antigravityState = refresh.State;
+                    antigravityError = refresh.Error;
+                }
+
                 if (options.Json)
                 {
                     var payload = BuildStatusPayload(
                         settings.EnableClaudeUsage, claudeState, claudeError,
-                        settings.EnableCodexUsage, codexState, codexError);
+                        settings.EnableCodexUsage, codexState, codexError,
+                        settings.EnableAntigravityUsage, antigravityState, antigravityError);
                     payload["observedAt"] = JsonValue.Create(DateTimeOffset.Now);
                     Console.WriteLine(payload.ToJsonString(JsonDefaults.Output));
                 }
@@ -405,6 +422,17 @@ public static class Program
                         }
 
                         ConsoleUsageRenderer.WriteCodex(codexState, codexError, text, UseColor(options));
+                        wroteAny = true;
+                    }
+
+                    if (settings.EnableAntigravityUsage)
+                    {
+                        if (wroteAny)
+                        {
+                            Console.WriteLine();
+                        }
+
+                        ConsoleUsageRenderer.WriteAntigravity(antigravityState, antigravityError, text);
                     }
 
                     Console.WriteLine();
@@ -424,6 +452,19 @@ public static class Program
         }
 
         return 0;
+    }
+
+    internal static async Task<(AntigravityUsageState? State, string? Error)> RefreshAntigravityWatchAsync(
+        CompanionSettings settings,
+        AntigravityUsageState? previousState,
+        Func<CancellationToken, Task<AntigravityUsageState>> readUsage,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var refresh = await ReadAntigravityUsageAsync(settings, cancellationToken, readUsage);
+        return refresh.State is null && refresh.Error is not null
+            ? (previousState, refresh.Error)
+            : refresh;
     }
 
     private static int ShowConfig()
