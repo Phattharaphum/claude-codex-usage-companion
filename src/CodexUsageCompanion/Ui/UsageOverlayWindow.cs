@@ -669,22 +669,32 @@ public sealed class UsageOverlayWindow : Window
         return new Viewbox { Width = IconSize, Height = IconSize, Child = canvas };
     }
 
-    private static Control CreateAntigravityIcon() => new Border
+    private static Control CreateAntigravityIcon()
     {
-        Width = IconSize,
-        Height = IconSize,
-        Background = Brush("#5D8BFF"),
-        CornerRadius = new CornerRadius(7),
-        Child = new TextBlock
+        // Antigravity quota pools are Gemini pools. Use Gemini's four-point
+        // sparkle rather than the temporary letter-A placeholder.
+        var sparkle = new Avalonia.Controls.Shapes.Path
         {
-            Text = "A",
-            Foreground = Brushes.White,
-            FontSize = 9,
-            FontWeight = FontWeight.Bold,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        }
-    };
+            Data = Geometry.Parse(
+                "M12 0C13.4 8.6 15.4 10.6 24 12C15.4 13.4 13.4 15.4 12 24C10.6 15.4 8.6 13.4 0 12C8.6 10.6 10.6 8.6 12 0Z"),
+            Fill = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops = new GradientStops
+                {
+                    new GradientStop(Color.Parse("#4285F4"), 0),
+                    new GradientStop(Color.Parse("#8E6CEF"), 0.5),
+                    new GradientStop(Color.Parse("#24C1E0"), 1)
+                }
+            }
+        };
+        var canvas = new Canvas { Width = 24, Height = 24 };
+        canvas.Children.Add(sparkle);
+        var icon = new Viewbox { Width = IconSize, Height = IconSize, Child = canvas };
+        ToolTip.SetTip(icon, "Gemini");
+        return icon;
+    }
 
     private static UsageCardControls CreateCard(string title, Func<Control> createIcon, bool showDetails)
     {

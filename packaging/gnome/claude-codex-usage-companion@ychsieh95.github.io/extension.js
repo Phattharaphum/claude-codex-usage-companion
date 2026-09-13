@@ -18,7 +18,7 @@ const STATE_FILE = 'gnome-top-bar.json';
 const METERS = [
     {name: 'Claude', glyph: '✳', color: [1.0, 0.31, 0.06], enabled: 'hasClaude', value: 'claudeFiveHourRemaining'},
     {name: 'Codex', glyph: '◌', color: [0.18, 0.85, 0.61], enabled: 'hasCodex', value: 'codexFiveHourRemaining'},
-    {name: 'Antigravity', glyph: '✦', color: [0.93, 0.95, 0.08], enabled: 'hasAntigravity', value: 'antigravityRemaining'},
+    {name: 'Antigravity', glyph: '✦', color: [0.26, 0.52, 0.96], enabled: 'hasAntigravity', value: 'antigravityRemaining'},
 ];
 
 class RingMeter extends St.DrawingArea {
