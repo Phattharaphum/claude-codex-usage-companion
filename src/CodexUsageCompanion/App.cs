@@ -25,6 +25,7 @@ public sealed class App : Application
     private TrayIcon? _trayIcon;
     private DispatcherTimer? _trayTooltipBridgeTimer;
     private readonly LinuxTrayTooltipBridge _trayTooltipBridge = new();
+    private readonly LinuxGnomeTopBarBridge _gnomeTopBarBridge = new();
     private readonly LinuxDesktopNotificationService _notificationService = new();
     private readonly UsageNotificationTracker _codexNotificationTracker = new();
     private readonly UsageNotificationTracker _claudeNotificationTracker = new();
@@ -36,6 +37,7 @@ public sealed class App : Application
     private RateLimitState? _lastClaudeUsage;
     private DateTimeOffset? _lastClaudeUpdatedAt;
     private AntigravityUsageState? _lastAntigravityUsage;
+    private DateTimeOffset? _lastAntigravityUpdatedAt;
     private string? _renderedTrayIconStyle;
     private int? _renderedTrayRemainingPercent;
     private bool _shutdownRequested;
@@ -95,6 +97,7 @@ public sealed class App : Application
             // Start independently of the window's Opened event so the first
             // refresh cannot be missed during framework initialization.
             _runtime.Start();
+            UpdateGnomeTopBarState();
             var startHidden = _settings.StartOnBoot &&
                 _settings.MinimizeOnStart &&
                 GuiLaunchContext.LaunchedInBackground;
@@ -518,6 +521,7 @@ public sealed class App : Application
         // The shortcuts window renders localized text captured when it opened.
         _shortcutsWindow?.Close();
         _runtime?.UpdateSettings(_settings);
+        UpdateGnomeTopBarState();
         UpdateTrayIcon();
     }
 
@@ -652,10 +656,20 @@ public sealed class App : Application
             }
 
             _lastAntigravityUsage = state;
+            _lastAntigravityUpdatedAt = updatedAt;
             _window.UpdateAntigravityUsage(state, error);
             _window.SetStatus(updatedAt, error);
+            UpdateGnomeTopBarState();
             UpdateTrayIcon();
         });
+    }
+
+    private void UpdateGnomeTopBarState()
+    {
+        _gnomeTopBarBridge.Publish(GnomeTopBarStateBuilder.Build(
+            _settings.EnableAntigravityUsage,
+            _lastAntigravityUsage,
+            _lastAntigravityUpdatedAt));
     }
 
     private static void TryWriteUsageLog(Action write)
@@ -702,6 +716,7 @@ public sealed class App : Application
                 () =>
                 {
                     DisposeTrayIcon();
+                    _gnomeTopBarBridge.Clear();
                     _shortcutsWindow?.Hide();
                     _settingsWindow?.Hide();
                     _window?.Hide();

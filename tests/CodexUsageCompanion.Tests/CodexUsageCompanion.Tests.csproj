@@ -23,5 +23,11 @@
     <None Include="..\..\packaging\plasma\com.github.ychsieh95.claude-codex-usage-companion\**\*"
           Link="plasmoid\%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\packaging\gnome\claude-codex-usage-companion@ychsieh95.github.io\**\*"
+          Link="gnome\claude-codex-usage-companion@ychsieh95.github.io\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\scripts\install-gnome-top-bar-extension.sh"
+          Link="install-gnome-top-bar-extension.sh"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

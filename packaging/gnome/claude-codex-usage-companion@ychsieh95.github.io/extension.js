@@ -1,0 +1,138 @@
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import St from 'gi://St';
+
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+
+import {formatPanelText, formatPercent, normalizeState} from './presentation.js';
+
+const APPLICATION_COMMAND = 'claude-codex-usage-companion';
+const STATE_DIRECTORY = 'claude-codex-usage-companion';
+const STATE_FILE = 'gnome-top-bar.json';
+
+export default class CompanionTopBarExtension extends Extension {
+    enable() {
+        this._state = null;
+        this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
+        this._label = new St.Label({text: formatPanelText(null)});
+        this._indicator.add_child(this._label);
+        Main.panel.addToStatusArea(this.uuid, this._indicator);
+
+        const runtimeDirectory = GLib.get_user_runtime_dir();
+        this._runtimeDirectory = Gio.File.new_for_path(runtimeDirectory);
+        this._stateDirectory = this._runtimeDirectory.get_child(STATE_DIRECTORY);
+        this._stateFile = this._stateDirectory.get_child(STATE_FILE);
+        this._installRuntimeMonitor();
+        this._installStateDirectoryMonitor();
+        this._reloadState();
+    }
+
+    disable() {
+        this._runtimeMonitor?.cancel();
+        this._runtimeMonitor = null;
+        this._stateDirectoryMonitor?.cancel();
+        this._stateDirectoryMonitor = null;
+        this._indicator?.destroy();
+        this._indicator = null;
+        this._label = null;
+        this._state = null;
+        this._runtimeDirectory = null;
+        this._stateDirectory = null;
+        this._stateFile = null;
+    }
+
+    _installRuntimeMonitor() {
+        try {
+            this._runtimeMonitor = this._runtimeDirectory.monitor_directory(
+                Gio.FileMonitorFlags.WATCH_MOVES,
+                null);
+            this._runtimeMonitor.connect('changed', () => {
+                this._installStateDirectoryMonitor();
+                this._reloadState();
+            });
+        } catch (error) {
+            logError(error, `${this.metadata.uuid}: could not monitor XDG_RUNTIME_DIR`);
+        }
+    }
+
+    _installStateDirectoryMonitor() {
+        if (this._stateDirectoryMonitor || !this._stateDirectory.query_exists(null)) {
+            return;
+        }
+
+        try {
+            this._stateDirectoryMonitor = this._stateDirectory.monitor_directory(
+                Gio.FileMonitorFlags.WATCH_MOVES,
+                null);
+            this._stateDirectoryMonitor.connect('changed', () => this._reloadState());
+        } catch (error) {
+            logError(error, `${this.metadata.uuid}: could not monitor companion state`);
+        }
+    }
+
+    async _reloadState() {
+        if (!this._stateFile || !this._indicator) {
+            return;
+        }
+
+        try {
+            const [, contents] = await this._stateFile.load_contents_async(null);
+            this._state = normalizeState(JSON.parse(new TextDecoder().decode(contents)));
+        } catch (_) {
+            this._state = null;
+        }
+
+        this._updatePresentation();
+    }
+
+    _updatePresentation() {
+        if (!this._indicator || !this._label) {
+            return;
+        }
+
+        this._label.text = formatPanelText(this._state);
+        this._indicator.menu.removeAll();
+        if (this._state?.hasAntigravity) {
+            this._addPool('Gemini Models',
+                this._state.geminiFiveHourRemaining,
+                this._state.geminiWeeklyRemaining);
+            this._addPool('Claude + GPT',
+                this._state.claudeGptFiveHourRemaining,
+                this._state.claudeGptWeeklyRemaining);
+            this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        } else {
+            this._addReadOnlyItem('Antigravity unavailable');
+            this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        }
+
+        const openUsage = new PopupMenu.PopupMenuItem('Open Usage');
+        openUsage.connect('activate', () => this._runCompanion('gui'));
+        this._indicator.menu.addMenuItem(openUsage);
+        const refresh = new PopupMenu.PopupMenuItem('Refresh');
+        refresh.connect('activate', () => this._runCompanion('refresh'));
+        this._indicator.menu.addMenuItem(refresh);
+    }
+
+    _addPool(name, fiveHour, weekly) {
+        this._addReadOnlyItem(name);
+        this._addReadOnlyItem(`  5h       ${formatPercent(fiveHour)}`);
+        this._addReadOnlyItem(`  Weekly   ${formatPercent(weekly)}`);
+    }
+
+    _addReadOnlyItem(text) {
+        const item = new PopupMenu.PopupMenuItem(text);
+        item.setSensitive(false);
+        this._indicator.menu.addMenuItem(item);
+    }
+
+    _runCompanion(command) {
+        try {
+            GLib.spawn_command_line_async(`${APPLICATION_COMMAND} ${command}`);
+        } catch (error) {
+            logError(error, `${this.metadata.uuid}: could not signal companion`);
+        }
+    }
+}

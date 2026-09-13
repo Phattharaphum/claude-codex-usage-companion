@@ -1,0 +1,7 @@
+{
+  "uuid": "claude-codex-usage-companion@ychsieh95.github.io",
+  "name": "Claude Codex Usage Companion",
+  "description": "Shows authoritative Antigravity shared quota pools in the GNOME top bar.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "url": "https://github.com/ychsieh95/claude-codex-usage-companion"
+}
