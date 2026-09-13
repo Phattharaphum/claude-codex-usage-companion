@@ -26,6 +26,7 @@ public sealed class UsageOverlayWindow : Window
     private const double AntigravitySectionTitleHeight = 20;
     private const double AntigravityGroupTitleHeight = 18;
     private const double AntigravityMessageCardHeight = 52;
+    private const double ContentBottomPadding = 10;
     private const double IconSize = 14;
     private const double HeaderGroupSpacing = 14;
     private const string CodexAccentColor = "#10A37F";
@@ -120,7 +121,11 @@ public sealed class UsageOverlayWindow : Window
                 Color = Color.Parse("#70000000")
             })
         };
-        var stack = new StackPanel { Spacing = CardSpacing };
+        var stack = new StackPanel
+        {
+            Spacing = CardSpacing,
+            Margin = new Thickness(0, 0, 0, ContentBottomPadding)
+        };
         var header = CreateHeader();
         _codexFiveHourCard = CreateCard(_text.FiveHourTitle, CreateCodexIcon, showDetails: false);
         _codexWeeklyCard = CreateCard(_text.WeeklyTitle, CreateCodexIcon, showDetails: true);
@@ -143,7 +148,12 @@ public sealed class UsageOverlayWindow : Window
         stack.Children.Add(_codexWeeklyCard.Container);
         stack.Children.Add(_antigravitySection);
         stack.Children.Add(_status);
-        _root.Child = stack;
+        _root.Child = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = stack
+        };
         RebuildAntigravitySection(applySize: false);
         Content = _root;
         ActualThemeVariantChanged += (_, _) => ApplyThemePalette();
@@ -359,7 +369,7 @@ public sealed class UsageOverlayWindow : Window
         }
 
         var antigravityHeight = ComputeAntigravitySectionHeight();
-        return BaseHeight + cardHeights.Sum() + antigravityHeight +
+        return BaseHeight + ContentBottomPadding + cardHeights.Sum() + antigravityHeight +
                (CardSpacing * (cardHeights.Count + 1 + (antigravityHeight > 0 ? 1 : 0)));
     }
 
@@ -718,8 +728,10 @@ public sealed class UsageOverlayWindow : Window
             Foreground = Brush("#9CA09C"),
             FontSize = 13,
             FontWeight = FontWeight.Bold,
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
+        Grid.SetRow(remaining, 1);
         Grid.SetColumn(remaining, 1);
         var reset = new TextBlock
         {
@@ -728,7 +740,7 @@ public sealed class UsageOverlayWindow : Window
             Margin = new Thickness(0, 1, 0, 3)
         };
         Grid.SetRow(reset, 1);
-        Grid.SetColumnSpan(reset, 2);
+        Grid.SetColumn(reset, 0);
         var details = new TextBlock
         {
             Foreground = Brush("#B7BAB6"),
@@ -772,6 +784,7 @@ public sealed class UsageOverlayWindow : Window
 
         Grid.SetRow(bar, 2);
         Grid.SetColumnSpan(bar, 2);
+        Grid.SetColumnSpan(titleRow, 2);
         grid.Children.Add(titleRow);
         grid.Children.Add(remaining);
         grid.Children.Add(reset);

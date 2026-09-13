@@ -76,6 +76,29 @@ public sealed class UsagePresentationTests
     }
 
     [Fact]
+    public void AntigravityPresentationPreservesLongTitlesAndOneHundredPercentValues()
+    {
+        var pool = new AntigravityQuotaPoolState(
+            "third-party",
+            "Claude and GPT models",
+            new AntigravityQuotaWindowState(
+                "3p-5h",
+                "Five Hour Limit Remaining",
+                AntigravityQuotaCadence.FiveHour,
+                100,
+                null,
+                TimeSpan.FromHours(5)),
+            null,
+            []);
+
+        var presentation = UsagePresentation.BuildAntigravityPresentation(true, State([pool]), null);
+
+        var window = Assert.Single(Assert.Single(presentation.Pools).Windows);
+        Assert.Equal("Five Hour Limit Remaining", window.Name);
+        Assert.Equal(100, window.RemainingPercent);
+    }
+
+    [Fact]
     public void AntigravityPresentationPrefersAuthoritativePoolsOverModels()
     {
         var state = new AntigravityUsageState(
