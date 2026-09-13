@@ -118,12 +118,16 @@ public static class Program
         var settings = CompanionSettingsStore.Load();
         var (codexState, codexError) = await ReadCodexUsageAsync(settings, CancellationToken.None);
         var (claudeState, claudeError) = await ReadClaudeUsageAsync(settings, CancellationToken.None);
+        var (antigravityState, antigravityError) = await ReadAntigravityUsageAsync(
+            settings,
+            CancellationToken.None);
 
         if (options.Json)
         {
             var payload = BuildStatusPayload(
                 settings.EnableClaudeUsage, claudeState, claudeError,
-                settings.EnableCodexUsage, codexState, codexError);
+                settings.EnableCodexUsage, codexState, codexError,
+                settings.EnableAntigravityUsage, antigravityState, antigravityError);
             Console.WriteLine(payload.ToJsonString(JsonDefaults.Output));
         }
         else
@@ -147,9 +151,20 @@ public static class Program
                 wroteAny = true;
             }
 
+            if (settings.EnableAntigravityUsage)
+            {
+                if (wroteAny)
+                {
+                    Console.WriteLine();
+                }
+
+                ConsoleUsageRenderer.WriteAntigravity(antigravityState, antigravityError, text);
+                wroteAny = true;
+            }
+
             if (!wroteAny)
             {
-                Console.WriteLine("No usage providers enabled. Enable Claude and/or Codex in Settings.");
+                Console.WriteLine("No usage providers enabled. Enable Claude, Codex, and/or Antigravity in Settings.");
             }
         }
 
@@ -159,7 +174,8 @@ public static class Program
         }
 
         var exitCode = (settings.EnableCodexUsage && codexError is not null) ||
-                       (settings.EnableClaudeUsage && claudeError is not null)
+                       (settings.EnableClaudeUsage && claudeError is not null) ||
+                       (settings.EnableAntigravityUsage && antigravityError is not null)
             ? 1
             : 0;
         return exitCode;
@@ -205,13 +221,64 @@ public static class Program
         }
     }
 
-    private static JsonObject BuildStatusPayload(
+    internal static async Task<(AntigravityUsageState? State, string? Error)> ReadAntigravityUsageAsync(
+        CompanionSettings settings,
+        CancellationToken cancellationToken,
+        Func<CancellationToken, Task<AntigravityUsageState>>? readUsage = null)
+    {
+        if (!settings.EnableAntigravityUsage)
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            if (readUsage is not null)
+            {
+                return (await readUsage(cancellationToken), null);
+            }
+
+            await using var client = new AntigravityUsageClient();
+            return (await client.ReadUsageAsync(cancellationToken), null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            return (null, FriendlyAntigravityError(exception));
+        }
+    }
+
+    internal static JsonObject BuildStatusPayload(
         bool claudeEnabled,
         RateLimitState? claudeState,
         string? claudeError,
         bool codexEnabled,
         RateLimitState? codexState,
-        string? codexError)
+        string? codexError) =>
+        BuildStatusPayload(
+            claudeEnabled,
+            claudeState,
+            claudeError,
+            codexEnabled,
+            codexState,
+            codexError,
+            antigravityEnabled: false,
+            antigravityState: null,
+            antigravityError: null);
+
+    internal static JsonObject BuildStatusPayload(
+        bool claudeEnabled,
+        RateLimitState? claudeState,
+        string? claudeError,
+        bool codexEnabled,
+        RateLimitState? codexState,
+        string? codexError,
+        bool antigravityEnabled,
+        AntigravityUsageState? antigravityState,
+        string? antigravityError)
     {
         var payload = new JsonObject();
         if (claudeEnabled)
@@ -224,10 +291,16 @@ public static class Program
             payload["codex"] = SerializeProvider(codexState, codexError);
         }
 
+        if (antigravityEnabled)
+        {
+            payload["antigravity"] = SerializeProvider(antigravityState, antigravityError);
+        }
+
         return payload;
     }
 
-    private static JsonObject SerializeProvider(RateLimitState? state, string? error)
+    private static JsonObject SerializeProvider<TState>(TState? state, string? error)
+        where TState : class
     {
         return new JsonObject
         {
@@ -461,6 +534,16 @@ public static class Program
         }
 
         return exception.Message;
+    }
+
+    private static string FriendlyAntigravityError(Exception exception)
+    {
+        return exception.Message switch
+        {
+            "Multiple Antigravity accounts are active." => exception.Message,
+            "The lsof utility is required for Antigravity local process discovery." => exception.Message,
+            _ => "Antigravity local usage service was unavailable."
+        };
     }
 }
 

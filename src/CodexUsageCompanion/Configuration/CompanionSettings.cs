@@ -13,6 +13,7 @@ public sealed record CompanionSettings
     public bool? LegacyShowFiveHourLimit { get; init; }
     public bool EnableClaudeUsage { get; init; } = true;
     public bool EnableCodexUsage { get; init; } = true;
+    public bool EnableAntigravityUsage { get; init; }
     public bool EnableSystemTray { get; init; }
     public string TrayIconStyle { get; init; } = TrayIconStyleOptions.Original;
     public bool ShowTaskbarIcon { get; init; } = true;

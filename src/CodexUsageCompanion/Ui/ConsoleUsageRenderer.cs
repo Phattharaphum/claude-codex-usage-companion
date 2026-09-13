@@ -13,6 +13,37 @@ public static class ConsoleUsageRenderer
     public static void WriteClaude(RateLimitState? state, string? error, UiText text, bool color) =>
         Write("Claude usage", text.ClaudeFiveHourTitle, text.ClaudeWeeklyTitle, state, error, text, color);
 
+    public static void WriteAntigravity(AntigravityUsageState? state, string? error, UiText text)
+    {
+        Console.WriteLine("Antigravity usage");
+        if (state is null)
+        {
+            Console.WriteLine(error ?? text.WaitingForData);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.Account))
+        {
+            Console.WriteLine($"Account: {state.Account}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(state.Plan))
+        {
+            Console.WriteLine($"Plan: {state.Plan}");
+        }
+
+        foreach (var model in state.Models)
+        {
+            Console.WriteLine();
+            Console.WriteLine(model.Name);
+            Console.WriteLine($"  Remaining: {model.RemainingPercent}%");
+            var reset = model.ResetAt is { } resetAt
+                ? text.FormatFiveHourReset(resetAt.ToLocalTime())
+                : text.ResetUnavailable;
+            Console.WriteLine($"  Reset: {reset}");
+        }
+    }
+
     private static void Write(
         string label,
         string fiveHourTitle,

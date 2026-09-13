@@ -20,6 +20,7 @@ public sealed class CompanionSettingsTests
             Assert.True(settings.ShowCodexWeekly);
             Assert.True(settings.EnableCodexUsage);
             Assert.True(settings.EnableClaudeUsage);
+            Assert.False(settings.EnableAntigravityUsage);
             Assert.False(settings.EnableSystemTray);
             Assert.Equal(TrayIconStyleOptions.Original, settings.TrayIconStyle);
             Assert.True(settings.ShowTaskbarIcon);
@@ -89,6 +90,7 @@ public sealed class CompanionSettingsTests
             Assert.True(settings.ShowCodexFiveHour);
             Assert.Null(settings.LegacyShowFiveHourLimit);
             Assert.False(settings.EnableSystemTray);
+            Assert.False(settings.EnableAntigravityUsage);
             Assert.Equal(TrayIconStyleOptions.Original, settings.TrayIconStyle);
             Assert.True(settings.ShowTaskbarIcon);
             Assert.False(settings.StartOnBoot);
@@ -149,6 +151,31 @@ public sealed class CompanionSettingsTests
             var json = File.ReadAllText(path);
             Assert.Contains("\"showCodexFiveHour\": true", json);
             Assert.DoesNotContain("\"showFiveHourLimit\"", json);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+    }
+
+    [Fact]
+    public void SavePersistsAntigravityEnablement()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"CodexUsageCompanion.Tests.{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "settings.json");
+        try
+        {
+            var saved = CompanionSettingsStore.Save(
+                new CompanionSettings { EnableAntigravityUsage = true },
+                path);
+            var loaded = CompanionSettingsStore.Load(path);
+
+            Assert.True(saved.EnableAntigravityUsage);
+            Assert.True(loaded.EnableAntigravityUsage);
+            Assert.Contains("\"enableAntigravityUsage\": true", File.ReadAllText(path));
         }
         finally
         {
