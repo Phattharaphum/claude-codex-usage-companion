@@ -17,20 +17,19 @@ namespace CodexUsageCompanion.Ui;
 
 public sealed class UsageOverlayWindow : Window
 {
-    private const double CellWidth = 48;
     // Header, root padding, and the persistent "Last updated" status row.
     // This remains outside the cards, so it must be included in the fixed
     // portion of the no-scroll layout.
     private const double BaseHeight = 84;
     private const double CardSpacing = 6;
-    private const double FiveHourCardHeight = 62;
-    private const double WeeklyCardHeight = 76;
-    private const double AntigravityWindowCardHeight = 62;
+    private const double FiveHourCardHeight = 64;
+    private const double WeeklyCardHeight = 64;
+    private const double AntigravityWindowCardHeight = 64;
     private const double AntigravitySectionTitleHeight = 18;
     private const double AntigravityGroupTitleHeight = 15;
     private const double AntigravityMessageCardHeight = 52;
     private const double ContentBottomPadding = 4;
-    private const double IconSize = 13;
+    private const double IconSize = 14;
     private const double HeaderGroupSpacing = 14;
     private const string CodexAccentColor = "#10A37F";
     private const string ClaudeIconBackground = "#D77655";
@@ -130,10 +129,10 @@ public sealed class UsageOverlayWindow : Window
             Margin = new Thickness(0, 0, 0, ContentBottomPadding)
         };
         var header = CreateHeader();
-        _codexFiveHourCard = CreateCard(_text.FiveHourTitle, CreateCodexIcon, showDetails: false);
-        _codexWeeklyCard = CreateCard(_text.WeeklyTitle, CreateCodexIcon, showDetails: true);
-        _claudeFiveHourCard = CreateCard(_text.ClaudeFiveHourTitle, CreateClaudeIcon, showDetails: false);
-        _claudeWeeklyCard = CreateCard(_text.ClaudeWeeklyTitle, CreateClaudeIcon, showDetails: true);
+        _codexFiveHourCard = CreateCard(_text.FiveHourTitle, CreateCodexIcon);
+        _codexWeeklyCard = CreateCard(_text.WeeklyTitle, CreateCodexIcon);
+        _claudeFiveHourCard = CreateCard(_text.ClaudeFiveHourTitle, CreateClaudeIcon);
+        _claudeWeeklyCard = CreateCard(_text.ClaudeWeeklyTitle, CreateClaudeIcon);
         _antigravitySection = new StackPanel { Spacing = 6 };
         ApplyCardVisibility();
         _status = new TextBlock
@@ -212,16 +211,12 @@ public sealed class UsageOverlayWindow : Window
             _lastCodexState = state;
             UpdateCard(_codexFiveHourCard, state?.FiveHour, weekly: false, dataAvailable: state is not null);
             UpdateCard(_codexWeeklyCard, state?.Weekly, weekly: true, dataAvailable: state is not null);
-            _codexWeeklyCard.Details.Text = _text.FormatCreditDetails(
-                state?.CreditBalance,
-                state?.AutomaticReloadEnabled == true);
             return;
         }
 
         _lastClaudeState = state;
         UpdateCard(_claudeFiveHourCard, state?.FiveHour, weekly: false, dataAvailable: state is not null);
         UpdateCard(_claudeWeeklyCard, state?.Weekly, weekly: true, dataAvailable: state is not null);
-        _claudeWeeklyCard.Details.Text = _text.FormatClaudeCreditsDetails(state?.ExtraUsage);
     }
 
     public void UpdateAntigravityUsage(AntigravityUsageState? state, string? error)
@@ -457,11 +452,14 @@ public sealed class UsageOverlayWindow : Window
 
     private void AddAntigravityWindow(AntigravityQuotaWindowState window)
     {
-        var card = CreateCard(window.Name, CreateAntigravityIcon, showDetails: false);
+        var card = CreateCard(CompactQuotaTitle(window.Name), CreateAntigravityIcon);
         UpdateAntigravityCard(card, window);
         _antigravityCards.Add(card);
         _antigravitySection.Children.Add(card.Container);
     }
+
+    private static string CompactQuotaTitle(string title) =>
+        title.Replace(" Remaining", string.Empty, StringComparison.OrdinalIgnoreCase);
 
     private void AddAntigravityMessage(string message, bool error)
     {
@@ -698,11 +696,11 @@ public sealed class UsageOverlayWindow : Window
         return icon;
     }
 
-    private static UsageCardControls CreateCard(string title, Func<Control> createIcon, bool showDetails)
+    private static UsageCardControls CreateCard(string title, Func<Control> createIcon)
     {
         var container = new Border
         {
-            Height = showDetails ? WeeklyCardHeight : FiveHourCardHeight,
+            Height = FiveHourCardHeight,
             Background = Brush("#FF353835"),
             BorderBrush = Brush("#FF4A4E4A"),
             BorderThickness = new Thickness(1),
@@ -711,10 +709,8 @@ public sealed class UsageOverlayWindow : Window
         };
         var grid = new Grid
         {
-            RowDefinitions = showDetails
-                ? new RowDefinitions("Auto,Auto,*,Auto")
-                : new RowDefinitions("Auto,Auto,*"),
-            ColumnDefinitions = new ColumnDefinitions("*,112")
+            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto")
         };
         var icon = createIcon();
         icon.VerticalAlignment = VerticalAlignment.Center;
@@ -723,7 +719,7 @@ public sealed class UsageOverlayWindow : Window
         {
             Text = title,
             Foreground = Brush("#F4F5F3"),
-            FontSize = 13,
+            FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -738,7 +734,7 @@ public sealed class UsageOverlayWindow : Window
         var remaining = new TextBlock
         {
             Foreground = Brush("#9CA09C"),
-            FontSize = 12,
+            FontSize = 15,
             FontWeight = FontWeight.Bold,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
@@ -749,52 +745,28 @@ public sealed class UsageOverlayWindow : Window
         var reset = new TextBlock
         {
             Foreground = Brush("#B7BAB6"),
-            FontSize = 10.5,
+            FontSize = 11,
             Margin = new Thickness(0, 0, 0, 2),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         Grid.SetRow(reset, 1);
         Grid.SetColumn(reset, 0);
-        var details = new TextBlock
+        var fill = new Border
         {
-            Foreground = Brush("#B7BAB6"),
-            FontSize = 10,
-            Margin = new Thickness(0, 2, 0, 0),
-            IsVisible = showDetails
+            Width = 0,
+            Height = 8,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            CornerRadius = new CornerRadius(4)
         };
-        Grid.SetRow(details, 3);
-        Grid.SetColumnSpan(details, 2);
-
-        var bar = new StackPanel
+        var bar = new Border
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 4,
-            VerticalAlignment = VerticalAlignment.Bottom
+            Height = 8,
+            Background = Brush("#FF4A4D49"),
+            CornerRadius = new CornerRadius(4),
+            ClipToBounds = true,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Child = fill
         };
-        var fills = new Border[5];
-        var cells = new Border[5];
-        for (var index = 0; index < fills.Length; index++)
-        {
-            var fill = new Border
-            {
-                Width = 0,
-                Height = 7,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                CornerRadius = new CornerRadius(2.5)
-            };
-            var cell = new Border
-            {
-                Width = CellWidth,
-                Height = 7,
-                Background = Brush("#FF4A4D49"),
-                CornerRadius = new CornerRadius(2),
-                Child = fill,
-                ClipToBounds = true
-            };
-            cells[index] = cell;
-            fills[index] = fill;
-            bar.Children.Add(cell);
-        }
 
         Grid.SetRow(bar, 2);
         Grid.SetColumnSpan(bar, 2);
@@ -802,17 +774,17 @@ public sealed class UsageOverlayWindow : Window
         grid.Children.Add(titleRow);
         grid.Children.Add(remaining);
         grid.Children.Add(reset);
-        grid.Children.Add(details);
         grid.Children.Add(bar);
         container.Child = grid;
-        return new UsageCardControls(
+        var card = new UsageCardControls(
             container,
             titleText,
             remaining,
             reset,
-            details,
-            cells,
-            fills);
+            bar,
+            fill);
+        bar.SizeChanged += (_, _) => UpdateProgressWidth(card);
+        return card;
     }
 
     private void UpdateCard(
@@ -823,13 +795,13 @@ public sealed class UsageOverlayWindow : Window
     {
         if (state is null)
         {
-            card.Remaining.Text = _text.RemainingUnavailable;
+            card.Remaining.Text = "--";
             card.Reset.Text = dataAvailable ? _text.LimitUnavailable : _text.WaitingForData;
             ApplyBar(card, 0, UsageSignal.Gray);
             return;
         }
 
-        card.Remaining.Text = _text.FormatRemaining(state.RemainingPercent);
+        card.Remaining.Text = FormatPercent(state.RemainingPercent);
         card.Reset.Text = state.ResetsAt is long unixSeconds
             ? weekly
                 ? _text.FormatWeeklyReset(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime())
@@ -842,7 +814,7 @@ public sealed class UsageOverlayWindow : Window
         UsageCardControls card,
         AntigravityQuotaWindowState window)
     {
-        card.Remaining.Text = _text.FormatRemaining(window.RemainingPercent);
+        card.Remaining.Text = FormatPercent(window.RemainingPercent);
         card.Reset.Text = window.ResetAt is { } resetAt
             ? window.Cadence == AntigravityQuotaCadence.Weekly
                 ? _text.FormatWeeklyReset(resetAt.ToLocalTime())
@@ -854,14 +826,17 @@ public sealed class UsageOverlayWindow : Window
     private void ApplyBar(UsageCardControls card, int remainingPercent, UsageSignal signal)
     {
         var color = SignalBrush(signal);
-        var ratios = UsagePresentation.GetCellFillRatios(remainingPercent);
+        card.RemainingPercent = Math.Clamp(remainingPercent, 0, 100);
         card.Remaining.Foreground = color;
-        for (var index = 0; index < card.Fills.Length; index++)
-        {
-            card.Fills[index].Background = color;
-            card.Fills[index].Width = CellWidth * ratios[index];
-        }
+        card.ProgressFill.Background = color;
+        UpdateProgressWidth(card);
     }
+
+    private static string FormatPercent(int percent) => $"{Math.Clamp(percent, 0, 100)}%";
+
+    private static void UpdateProgressWidth(UsageCardControls card) =>
+        card.ProgressFill.Width = Math.Round(
+            card.ProgressTrack.Bounds.Width * card.RemainingPercent / 100d);
 
     private void HandleHeaderPointerPressed(object? sender, PointerPressedEventArgs eventArgs)
     {
@@ -965,11 +940,7 @@ public sealed class UsageOverlayWindow : Window
         card.Container.BorderBrush = Brush(_palette.CardBorder);
         card.Title.Foreground = Brush(_palette.CardTitle);
         card.Reset.Foreground = Brush(_palette.SecondaryText);
-        card.Details.Foreground = Brush(_palette.SecondaryText);
-        foreach (var cell in card.Cells)
-        {
-            cell.Background = Brush(_palette.EmptyCell);
-        }
+        card.ProgressTrack.Background = Brush(_palette.EmptyCell);
     }
 
     private SolidColorBrush SignalBrush(UsageSignal signal) => signal switch
@@ -988,7 +959,9 @@ public sealed class UsageOverlayWindow : Window
         TextBlock Title,
         TextBlock Remaining,
         TextBlock Reset,
-        TextBlock Details,
-        Border[] Cells,
-        Border[] Fills);
+        Border ProgressTrack,
+        Border ProgressFill)
+    {
+        public int RemainingPercent { get; set; }
+    }
 }
