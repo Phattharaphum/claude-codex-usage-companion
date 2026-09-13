@@ -101,6 +101,10 @@ public sealed class UsageOverlayWindow : Window
         MaxHeight = Height;
         CanResize = false;
         WindowDecorations = Avalonia.Controls.WindowDecorations.None;
+        // On GNOME Wayland this app uses XWayland. A transparent X11 surface
+        // receives a compositor drop shadow that cannot be styled by Avalonia.
+        // Prefer an opaque surface so the companion controls its own border.
+        TransparencyLevelHint = [WindowTransparencyLevel.None];
         ShowInTaskbar = _showTaskbarIcon;
         Topmost = settings.AlwaysOnTop;
         Opacity = settings.Opacity;
@@ -907,6 +911,7 @@ public sealed class UsageOverlayWindow : Window
         _palette = ActualThemeVariant == ThemeVariant.Light
             ? OverlayThemePalette.Light
             : OverlayThemePalette.Dark;
+        Background = Brush(_palette.RootBackground);
         _root.Background = Brush(_palette.RootBackground);
         _root.BorderBrush = Brush(_palette.RootBorder);
         _root.BoxShadow = _palette.Shadow == "#00000000"
