@@ -35,6 +35,7 @@ public sealed class App : Application
     private DateTimeOffset? _lastCodexUpdatedAt;
     private RateLimitState? _lastClaudeUsage;
     private DateTimeOffset? _lastClaudeUpdatedAt;
+    private AntigravityUsageState? _lastAntigravityUsage;
     private string? _renderedTrayIconStyle;
     private int? _renderedTrayRemainingPercent;
     private bool _shutdownRequested;
@@ -161,6 +162,9 @@ public sealed class App : Application
 
     private NativeMenu CreateTrayMenu()
     {
+        var menu = new NativeMenu();
+        AddLinuxAntigravityIndicatorMenu(menu);
+
         var show = new NativeMenuItem(_text.TrayShowAction);
         show.Click += (_, _) => ShowWindow();
 
@@ -236,7 +240,6 @@ public sealed class App : Application
         var quit = new NativeMenuItem(_text.TrayQuitAction);
         quit.Click += async (_, _) => await ShutdownAsync();
 
-        var menu = new NativeMenu();
         menu.Items.Add(show);
         menu.Items.Add(refresh);
         menu.Items.Add(new NativeMenuItemSeparator());
@@ -247,6 +250,54 @@ public sealed class App : Application
         menu.Items.Add(shortcuts);
         menu.Items.Add(quit);
         return menu;
+    }
+
+    private void AddLinuxAntigravityIndicatorMenu(NativeMenu menu)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var presentation = LinuxStatusNotifierPresentationBuilder.Build(
+            _settings.EnableAntigravityUsage,
+            _lastAntigravityUsage);
+        if (presentation.Kind == LinuxStatusNotifierPresentationKind.Hidden)
+        {
+            return;
+        }
+
+        menu.Items.Add(new NativeMenuItem(_text.AntigravityTitle)
+        {
+            IsEnabled = false
+        });
+        if (presentation.Kind == LinuxStatusNotifierPresentationKind.QuotaPools)
+        {
+            foreach (var pool in presentation.Pools)
+            {
+                menu.Items.Add(new NativeMenuItem(pool.Name)
+                {
+                    IsEnabled = false
+                });
+                foreach (var window in pool.Windows)
+                {
+                    menu.Items.Add(new NativeMenuItem(
+                        $"  {window.Name}: {_text.FormatRemaining(window.RemainingPercent)}")
+                    {
+                        IsEnabled = false
+                    });
+                }
+            }
+        }
+        else
+        {
+            menu.Items.Add(new NativeMenuItem(_text.WaitingForData)
+            {
+                IsEnabled = false
+            });
+        }
+
+        menu.Items.Add(new NativeMenuItemSeparator());
     }
 
     private WindowIcon CreateTrayWindowIcon()
@@ -600,8 +651,10 @@ public sealed class App : Application
                 return;
             }
 
+            _lastAntigravityUsage = state;
             _window.UpdateAntigravityUsage(state, error);
             _window.SetStatus(updatedAt, error);
+            UpdateTrayIcon();
         });
     }
 
