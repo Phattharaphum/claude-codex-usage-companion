@@ -909,12 +909,14 @@ public sealed class UsageOverlayWindow : Window
             : OverlayThemePalette.Dark;
         _root.Background = Brush(_palette.RootBackground);
         _root.BorderBrush = Brush(_palette.RootBorder);
-        _root.BoxShadow = new BoxShadows(new BoxShadow
-        {
-            Blur = 22,
-            OffsetY = 5,
-            Color = Color.Parse(_palette.Shadow)
-        });
+        _root.BoxShadow = _palette.Shadow == "#00000000"
+            ? default
+            : new BoxShadows(new BoxShadow
+            {
+                Blur = 22,
+                OffsetY = 5,
+                Color = Color.Parse(_palette.Shadow)
+            });
         _headerTitle.Foreground = Brush(_palette.HeaderForeground);
         ApplyCardTheme(_codexFiveHourCard);
         ApplyCardTheme(_codexWeeklyCard);
