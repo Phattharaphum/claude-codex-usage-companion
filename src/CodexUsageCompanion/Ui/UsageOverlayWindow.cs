@@ -162,7 +162,6 @@ public sealed class UsageOverlayWindow : Window
         Opened += (_, _) =>
         {
             PositionOnPrimaryScreen();
-            LinuxX11WindowHints.TrySetUtilityWindowType(this);
             ApplyThemePalette();
         };
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
@@ -569,7 +568,9 @@ public sealed class UsageOverlayWindow : Window
         Grid.SetColumn(_refreshButton, 4);
 
         _minimizeButton = HeaderButton("−", _text.MinimizeAction);
-        _minimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
+        // A real unmap works on both X11 and native Wayland.  WindowState.Minimized
+        // is only advisory on Wayland and can leave a borderless overlay visible.
+        _minimizeButton.Click += (_, _) => Hide();
         // Sets the window controls apart from the panel actions before them.
         _minimizeButton.Margin = new Thickness(HeaderGroupSpacing, 0, 0, 0);
         Grid.SetColumn(_minimizeButton, 5);
