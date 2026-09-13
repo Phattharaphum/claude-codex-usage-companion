@@ -209,6 +209,13 @@ public sealed record UiText(
         _ => "Enable Codex usage"
     };
 
+    public string EnableAntigravityUsageOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "啟用 Antigravity 用量顯示",
+        UiLanguage.SimplifiedChinese => "启用 Antigravity 用量显示",
+        _ => "Enable Antigravity usage"
+    };
+
     public string EnableClaudeUsageOption => Language switch
     {
         UiLanguage.TraditionalChinese => "啟用 Claude 用量顯示",

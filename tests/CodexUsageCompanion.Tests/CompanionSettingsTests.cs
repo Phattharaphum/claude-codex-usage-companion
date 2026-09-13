@@ -1,4 +1,5 @@
 using CodexUsageCompanion.Configuration;
+using CodexUsageCompanion.Ui;
 using Xunit;
 
 namespace CodexUsageCompanion.Tests;
@@ -184,6 +185,91 @@ public sealed class CompanionSettingsTests
                 Directory.Delete(directory, true);
             }
         }
+    }
+
+    [Fact]
+    public void SavePersistsDisabledAntigravityWithoutChangingUnrelatedSettings()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"CodexUsageCompanion.Tests.{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "settings.json");
+        try
+        {
+            var saved = CompanionSettingsStore.Save(
+                new CompanionSettings
+                {
+                    EnableAntigravityUsage = false,
+                    EnableClaudeUsage = false,
+                    EnableCodexUsage = true,
+                    Language = "zh-tw",
+                    RefreshIntervalSeconds = 300
+                },
+                path);
+            var loaded = CompanionSettingsStore.Load(path);
+
+            Assert.False(saved.EnableAntigravityUsage);
+            Assert.False(loaded.EnableAntigravityUsage);
+            Assert.False(loaded.EnableClaudeUsage);
+            Assert.True(loaded.EnableCodexUsage);
+            Assert.Equal("zh-tw", loaded.Language);
+            Assert.Equal(300, loaded.RefreshIntervalSeconds);
+            Assert.Contains("\"enableAntigravityUsage\": false", File.ReadAllText(path));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SettingsUsageProviderSelectionPreservesAntigravityInitialValue(bool enabled)
+    {
+        var initial = new CompanionSettings
+        {
+            EnableClaudeUsage = false,
+            EnableCodexUsage = true,
+            EnableAntigravityUsage = enabled,
+            Language = "zh-cn",
+            RefreshIntervalSeconds = 300
+        };
+
+        var captured = SettingsWindow.ApplyUsageProviderEnablement(
+            initial,
+            initial.EnableClaudeUsage,
+            initial.EnableCodexUsage,
+            initial.EnableAntigravityUsage);
+
+        Assert.Equal(enabled, captured.EnableAntigravityUsage);
+        Assert.False(captured.EnableClaudeUsage);
+        Assert.True(captured.EnableCodexUsage);
+        Assert.Equal("zh-cn", captured.Language);
+        Assert.Equal(300, captured.RefreshIntervalSeconds);
+    }
+
+    [Fact]
+    public void SettingsUsageProviderSelectionCanEnableAndDisableAntigravity()
+    {
+        var initial = new CompanionSettings
+        {
+            EnableClaudeUsage = false,
+            EnableCodexUsage = true,
+            Language = "zh-tw"
+        };
+
+        var enabled = SettingsWindow.ApplyUsageProviderEnablement(
+            initial, false, true, true);
+        var disabled = SettingsWindow.ApplyUsageProviderEnablement(
+            enabled, false, true, false);
+
+        Assert.True(enabled.EnableAntigravityUsage);
+        Assert.False(disabled.EnableAntigravityUsage);
+        Assert.False(disabled.EnableClaudeUsage);
+        Assert.True(disabled.EnableCodexUsage);
+        Assert.Equal("zh-tw", disabled.Language);
     }
 
     [Fact]

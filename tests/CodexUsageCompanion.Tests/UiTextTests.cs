@@ -118,6 +118,7 @@ public sealed class UiTextTests
         Assert.Equal("Author: ychsieh95 • Original project: gkfriend/codex-usage-companion", text.AuthorInfo);
         Assert.Equal("Enable Codex usage", text.EnableCodexUsageOption);
         Assert.Equal("Enable Claude usage", text.EnableClaudeUsageOption);
+        Assert.Equal("Enable Antigravity usage", text.EnableAntigravityUsageOption);
         Assert.Equal("Displayed limits", text.DisplayedLimitsOption);
         Assert.Equal("Claude current session", text.ShowClaudeSessionOption);
         Assert.Equal("Claude current week (All)", text.ShowClaudeWeeklyOption);
@@ -177,6 +178,17 @@ public sealed class UiTextTests
         var text = UiText.For(language);
 
         Assert.Equal(expected, text.EnableCodexUsageOption);
+    }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "Enable Antigravity usage")]
+    [InlineData(UiLanguage.TraditionalChinese, "啟用 Antigravity 用量顯示")]
+    [InlineData(UiLanguage.SimplifiedChinese, "启用 Antigravity 用量显示")]
+    public void EnableAntigravityUsageOptionIsLocalized(UiLanguage language, string expected)
+    {
+        var text = UiText.For(language);
+
+        Assert.Equal(expected, text.EnableAntigravityUsageOption);
     }
 
     [Theory]

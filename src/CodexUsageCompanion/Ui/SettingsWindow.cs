@@ -23,6 +23,7 @@ public sealed class SettingsWindow : Window
     private readonly CheckBox _alwaysOnTop;
     private readonly CheckBox _enableClaudeUsage;
     private readonly CheckBox _enableCodexUsage;
+    private readonly CheckBox _enableAntigravityUsage;
     private readonly CheckBox _showClaudeSession;
     private readonly CheckBox _showClaudeWeekly;
     private readonly CheckBox _showCodexFiveHour;
@@ -119,6 +120,11 @@ public sealed class SettingsWindow : Window
         {
             Content = text.EnableCodexUsageOption,
             IsChecked = settings.EnableCodexUsage
+        };
+        _enableAntigravityUsage = new CheckBox
+        {
+            Content = text.EnableAntigravityUsageOption,
+            IsChecked = settings.EnableAntigravityUsage
         };
         _showClaudeSession = new CheckBox
         {
@@ -423,6 +429,7 @@ public sealed class SettingsWindow : Window
                 CreateSectionHeader(text.UsageSettingsGroup),
                 _enableClaudeUsage,
                 _enableCodexUsage,
+                _enableAntigravityUsage,
                 displayedLimitsLabel,
                 _showClaudeSession,
                 _showClaudeWeekly,
@@ -639,7 +646,12 @@ public sealed class SettingsWindow : Window
 
     private CompanionSettings CaptureSettings()
     {
-        return _settings with
+        var settings = ApplyUsageProviderEnablement(
+            _settings,
+            _enableClaudeUsage.IsChecked == true,
+            _enableCodexUsage.IsChecked == true,
+            _enableAntigravityUsage.IsChecked == true);
+        return settings with
         {
             EnableSystemTray = _systemTray.IsChecked == true,
             TrayIconStyle =
@@ -649,8 +661,6 @@ public sealed class SettingsWindow : Window
             StartOnBoot = _startOnBoot.IsChecked == true,
             MinimizeOnStart = _minimizeOnStart.IsChecked == true,
             AlwaysOnTop = _alwaysOnTop.IsChecked == true,
-            EnableClaudeUsage = _enableClaudeUsage.IsChecked == true,
-            EnableCodexUsage = _enableCodexUsage.IsChecked == true,
             ShowClaudeSession = _showClaudeSession.IsChecked == true,
             ShowClaudeWeekly = _showClaudeWeekly.IsChecked == true,
             ShowCodexFiveHour = _showCodexFiveHour.IsChecked == true,
@@ -672,6 +682,20 @@ public sealed class SettingsWindow : Window
             UsageLogFilePath = _usageLogFilePath.Text ?? string.Empty,
             UsageLogFormat =
                 _usageLogFormat.SelectedItem as string ?? UsageLogOptions.Csv
+        };
+    }
+
+    internal static CompanionSettings ApplyUsageProviderEnablement(
+        CompanionSettings settings,
+        bool enableClaudeUsage,
+        bool enableCodexUsage,
+        bool enableAntigravityUsage)
+    {
+        return settings with
+        {
+            EnableClaudeUsage = enableClaudeUsage,
+            EnableCodexUsage = enableCodexUsage,
+            EnableAntigravityUsage = enableAntigravityUsage
         };
     }
 
