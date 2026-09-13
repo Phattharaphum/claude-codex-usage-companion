@@ -10,6 +10,8 @@ internal sealed class AntigravityUsageClient : IAntigravityUsageReader
 {
     private const string GetUserStatusPath =
         "/exa.language_server_pb.LanguageServerService/GetUserStatus";
+    private const string RetrieveUserQuotaSummaryPath =
+        "/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary";
     private const string UnavailableMessage = "Antigravity local usage service was unavailable.";
     private const int MaximumResponseBytes = 1_048_576;
 
@@ -112,6 +114,8 @@ internal sealed class AntigravityUsageClient : IAntigravityUsageReader
         CancellationToken callerCancellationToken,
         CancellationToken operationCancellationToken)
     {
+        AntigravityUsageState? metadata = null;
+        IReadOnlyList<AntigravityQuotaPoolState> quotaPools = [];
         foreach (var port in endpoint.Ports.Order())
         {
             foreach (var scheme in new[] { "https", "http" })
@@ -123,25 +127,47 @@ internal sealed class AntigravityUsageClient : IAntigravityUsageReader
                         return null;
                     }
 
-                    var state = await TryReadAsync(
-                        endpoint.CsrfToken,
-                        scheme,
-                        host,
-                        port,
-                        callerCancellationToken,
-                        operationCancellationToken);
-                    if (state is not null)
+                    if (metadata is null)
                     {
-                        return state;
+                        metadata = await TryReadMetadataAsync(
+                            endpoint.CsrfToken,
+                            scheme,
+                            host,
+                            port,
+                            callerCancellationToken,
+                            operationCancellationToken);
+                    }
+
+                    if (quotaPools.Count == 0 && scheme == "https")
+                    {
+                        quotaPools = await TryReadQuotaSummaryAsync(
+                            endpoint.CsrfToken,
+                            scheme,
+                            host,
+                            port,
+                            callerCancellationToken,
+                            operationCancellationToken);
+                    }
+
+                    if (metadata is not null && quotaPools.Count > 0)
+                    {
+                        return metadata with { QuotaPools = quotaPools };
                     }
                 }
             }
         }
 
-        return null;
+        if (metadata is not null)
+        {
+            return metadata;
+        }
+
+        return quotaPools.Count > 0
+            ? new AntigravityUsageState(null, null, [], quotaPools)
+            : null;
     }
 
-    private async Task<AntigravityUsageState?> TryReadAsync(
+    private async Task<AntigravityUsageState?> TryReadMetadataAsync(
         string csrfToken,
         string scheme,
         string host,
@@ -153,7 +179,7 @@ internal sealed class AntigravityUsageClient : IAntigravityUsageReader
         attemptCancellation.CancelAfter(_attemptTimeout);
         try
         {
-            using var request = CreateRequest(scheme, host, port, csrfToken);
+            using var request = CreateUserStatusRequest(scheme, host, port, csrfToken);
             using var response = await _http.SendAsync(
                 request,
                 HttpCompletionOption.ResponseHeadersRead,
@@ -182,7 +208,47 @@ internal sealed class AntigravityUsageClient : IAntigravityUsageReader
         }
     }
 
-    private static HttpRequestMessage CreateRequest(string scheme, string host, int port, string csrfToken)
+    private async Task<IReadOnlyList<AntigravityQuotaPoolState>> TryReadQuotaSummaryAsync(
+        string csrfToken,
+        string scheme,
+        string host,
+        int port,
+        CancellationToken callerCancellationToken,
+        CancellationToken operationCancellationToken)
+    {
+        using var attemptCancellation = CancellationTokenSource.CreateLinkedTokenSource(operationCancellationToken);
+        attemptCancellation.CancelAfter(_attemptTimeout);
+        try
+        {
+            using var request = CreateQuotaSummaryRequest(scheme, host, port, csrfToken);
+            using var response = await _http.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                attemptCancellation.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return [];
+            }
+
+            var json = await ReadContentAsync(response.Content, attemptCancellation.Token);
+            return AntigravityQuotaSummaryParser.ParseResponse(json);
+        }
+        catch (OperationCanceledException) when (callerCancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return [];
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException or JsonException or IOException or InvalidDataException)
+        {
+            return [];
+        }
+    }
+
+    private static HttpRequestMessage CreateUserStatusRequest(string scheme, string host, int port, string csrfToken)
     {
         var uri = new UriBuilder(scheme, host, port, GetUserStatusPath).Uri;
         var request = new HttpRequestMessage(HttpMethod.Post, uri)
@@ -202,6 +268,17 @@ internal sealed class AntigravityUsageClient : IAntigravityUsageReader
         };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.Add("Connect-Protocol-Version", "1");
+        request.Headers.TryAddWithoutValidation("X-Codeium-Csrf-Token", csrfToken);
+        return request;
+    }
+
+    private static HttpRequestMessage CreateQuotaSummaryRequest(string scheme, string host, int port, string csrfToken)
+    {
+        var uri = new UriBuilder(scheme, host, port, RetrieveUserQuotaSummaryPath).Uri;
+        var request = new HttpRequestMessage(HttpMethod.Post, uri)
+        {
+            Content = new StringContent("{\"forceRefresh\":true}", Encoding.UTF8, "application/json")
+        };
         request.Headers.TryAddWithoutValidation("X-Codeium-Csrf-Token", csrfToken);
         return request;
     }

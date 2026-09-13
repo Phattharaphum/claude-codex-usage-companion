@@ -117,7 +117,42 @@ public sealed class ProgramWatchTests
         }
 
         Assert.Contains("Gemini", output.ToString());
-        Assert.Contains("Remaining: 54%", output.ToString());
+        Assert.Contains("Observed remaining: 54%", output.ToString());
+    }
+
+    [Fact]
+    public void WatchRendererPrefersSharedPoolsWhenTheyAreAvailable()
+    {
+        var original = Console.Out;
+        using var output = new StringWriter();
+        try
+        {
+            Console.SetOut(output);
+            ConsoleUsageRenderer.WriteAntigravity(
+                new AntigravityUsageState(
+                    null,
+                    null,
+                    [new AntigravityModelQuotaState("model", "Model observation", 54, null)],
+                    [new AntigravityQuotaPoolState(
+                        "gemini-models",
+                        "Gemini Models",
+                        new AntigravityQuotaWindowState(
+                            "gemini-5h", "Five Hour Limit Remaining", AntigravityQuotaCadence.FiveHour, 89,
+                            null, TimeSpan.FromHours(5)),
+                        null,
+                        [])]),
+                null,
+                UiText.For(UiLanguage.English));
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        var rendered = output.ToString();
+        Assert.Contains("Gemini Models", rendered);
+        Assert.Contains("Five Hour Limit Remaining: 89%", rendered);
+        Assert.DoesNotContain("Model observation", rendered);
     }
 
     private static AntigravityUsageState State(string id = "model") =>

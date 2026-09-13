@@ -32,16 +32,44 @@ public static class ConsoleUsageRenderer
             Console.WriteLine($"Plan: {state.Plan}");
         }
 
+        if (state.QuotaPools.Count > 0)
+        {
+            foreach (var pool in state.QuotaPools)
+            {
+                Console.WriteLine();
+                Console.WriteLine(pool.Name);
+                WriteAntigravityWindow(pool.FiveHour, text);
+                WriteAntigravityWindow(pool.Weekly, text);
+            }
+
+            return;
+        }
+
         foreach (var model in state.Models)
         {
             Console.WriteLine();
             Console.WriteLine(model.Name);
-            Console.WriteLine($"  Remaining: {model.RemainingPercent}%");
+            Console.WriteLine($"  Observed remaining: {model.RemainingPercent}%");
             var reset = model.ResetAt is { } resetAt
                 ? text.FormatFiveHourReset(resetAt.ToLocalTime())
                 : text.ResetUnavailable;
             Console.WriteLine($"  Reset: {reset}");
         }
+    }
+
+    private static void WriteAntigravityWindow(AntigravityQuotaWindowState? window, UiText text)
+    {
+        if (window is null)
+        {
+            return;
+        }
+
+        var reset = window.ResetAt is { } resetAt
+            ? window.Cadence == AntigravityQuotaCadence.Weekly
+                ? text.FormatWeeklyReset(resetAt.ToLocalTime())
+                : text.FormatFiveHourReset(resetAt.ToLocalTime())
+            : text.ResetUnavailable;
+        Console.WriteLine($"  {window.Name}: {window.RemainingPercent}%  {reset}");
     }
 
     private static void Write(

@@ -17,8 +17,12 @@ public sealed class AntigravityUsageClientTests
         string? capturedBody = null;
         var handler = new StubHandler((request, _) =>
         {
-            captured = request;
-            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (request.RequestUri!.AbsolutePath.EndsWith("GetUserStatus", StringComparison.Ordinal))
+            {
+                captured = request;
+                capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            }
+
             return Response();
         });
         await using var client = Client(handler, Endpoint(37017));
@@ -61,15 +65,9 @@ public sealed class AntigravityUsageClientTests
         var state = await client.ReadUsageAsync(CancellationToken.None);
 
         Assert.Single(state.Models);
-        Assert.Equal(
-            [
-                "https://127.0.0.1:37017",
-                "https://[::1]:37017",
-                "http://127.0.0.1:37017",
-                "http://[::1]:37017",
-                "https://127.0.0.1:38507"
-            ],
-            attempts);
+        Assert.Contains("https://127.0.0.1:37017", attempts);
+        Assert.Contains("http://[::1]:37017", attempts);
+        Assert.Contains("https://127.0.0.1:38507", attempts);
     }
 
     [Fact]
@@ -87,13 +85,9 @@ public sealed class AntigravityUsageClientTests
 
         await client.ReadUsageAsync(CancellationToken.None);
 
-        Assert.Equal(
-            [
-                "https://127.0.0.1:37017",
-                "https://[::1]:37017",
-                "http://127.0.0.1:37017"
-            ],
-            attempts);
+        Assert.Contains("https://127.0.0.1:37017", attempts);
+        Assert.Contains("https://[::1]:37017", attempts);
+        Assert.Contains("http://127.0.0.1:37017", attempts);
     }
 
     [Fact]
@@ -207,6 +201,70 @@ public sealed class AntigravityUsageClientTests
         Assert.DoesNotContain(Secret, exception.Message);
     }
 
+    [Fact]
+    public async Task ReadUsageAsyncRequestsQuotaSummaryWithForceRefreshAndPreservesPoolsWithModels()
+    {
+        HttpRequestMessage? summaryRequest = null;
+        string? summaryBody = null;
+        var handler = new StubHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("RetrieveUserQuotaSummary", StringComparison.Ordinal))
+            {
+                summaryRequest = request;
+                summaryBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return SummaryResponse();
+            }
+
+            return Response();
+        });
+        await using var client = Client(handler, Endpoint(37017));
+
+        var state = await client.ReadUsageAsync(CancellationToken.None);
+
+        Assert.NotNull(summaryRequest);
+        Assert.Equal(HttpMethod.Post, summaryRequest!.Method);
+        Assert.Equal("https", summaryRequest.RequestUri!.Scheme);
+        Assert.Equal(
+            "/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary",
+            summaryRequest.RequestUri.AbsolutePath);
+        Assert.Equal(Secret, Assert.Single(summaryRequest.Headers.GetValues("X-Codeium-Csrf-Token")));
+        Assert.DoesNotContain("Connect-Protocol-Version", summaryRequest.Headers.Select(header => header.Key));
+        Assert.Equal("application/json", summaryRequest.Content!.Headers.ContentType!.MediaType);
+        using var body = JsonDocument.Parse(summaryBody!);
+        Assert.True(body.RootElement.GetProperty("forceRefresh").GetBoolean());
+        Assert.Single(state.Models);
+        var pool = Assert.Single(state.QuotaPools);
+        Assert.Equal("Gemini Models", pool.Name);
+        Assert.Equal(89, pool.FiveHour!.RemainingPercent);
+        Assert.Equal(88, pool.Weekly!.RemainingPercent);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncUsesQuotaSummaryWhenMetadataIsUnavailableAndTriesLaterPort()
+    {
+        var summaryPorts = new List<int>();
+        var handler = new StubHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("RetrieveUserQuotaSummary", StringComparison.Ordinal))
+            {
+                summaryPorts.Add(request.RequestUri.Port);
+                return request.RequestUri.Port == 38507 ? SummaryResponse() : new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        await using var client = Client(handler, Endpoint(37017, 38507));
+
+        var state = await client.ReadUsageAsync(CancellationToken.None);
+
+        Assert.Contains(37017, summaryPorts);
+        Assert.Contains(38507, summaryPorts);
+        Assert.Null(state.Account);
+        Assert.Null(state.Plan);
+        Assert.Empty(state.Models);
+        Assert.Single(state.QuotaPools);
+    }
+
     private static AntigravityUsageClient Client(
         HttpMessageHandler handler,
         params AntigravityLocalEndpoint[] endpoints) =>
@@ -240,6 +298,26 @@ public sealed class AntigravityUsageClientTests
                         }
                       ]
                     }
+                  }
+                }
+                """)
+        };
+
+    private static HttpResponseMessage SummaryResponse() =>
+        new(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""
+                {
+                  "response": {
+                    "groups": [
+                      {
+                        "displayName": "Gemini Models",
+                        "buckets": [
+                          { "bucketId": "gemini-5h", "window": "five_hour", "remainingFraction": 0.89 },
+                          { "bucketId": "gemini-weekly", "window": "weekly", "remainingFraction": 0.88 }
+                        ]
+                      }
+                    ]
                   }
                 }
                 """)

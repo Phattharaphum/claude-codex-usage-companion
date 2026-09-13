@@ -34,7 +34,15 @@ public sealed class AntigravityRuntimeProviderTests
             [
                 new AntigravityModelQuotaState("gemini", "Gemini", 54, null),
                 new AntigravityModelQuotaState("claude", "Claude", 100, null)
-            ]);
+            ],
+            [new AntigravityQuotaPoolState(
+                "gemini-models",
+                "Gemini Models",
+                new AntigravityQuotaWindowState(
+                    "gemini-5h", "Five Hour Limit", AntigravityQuotaCadence.FiveHour, 54,
+                    null, TimeSpan.FromHours(5)),
+                null,
+                [])]);
         var reader = new StubReader(_ => Task.FromResult(state));
         await using var provider = Provider(true, () => reader);
         var updates = new List<(AntigravityUsageState? State, string? Error)>();
@@ -48,6 +56,8 @@ public sealed class AntigravityRuntimeProviderTests
         Assert.Equal(2, update.State!.Models.Count);
         Assert.Equal("gemini", update.State.Models[0].Id);
         Assert.Equal("claude", update.State.Models[1].Id);
+        Assert.Single(update.State.QuotaPools);
+        Assert.Equal("gemini-models", update.State.QuotaPools[0].Id);
         Assert.Null(update.State.Account);
         Assert.Null(update.State.Plan);
         Assert.Null(update.State.Models[0].ResetAt);

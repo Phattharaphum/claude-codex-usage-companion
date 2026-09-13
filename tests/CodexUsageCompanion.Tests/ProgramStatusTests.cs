@@ -101,6 +101,41 @@ public sealed class ProgramStatusTests
     }
 
     [Fact]
+    public void BuildStatusPayloadSerializesAntigravityQuotaPoolsAlongsideModels()
+    {
+        var resetAt = new DateTimeOffset(2026, 9, 13, 7, 44, 7, TimeSpan.Zero);
+        var state = new AntigravityUsageState(
+            "sanitized@example.invalid",
+            "Pro",
+            [new AntigravityModelQuotaState("gemini", "Gemini", 89, resetAt)],
+            [new AntigravityQuotaPoolState(
+                "gemini-models",
+                "Gemini Models",
+                new AntigravityQuotaWindowState(
+                    "gemini-5h", "Five Hour Limit Remaining", AntigravityQuotaCadence.FiveHour, 89,
+                    resetAt, TimeSpan.FromHours(5)),
+                new AntigravityQuotaWindowState(
+                    "gemini-weekly", "Weekly Limit Remaining", AntigravityQuotaCadence.Weekly, 88,
+                    resetAt, TimeSpan.FromDays(7)),
+                [])]);
+
+        var payload = Program.BuildStatusPayload(
+            false, null, null,
+            false, null, null,
+            true, state, null);
+
+        using var document = JsonDocument.Parse(payload.ToJsonString(JsonDefaults.Output));
+        var serializedState = document.RootElement.GetProperty("antigravity").GetProperty("state");
+        Assert.Single(serializedState.GetProperty("models").EnumerateArray());
+        var pool = Assert.Single(serializedState.GetProperty("quotaPools").EnumerateArray());
+        Assert.Equal("Gemini Models", pool.GetProperty("name").GetString());
+        Assert.Equal(89, pool.GetProperty("fiveHour").GetProperty("remainingPercent").GetInt32());
+        Assert.Equal("fiveHour", pool.GetProperty("fiveHour").GetProperty("cadence").GetString());
+        Assert.Equal(88, pool.GetProperty("weekly").GetProperty("remainingPercent").GetInt32());
+        Assert.Empty(pool.GetProperty("modelIds").EnumerateArray());
+    }
+
+    [Fact]
     public async Task ReadAntigravityUsageAsyncReportsSanitizedFailure()
     {
         var settings = new CompanionSettings { EnableAntigravityUsage = true };
@@ -162,7 +197,43 @@ public sealed class ProgramStatusTests
         Assert.Contains("Account: sanitized@example.invalid", rendered);
         Assert.Contains("Plan: Pro", rendered);
         Assert.Contains("Gemini", rendered);
-        Assert.Contains("Remaining: 54%", rendered);
+        Assert.Contains("Observed remaining: 54%", rendered);
         Assert.Contains("Antigravity local usage service was unavailable.", rendered);
+    }
+
+    [Fact]
+    public void WriteAntigravityPrefersSharedQuotaPoolsOverModelObservations()
+    {
+        var state = new AntigravityUsageState(
+            null,
+            null,
+            [new AntigravityModelQuotaState("gemini", "Model-only observation", 12, null)],
+            [new AntigravityQuotaPoolState(
+                "gemini-models",
+                "Gemini Models",
+                new AntigravityQuotaWindowState(
+                    "gemini-5h", "Five Hour Limit Remaining", AntigravityQuotaCadence.FiveHour, 89,
+                    null, TimeSpan.FromHours(5)),
+                new AntigravityQuotaWindowState(
+                    "gemini-weekly", "Weekly Limit Remaining", AntigravityQuotaCadence.Weekly, 88,
+                    null, TimeSpan.FromDays(7)),
+                [])]);
+        var original = Console.Out;
+        using var output = new StringWriter();
+        try
+        {
+            Console.SetOut(output);
+            ConsoleUsageRenderer.WriteAntigravity(state, null, UiText.For(UiLanguage.English));
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        var rendered = output.ToString();
+        Assert.Contains("Gemini Models", rendered);
+        Assert.Contains("Five Hour Limit Remaining: 89%", rendered);
+        Assert.Contains("Weekly Limit Remaining: 88%", rendered);
+        Assert.DoesNotContain("Model-only observation", rendered);
     }
 }

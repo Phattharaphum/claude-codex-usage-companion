@@ -72,6 +72,26 @@ public sealed class AntigravityUsageParserTests
             });
     }
 
+    [Fact]
+    public void ParseResponseDoesNotSynthesizeSharedPoolsFromMatchingModelObservations()
+    {
+        var state = AntigravityUsageParser.ParseResponse(Response("""
+            {
+              "label": "Gemini A",
+              "modelOrAlias": { "model": "gemini-a" },
+              "quotaInfo": { "remainingFraction": 0.89, "resetTime": "2026-09-13T07:44:07Z" }
+            },
+            {
+              "label": "Gemini B",
+              "modelOrAlias": { "model": "gemini-b" },
+              "quotaInfo": { "remainingFraction": 0.89, "resetTime": "2026-09-13T07:44:07Z" }
+            }
+            """));
+
+        Assert.Equal(2, state.Models.Count);
+        Assert.Empty(state.QuotaPools);
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(1, 100)]
