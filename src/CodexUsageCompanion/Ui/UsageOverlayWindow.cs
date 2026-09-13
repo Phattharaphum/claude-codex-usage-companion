@@ -17,17 +17,17 @@ namespace CodexUsageCompanion.Ui;
 
 public sealed class UsageOverlayWindow : Window
 {
-    private const double CellWidth = 47;
-    private const double BaseHeight = 66;
-    private const double CardSpacing = 9;
-    private const double FiveHourCardHeight = 78;
-    private const double WeeklyCardHeight = 96;
-    private const double AntigravityWindowCardHeight = FiveHourCardHeight;
-    private const double AntigravitySectionTitleHeight = 20;
-    private const double AntigravityGroupTitleHeight = 18;
+    private const double CellWidth = 48;
+    private const double BaseHeight = 62;
+    private const double CardSpacing = 6;
+    private const double FiveHourCardHeight = 62;
+    private const double WeeklyCardHeight = 76;
+    private const double AntigravityWindowCardHeight = 62;
+    private const double AntigravitySectionTitleHeight = 18;
+    private const double AntigravityGroupTitleHeight = 15;
     private const double AntigravityMessageCardHeight = 52;
-    private const double ContentBottomPadding = 10;
-    private const double IconSize = 14;
+    private const double ContentBottomPadding = 4;
+    private const double IconSize = 13;
     private const double HeaderGroupSpacing = 14;
     private const string CodexAccentColor = "#10A37F";
     private const string ClaudeIconBackground = "#D77655";
@@ -93,7 +93,7 @@ public sealed class UsageOverlayWindow : Window
         _antigravityEnabled = settings.EnableAntigravityUsage;
 
         Title = "Claude Codex Usage Companion";
-        Width = 344;
+        Width = 370;
         Height = ComputeHeight();
         MinWidth = Width;
         MaxWidth = Width;
@@ -148,12 +148,9 @@ public sealed class UsageOverlayWindow : Window
         stack.Children.Add(_codexWeeklyCard.Container);
         stack.Children.Add(_antigravitySection);
         stack.Children.Add(_status);
-        _root.Child = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = stack
-        };
+        // The compact layout is deliberately sized to show every quota at
+        // once. A scrolling dashboard hides the values the user opened it for.
+        _root.Child = stack;
         RebuildAntigravitySection(applySize: false);
         Content = _root;
         ActualThemeVariantChanged += (_, _) => ApplyThemePalette();
@@ -385,9 +382,9 @@ public sealed class UsageOverlayWindow : Window
             AntigravityPresentationKind.Hidden => 0,
             AntigravityPresentationKind.QuotaPools => AntigravitySectionTitleHeight +
                 presentation.Pools.Sum(pool => AntigravityGroupTitleHeight +
-                    (pool.Windows.Count * (AntigravityWindowCardHeight + 6))) +
-                (string.IsNullOrWhiteSpace(presentation.Error) ? 0 : AntigravityMessageCardHeight + 6),
-            _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + 6
+                    (pool.Windows.Count * (AntigravityWindowCardHeight + CardSpacing))) +
+                (string.IsNullOrWhiteSpace(presentation.Error) ? 0 : AntigravityMessageCardHeight + CardSpacing),
+            _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + CardSpacing
         };
     }
 
@@ -449,7 +446,7 @@ public sealed class UsageOverlayWindow : Window
             Text = text,
             FontSize = sectionTitle ? 12 : 11,
             FontWeight = sectionTitle ? FontWeight.SemiBold : FontWeight.Medium,
-            Margin = sectionTitle ? new Thickness(0, 3, 0, 0) : new Thickness(2, 4, 0, 0),
+            Margin = sectionTitle ? new Thickness(0, 2, 0, 0) : new Thickness(2, 2, 0, 0),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         _antigravityHeadings.Add(heading);
@@ -476,9 +473,9 @@ public sealed class UsageOverlayWindow : Window
         var card = new Border
         {
             Height = AntigravityMessageCardHeight,
-            CornerRadius = new CornerRadius(11),
+            CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(11, 8),
+            Padding = new Thickness(10, 6),
             Child = text
         };
         _antigravityMessages.Add(text);
@@ -705,15 +702,15 @@ public sealed class UsageOverlayWindow : Window
             Background = Brush("#FF353835"),
             BorderBrush = Brush("#FF4A4E4A"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(11),
-            Padding = new Thickness(11, 8)
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 6)
         };
         var grid = new Grid
         {
             RowDefinitions = showDetails
                 ? new RowDefinitions("Auto,Auto,*,Auto")
                 : new RowDefinitions("Auto,Auto,*"),
-            ColumnDefinitions = new ColumnDefinitions("*,Auto")
+            ColumnDefinitions = new ColumnDefinitions("*,112")
         };
         var icon = createIcon();
         icon.VerticalAlignment = VerticalAlignment.Center;
@@ -722,7 +719,7 @@ public sealed class UsageOverlayWindow : Window
         {
             Text = title,
             Foreground = Brush("#F4F5F3"),
-            FontSize = 14,
+            FontSize = 13,
             FontWeight = FontWeight.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
@@ -737,26 +734,28 @@ public sealed class UsageOverlayWindow : Window
         var remaining = new TextBlock
         {
             Foreground = Brush("#9CA09C"),
-            FontSize = 13,
+            FontSize = 12,
             FontWeight = FontWeight.Bold,
             HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
         Grid.SetRow(remaining, 1);
         Grid.SetColumn(remaining, 1);
         var reset = new TextBlock
         {
             Foreground = Brush("#B7BAB6"),
-            FontSize = 11.5,
-            Margin = new Thickness(0, 1, 0, 3)
+            FontSize = 10.5,
+            Margin = new Thickness(0, 0, 0, 2),
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
         Grid.SetRow(reset, 1);
         Grid.SetColumn(reset, 0);
         var details = new TextBlock
         {
             Foreground = Brush("#B7BAB6"),
-            FontSize = 11,
-            Margin = new Thickness(0, 4, 0, 0),
+            FontSize = 10,
+            Margin = new Thickness(0, 2, 0, 0),
             IsVisible = showDetails
         };
         Grid.SetRow(details, 3);
@@ -765,7 +764,7 @@ public sealed class UsageOverlayWindow : Window
         var bar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 5,
+            Spacing = 4,
             VerticalAlignment = VerticalAlignment.Bottom
         };
         var fills = new Border[5];
@@ -775,16 +774,16 @@ public sealed class UsageOverlayWindow : Window
             var fill = new Border
             {
                 Width = 0,
-                Height = 9,
+                Height = 7,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 CornerRadius = new CornerRadius(2.5)
             };
             var cell = new Border
             {
                 Width = CellWidth,
-                Height = 9,
+                Height = 7,
                 Background = Brush("#FF4A4D49"),
-                CornerRadius = new CornerRadius(2.5),
+                CornerRadius = new CornerRadius(2),
                 Child = fill,
                 ClipToBounds = true
             };
