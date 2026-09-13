@@ -22,6 +22,10 @@ public sealed class UsageOverlayWindow : Window
     private const double CardSpacing = 9;
     private const double FiveHourCardHeight = 78;
     private const double WeeklyCardHeight = 96;
+    private const double AntigravityWindowCardHeight = FiveHourCardHeight;
+    private const double AntigravitySectionTitleHeight = 20;
+    private const double AntigravityGroupTitleHeight = 18;
+    private const double AntigravityMessageCardHeight = 52;
     private const double IconSize = 14;
     private const double HeaderGroupSpacing = 14;
     private const string CodexAccentColor = "#10A37F";
@@ -35,6 +39,12 @@ public sealed class UsageOverlayWindow : Window
     private readonly UsageCardControls _codexWeeklyCard;
     private readonly UsageCardControls _claudeFiveHourCard;
     private readonly UsageCardControls _claudeWeeklyCard;
+    private readonly StackPanel _antigravitySection;
+    private readonly List<UsageCardControls> _antigravityCards = [];
+    private readonly List<TextBlock> _antigravityHeadings = [];
+    private readonly List<TextBlock> _antigravityMessages = [];
+    private readonly List<TextBlock> _antigravityErrorMessages = [];
+    private readonly List<Border> _antigravityMessageCards = [];
     private UiText _text;
     private readonly Border _root;
     private TextBlock _headerTitle = null!;
@@ -55,8 +65,11 @@ public sealed class UsageOverlayWindow : Window
     private bool _showCodexWeekly;
     private bool _codexEnabled;
     private bool _claudeEnabled;
+    private bool _antigravityEnabled;
     private RateLimitState? _lastCodexState;
     private RateLimitState? _lastClaudeState;
+    private AntigravityUsageState? _lastAntigravityState;
+    private string? _lastAntigravityError;
     private DateTimeOffset? _lastUpdatedAt;
     private string? _lastError;
     private bool _repositionAfterResize;
@@ -76,6 +89,7 @@ public sealed class UsageOverlayWindow : Window
         _showCodexWeekly = settings.ShowCodexWeekly;
         _codexEnabled = settings.EnableCodexUsage;
         _claudeEnabled = settings.EnableClaudeUsage;
+        _antigravityEnabled = settings.EnableAntigravityUsage;
 
         Title = "Claude Codex Usage Companion";
         Width = 344;
@@ -112,6 +126,7 @@ public sealed class UsageOverlayWindow : Window
         _codexWeeklyCard = CreateCard(_text.WeeklyTitle, CreateCodexIcon, showDetails: true);
         _claudeFiveHourCard = CreateCard(_text.ClaudeFiveHourTitle, CreateClaudeIcon, showDetails: false);
         _claudeWeeklyCard = CreateCard(_text.ClaudeWeeklyTitle, CreateClaudeIcon, showDetails: true);
+        _antigravitySection = new StackPanel { Spacing = 6 };
         ApplyCardVisibility();
         _status = new TextBlock
         {
@@ -126,8 +141,10 @@ public sealed class UsageOverlayWindow : Window
         stack.Children.Add(_claudeWeeklyCard.Container);
         stack.Children.Add(_codexFiveHourCard.Container);
         stack.Children.Add(_codexWeeklyCard.Container);
+        stack.Children.Add(_antigravitySection);
         stack.Children.Add(_status);
         _root.Child = stack;
+        RebuildAntigravitySection(applySize: false);
         Content = _root;
         ActualThemeVariantChanged += (_, _) => ApplyThemePalette();
         SizeChanged += HandleWindowSizeChanged;
@@ -197,6 +214,13 @@ public sealed class UsageOverlayWindow : Window
         _claudeWeeklyCard.Details.Text = _text.FormatClaudeCreditsDetails(state?.ExtraUsage);
     }
 
+    public void UpdateAntigravityUsage(AntigravityUsageState? state, string? error)
+    {
+        _lastAntigravityState = state;
+        _lastAntigravityError = error;
+        RebuildAntigravitySection(applySize: true);
+    }
+
     public void SetLoading(bool loading)
     {
         _refreshButton.IsEnabled = !loading;
@@ -233,6 +257,7 @@ public sealed class UsageOverlayWindow : Window
         _showCodexWeekly = settings.ShowCodexWeekly;
         _codexEnabled = settings.EnableCodexUsage;
         _claudeEnabled = settings.EnableClaudeUsage;
+        _antigravityEnabled = settings.EnableAntigravityUsage;
         _codexFiveHourCard.Title.Text = text.FiveHourTitle;
         _codexWeeklyCard.Title.Text = text.WeeklyTitle;
         _claudeFiveHourCard.Title.Text = text.ClaudeFiveHourTitle;
@@ -249,6 +274,7 @@ public sealed class UsageOverlayWindow : Window
         ApplyThemePalette();
         UpdateUsage(UsageProvider.Codex, _lastCodexState);
         UpdateUsage(UsageProvider.Claude, _lastClaudeState);
+        RebuildAntigravitySection(applySize: false);
         SetStatus(_lastUpdatedAt, _lastError);
     }
 
@@ -332,7 +358,125 @@ public sealed class UsageOverlayWindow : Window
             }
         }
 
-        return BaseHeight + cardHeights.Sum() + (CardSpacing * (cardHeights.Count + 1));
+        var antigravityHeight = ComputeAntigravitySectionHeight();
+        return BaseHeight + cardHeights.Sum() + antigravityHeight +
+               (CardSpacing * (cardHeights.Count + 1 + (antigravityHeight > 0 ? 1 : 0)));
+    }
+
+    private double ComputeAntigravitySectionHeight()
+    {
+        var presentation = UsagePresentation.BuildAntigravityPresentation(
+            _antigravityEnabled,
+            _lastAntigravityState,
+            _lastAntigravityError);
+        return presentation.Kind switch
+        {
+            AntigravityPresentationKind.Hidden => 0,
+            AntigravityPresentationKind.QuotaPools => AntigravitySectionTitleHeight +
+                presentation.Pools.Sum(pool => AntigravityGroupTitleHeight +
+                    (pool.Windows.Count * (AntigravityWindowCardHeight + 6))) +
+                (string.IsNullOrWhiteSpace(presentation.Error) ? 0 : AntigravityMessageCardHeight + 6),
+            _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + 6
+        };
+    }
+
+    private void RebuildAntigravitySection(bool applySize)
+    {
+        var presentation = UsagePresentation.BuildAntigravityPresentation(
+            _antigravityEnabled,
+            _lastAntigravityState,
+            _lastAntigravityError);
+        _antigravitySection.Children.Clear();
+        _antigravityCards.Clear();
+        _antigravityHeadings.Clear();
+        _antigravityMessages.Clear();
+        _antigravityErrorMessages.Clear();
+        _antigravityMessageCards.Clear();
+        _antigravitySection.IsVisible = presentation.Kind != AntigravityPresentationKind.Hidden;
+        if (_antigravitySection.IsVisible)
+        {
+            AddAntigravityHeading(_text.AntigravityTitle, sectionTitle: true);
+            if (presentation.Kind == AntigravityPresentationKind.QuotaPools)
+            {
+                foreach (var pool in presentation.Pools)
+                {
+                    AddAntigravityHeading(pool.Name, sectionTitle: false);
+                    foreach (var window in pool.Windows)
+                    {
+                        AddAntigravityWindow(window);
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(presentation.Error))
+                {
+                    AddAntigravityMessage(presentation.Error, error: true);
+                }
+            }
+            else
+            {
+                var message = presentation.Kind switch
+                {
+                    AntigravityPresentationKind.ObservedModelFallback => _text.AntigravityObservedFallback,
+                    AntigravityPresentationKind.Error => presentation.Error ?? _text.WaitingForData,
+                    _ => _text.WaitingForData
+                };
+                AddAntigravityMessage(message, presentation.Kind == AntigravityPresentationKind.Error);
+            }
+        }
+
+        ApplyAntigravityTheme();
+        if (applySize)
+        {
+            ApplySizeAndPosition(_position);
+        }
+    }
+
+    private void AddAntigravityHeading(string text, bool sectionTitle)
+    {
+        var heading = new TextBlock
+        {
+            Text = text,
+            FontSize = sectionTitle ? 12 : 11,
+            FontWeight = sectionTitle ? FontWeight.SemiBold : FontWeight.Medium,
+            Margin = sectionTitle ? new Thickness(0, 3, 0, 0) : new Thickness(2, 4, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        _antigravityHeadings.Add(heading);
+        _antigravitySection.Children.Add(heading);
+    }
+
+    private void AddAntigravityWindow(AntigravityQuotaWindowState window)
+    {
+        var card = CreateCard(window.Name, CreateAntigravityIcon, showDetails: false);
+        UpdateAntigravityCard(card, window);
+        _antigravityCards.Add(card);
+        _antigravitySection.Children.Add(card.Container);
+    }
+
+    private void AddAntigravityMessage(string message, bool error)
+    {
+        var text = new TextBlock
+        {
+            Text = message,
+            FontSize = 11.5,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var card = new Border
+        {
+            Height = AntigravityMessageCardHeight,
+            CornerRadius = new CornerRadius(11),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(11, 8),
+            Child = text
+        };
+        _antigravityMessages.Add(text);
+        if (error)
+        {
+            _antigravityErrorMessages.Add(text);
+        }
+        _antigravityMessageCards.Add(card);
+        _antigravitySection.Children.Add(card);
     }
 
     private void ApplyComputedHeight()
@@ -515,6 +659,23 @@ public sealed class UsageOverlayWindow : Window
         return new Viewbox { Width = IconSize, Height = IconSize, Child = canvas };
     }
 
+    private static Control CreateAntigravityIcon() => new Border
+    {
+        Width = IconSize,
+        Height = IconSize,
+        Background = Brush("#5D8BFF"),
+        CornerRadius = new CornerRadius(7),
+        Child = new TextBlock
+        {
+            Text = "A",
+            Foreground = Brushes.White,
+            FontSize = 9,
+            FontWeight = FontWeight.Bold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        }
+    };
+
     private static UsageCardControls CreateCard(string title, Func<Control> createIcon, bool showDetails)
     {
         var container = new Border
@@ -650,6 +811,19 @@ public sealed class UsageOverlayWindow : Window
         ApplyBar(card, state.RemainingPercent, UsagePresentation.GetSignal(state.RemainingPercent));
     }
 
+    private void UpdateAntigravityCard(
+        UsageCardControls card,
+        AntigravityQuotaWindowState window)
+    {
+        card.Remaining.Text = _text.FormatRemaining(window.RemainingPercent);
+        card.Reset.Text = window.ResetAt is { } resetAt
+            ? window.Cadence == AntigravityQuotaCadence.Weekly
+                ? _text.FormatWeeklyReset(resetAt.ToLocalTime())
+                : _text.FormatFiveHourReset(resetAt.ToLocalTime())
+            : _text.ResetUnavailable;
+        ApplyBar(card, window.RemainingPercent, UsagePresentation.GetSignal(window.RemainingPercent));
+    }
+
     private void ApplyBar(UsageCardControls card, int remainingPercent, UsageSignal signal)
     {
         var color = SignalBrush(signal);
@@ -723,9 +897,37 @@ public sealed class UsageOverlayWindow : Window
         ApplyCardTheme(_codexWeeklyCard);
         ApplyCardTheme(_claudeFiveHourCard);
         ApplyCardTheme(_claudeWeeklyCard);
+        ApplyAntigravityTheme();
         SetStatus(_lastUpdatedAt, _lastError);
         UpdateUsage(UsageProvider.Codex, _lastCodexState);
         UpdateUsage(UsageProvider.Claude, _lastClaudeState);
+    }
+
+    private void ApplyAntigravityTheme()
+    {
+        foreach (var heading in _antigravityHeadings)
+        {
+            heading.Foreground = Brush(_palette.CardTitle);
+        }
+
+        foreach (var card in _antigravityCards)
+        {
+            ApplyCardTheme(card);
+        }
+
+        foreach (var card in _antigravityMessageCards)
+        {
+            card.Background = Brush(_palette.CardBackground);
+            card.BorderBrush = Brush(_palette.CardBorder);
+        }
+
+        foreach (var message in _antigravityMessages)
+        {
+            message.Foreground = Brush(
+                _antigravityErrorMessages.Contains(message)
+                    ? _palette.ErrorText
+                    : _palette.SecondaryText);
+        }
     }
 
     private void ApplyCardTheme(UsageCardControls card)

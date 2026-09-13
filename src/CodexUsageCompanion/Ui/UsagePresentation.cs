@@ -1,4 +1,5 @@
 using CodexUsageCompanion.Localization;
+using CodexUsageCompanion.RateLimits;
 
 namespace CodexUsageCompanion.Ui;
 
@@ -11,8 +12,71 @@ public enum UsageSignal
     Green
 }
 
+public enum AntigravityPresentationKind
+{
+    Hidden,
+    Waiting,
+    Error,
+    ObservedModelFallback,
+    QuotaPools
+}
+
+public sealed record AntigravityQuotaPoolPresentation(
+    string Name,
+    IReadOnlyList<AntigravityQuotaWindowState> Windows);
+
+public sealed record AntigravityPresentationState(
+    AntigravityPresentationKind Kind,
+    IReadOnlyList<AntigravityQuotaPoolPresentation> Pools,
+    int ObservedModelCount,
+    string? Error);
+
 public static class UsagePresentation
 {
+    public static AntigravityPresentationState BuildAntigravityPresentation(
+        bool enabled,
+        AntigravityUsageState? state,
+        string? error)
+    {
+        if (!enabled)
+        {
+            return new AntigravityPresentationState(AntigravityPresentationKind.Hidden, [], 0, null);
+        }
+
+        if (state?.QuotaPools.Count > 0)
+        {
+            var pools = state.QuotaPools.Select(pool =>
+            {
+                var windows = new[] { pool.Weekly, pool.FiveHour }
+                    .OfType<AntigravityQuotaWindowState>()
+                    .ToArray();
+                return new AntigravityQuotaPoolPresentation(pool.Name, windows);
+            }).ToArray();
+            return new AntigravityPresentationState(
+                AntigravityPresentationKind.QuotaPools,
+                pools,
+                state.Models.Count,
+                error);
+        }
+
+        if (state?.Models.Count > 0)
+        {
+            return new AntigravityPresentationState(
+                AntigravityPresentationKind.ObservedModelFallback,
+                [],
+                state.Models.Count,
+                error);
+        }
+
+        return new AntigravityPresentationState(
+            string.IsNullOrWhiteSpace(error)
+                ? AntigravityPresentationKind.Waiting
+                : AntigravityPresentationKind.Error,
+            [],
+            0,
+            error);
+    }
+
     public static UsageSignal GetSignal(int remainingPercent)
     {
         var remaining = Math.Clamp(remainingPercent, 0, 100);

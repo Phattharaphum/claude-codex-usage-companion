@@ -193,6 +193,15 @@ public sealed record UiText(
             ? "剩余 --"
             : "剩餘 --";
 
+    public string AntigravityTitle => "Antigravity";
+
+    public string AntigravityObservedFallback => Language switch
+    {
+        UiLanguage.TraditionalChinese => "觀察到的模型剩餘用量；共用額度尚未提供",
+        UiLanguage.SimplifiedChinese => "观察到的模型剩余用量；共享额度尚未提供",
+        _ => "Observed remaining model data; shared quota limits are unavailable"
+    };
+
     public string EnableCodexUsageOption => Language switch
     {
         UiLanguage.TraditionalChinese => "啟用 Codex 用量顯示",

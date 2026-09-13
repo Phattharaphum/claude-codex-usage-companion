@@ -61,6 +61,7 @@ public sealed class App : Application
             _runtime = new CompanionRuntime(lease, _window, _settings);
             _runtime.UsageUpdated += HandleUsageUpdated;
             _runtime.UsageUpdateFailed += HandleUsageUpdateFailed;
+            _runtime.AntigravityUsageChanged += HandleAntigravityUsageChanged;
 
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
@@ -587,6 +588,23 @@ public sealed class App : Application
         }
     }
 
+    private void HandleAntigravityUsageChanged(
+        AntigravityUsageState? state,
+        string? error,
+        DateTimeOffset updatedAt)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_window is null)
+            {
+                return;
+            }
+
+            _window.UpdateAntigravityUsage(state, error);
+            _window.SetStatus(updatedAt, error);
+        });
+    }
+
     private static void TryWriteUsageLog(Action write)
     {
         try
@@ -646,6 +664,7 @@ public sealed class App : Application
 
                     runtime.UsageUpdated -= HandleUsageUpdated;
                     runtime.UsageUpdateFailed -= HandleUsageUpdateFailed;
+                    runtime.AntigravityUsageChanged -= HandleAntigravityUsageChanged;
                     await runtime.DisposeAsync();
                 },
                 () =>
