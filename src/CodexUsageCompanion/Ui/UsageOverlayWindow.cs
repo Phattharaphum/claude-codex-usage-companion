@@ -18,7 +18,10 @@ namespace CodexUsageCompanion.Ui;
 public sealed class UsageOverlayWindow : Window
 {
     private const double CellWidth = 48;
-    private const double BaseHeight = 62;
+    // Header, root padding, and the persistent "Last updated" status row.
+    // This remains outside the cards, so it must be included in the fixed
+    // portion of the no-scroll layout.
+    private const double BaseHeight = 84;
     private const double CardSpacing = 6;
     private const double FiveHourCardHeight = 62;
     private const double WeeklyCardHeight = 76;
