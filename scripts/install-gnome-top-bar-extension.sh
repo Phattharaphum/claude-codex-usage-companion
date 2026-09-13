@@ -5,7 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXTENSION_ID="claude-codex-usage-companion-fork@gamephat.local"
 LEGACY_EXTENSION_ID="claude-codex-usage-companion@ychsieh95.github.io"
 SOURCE="$ROOT/packaging/gnome/$LEGACY_EXTENSION_ID"
-TARGET_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions"
+# A terminal launched by a sandboxed editor can override XDG_DATA_HOME with
+# the editor's private data directory. GNOME Shell does not search that
+# directory, so use its per-user extension location unless explicitly
+# overridden for a nonstandard shell setup.
+TARGET_ROOT="${GNOME_EXTENSION_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions"
 TARGET="$TARGET_ROOT/$EXTENSION_ID"
 
 if ! command -v gnome-extensions >/dev/null 2>&1; then
