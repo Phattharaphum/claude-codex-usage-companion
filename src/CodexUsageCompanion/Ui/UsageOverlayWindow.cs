@@ -779,6 +779,9 @@ public sealed class UsageOverlayWindow : Window
             BorderBrush = Brush("#FF4A4E4A"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
+            // Keep the outer one-pixel border above the coloured limit rail.
+            // Without this inset, the rail can overpaint the curved edge.
+            Padding = new Thickness(1),
             ClipToBounds = true
         };
         var grid = new Grid
@@ -797,7 +800,9 @@ public sealed class UsageOverlayWindow : Window
         railText.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
         var rail = new Border
         {
+            CornerRadius = new CornerRadius(8, 0, 0, 8),
             BorderThickness = new Thickness(0, 0, 1, 0),
+            ClipToBounds = true,
             Child = railText
         };
         var content = new Grid
@@ -818,7 +823,6 @@ public sealed class UsageOverlayWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-        Grid.SetRow(remaining, 1);
         Grid.SetColumn(remaining, 1);
         var reset = new TextBlock
         {
