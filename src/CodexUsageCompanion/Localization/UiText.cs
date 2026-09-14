@@ -667,6 +667,24 @@ public sealed record UiText(
         return FormatResetDateTime(localReset);
     }
 
+    public string FormatResetWithCountdown(DateTimeOffset localReset, DateTimeOffset now)
+    {
+        var minutesRemaining = Math.Max(
+            0,
+            (int)Math.Ceiling((localReset - now).TotalMinutes));
+        var days = minutesRemaining / (24 * 60);
+        var hours = (minutesRemaining % (24 * 60)) / 60;
+        var minutes = minutesRemaining % 60;
+        var countdown = Language switch
+        {
+            UiLanguage.TraditionalChinese => $"{days}天 {hours}小時 {minutes}分",
+            UiLanguage.SimplifiedChinese => $"{days}天 {hours}小时 {minutes}分",
+            _ => $"{days}d {hours}h {minutes}m"
+        };
+
+        return $"{FormatResetDateTime(localReset)} · {countdown}";
+    }
+
     public string FormatUpdatedTime(DateTimeOffset updatedAt)
     {
         var dateTime = FormatDateTime(updatedAt, LastUpdatedDateTimeFormat);

@@ -1,4 +1,5 @@
 using System.Globalization;
+using CodexUsageCompanion.Configuration;
 using CodexUsageCompanion.Localization;
 using CodexUsageCompanion.RateLimits;
 using Xunit;
@@ -138,6 +139,19 @@ public sealed class UiTextTests
         Assert.Equal("Unpin window from top", text.UnpinFromTopAction);
         Assert.Equal("Claude usage is running low", text.ClaudeLowUsageAlertTitle);
         Assert.Equal("Claude usage has reset", text.ClaudeUsageResetTitle);
+    }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "Resets at 15:50 · 2d 3h 5m")]
+    [InlineData(UiLanguage.TraditionalChinese, "於 15:50 重置 · 2天 3小時 5分")]
+    [InlineData(UiLanguage.SimplifiedChinese, "于 15:50 重置 · 2天 3小时 5分")]
+    public void ResetCountdownIncludesDaysHoursAndMinutes(UiLanguage language, string expected)
+    {
+        var text = UiText.For(language, resetDateTimeFormat: DateTimeFormatOptions.HourMinute);
+        var now = new DateTimeOffset(2026, 9, 14, 12, 45, 0, TimeSpan.FromHours(7));
+        var reset = now.AddDays(2).AddHours(3).AddMinutes(5);
+
+        Assert.Equal(expected, text.FormatResetWithCountdown(reset, now));
     }
 
     [Theory]

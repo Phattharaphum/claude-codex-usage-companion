@@ -52,6 +52,7 @@ public sealed class UsageOverlayWindow : Window
     private readonly Border _root;
     private TextBlock _headerTitle = null!;
     private readonly TextBlock _status;
+    private readonly DispatcherTimer _countdownTimer;
     private Button _minimizeButton = null!;
     private ToggleButton _pinButton = null!;
     private Button _shortcutsButton = null!;
@@ -155,6 +156,14 @@ public sealed class UsageOverlayWindow : Window
         _root.Child = stack;
         RebuildAntigravitySection(applySize: false);
         Content = _root;
+        _countdownTimer = new DispatcherTimer
+        {
+            // The displayed value is rounded to minutes. Refreshing twice a
+            // minute keeps it aligned with the current clock without fetching
+            // provider data more often.
+            Interval = TimeSpan.FromSeconds(30)
+        };
+        _countdownTimer.Tick += (_, _) => RefreshCountdowns();
         ActualThemeVariantChanged += (_, _) => ApplyThemePalette();
         SizeChanged += HandleWindowSizeChanged;
 
@@ -162,7 +171,9 @@ public sealed class UsageOverlayWindow : Window
         {
             PositionOnPrimaryScreen();
             ApplyThemePalette();
+            _countdownTimer.Start();
         };
+        Closed += (_, _) => _countdownTimer.Stop();
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
     }
 
@@ -209,14 +220,14 @@ public sealed class UsageOverlayWindow : Window
         if (provider == UsageProvider.Codex)
         {
             _lastCodexState = state;
-            UpdateCard(_codexFiveHourCard, state?.FiveHour, weekly: false, dataAvailable: state is not null);
-            UpdateCard(_codexWeeklyCard, state?.Weekly, weekly: true, dataAvailable: state is not null);
+            UpdateCard(_codexFiveHourCard, state?.FiveHour, dataAvailable: state is not null);
+            UpdateCard(_codexWeeklyCard, state?.Weekly, dataAvailable: state is not null);
             return;
         }
 
         _lastClaudeState = state;
-        UpdateCard(_claudeFiveHourCard, state?.FiveHour, weekly: false, dataAvailable: state is not null);
-        UpdateCard(_claudeWeeklyCard, state?.Weekly, weekly: true, dataAvailable: state is not null);
+        UpdateCard(_claudeFiveHourCard, state?.FiveHour, dataAvailable: state is not null);
+        UpdateCard(_claudeWeeklyCard, state?.Weekly, dataAvailable: state is not null);
     }
 
     public void UpdateAntigravityUsage(AntigravityUsageState? state, string? error)
@@ -790,7 +801,6 @@ public sealed class UsageOverlayWindow : Window
     private void UpdateCard(
         UsageCardControls card,
         RateLimitWindowState? state,
-        bool weekly,
         bool dataAvailable)
     {
         if (state is null)
@@ -803,9 +813,9 @@ public sealed class UsageOverlayWindow : Window
 
         card.Remaining.Text = FormatPercent(state.RemainingPercent);
         card.Reset.Text = state.ResetsAt is long unixSeconds
-            ? weekly
-                ? _text.FormatWeeklyReset(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime())
-                : _text.FormatFiveHourReset(DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime())
+            ? _text.FormatResetWithCountdown(
+                DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime(),
+                DateTimeOffset.Now)
             : _text.ResetUnavailable;
         ApplyBar(card, state.RemainingPercent, UsagePresentation.GetSignal(state.RemainingPercent));
     }
@@ -816,11 +826,16 @@ public sealed class UsageOverlayWindow : Window
     {
         card.Remaining.Text = FormatPercent(window.RemainingPercent);
         card.Reset.Text = window.ResetAt is { } resetAt
-            ? window.Cadence == AntigravityQuotaCadence.Weekly
-                ? _text.FormatWeeklyReset(resetAt.ToLocalTime())
-                : _text.FormatFiveHourReset(resetAt.ToLocalTime())
+            ? _text.FormatResetWithCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now)
             : _text.ResetUnavailable;
         ApplyBar(card, window.RemainingPercent, UsagePresentation.GetSignal(window.RemainingPercent));
+    }
+
+    private void RefreshCountdowns()
+    {
+        UpdateUsage(UsageProvider.Codex, _lastCodexState);
+        UpdateUsage(UsageProvider.Claude, _lastClaudeState);
+        RebuildAntigravitySection(applySize: false);
     }
 
     private void ApplyBar(UsageCardControls card, int remainingPercent, UsageSignal signal)
