@@ -21,9 +21,9 @@ public sealed class UsageOverlayWindow : Window
     // This remains outside the provider sections.
     private const double BaseHeight = 72;
     private const double CardSpacing = 6;
-    private const double FiveHourCardHeight = 60;
-    private const double WeeklyCardHeight = 60;
-    private const double AntigravityWindowCardHeight = 60;
+    private const double FiveHourCardHeight = 64;
+    private const double WeeklyCardHeight = 64;
+    private const double AntigravityWindowCardHeight = 64;
     private const double ProviderSectionTitleHeight = 18;
     private const double AntigravitySectionTitleHeight = 18;
     private const double AntigravityGroupTitleHeight = 15;
@@ -134,10 +134,10 @@ public sealed class UsageOverlayWindow : Window
             Margin = new Thickness(0, 0, 0, ContentBottomPadding)
         };
         var header = CreateHeader();
-        _codexFiveHourCard = CreateCard(LimitBadge.FiveHour, CreateCodexIcon);
-        _codexWeeklyCard = CreateCard(LimitBadge.Week, CreateCodexIcon);
-        _claudeFiveHourCard = CreateCard(LimitBadge.FiveHour, CreateClaudeIcon);
-        _claudeWeeklyCard = CreateCard(LimitBadge.Week, CreateClaudeIcon);
+        _codexFiveHourCard = CreateCard(LimitBadge.FiveHour);
+        _codexWeeklyCard = CreateCard(LimitBadge.Week);
+        _claudeFiveHourCard = CreateCard(LimitBadge.FiveHour);
+        _claudeWeeklyCard = CreateCard(LimitBadge.Week);
         _claudeSection = CreateProviderSection("Claude", CreateClaudeIcon, out _claudeHeading);
         _claudeSection.Children.Add(_claudeFiveHourCard.Container);
         _claudeSection.Children.Add(_claudeWeeklyCard.Container);
@@ -523,7 +523,7 @@ public sealed class UsageOverlayWindow : Window
         var badge = window.Cadence == AntigravityQuotaCadence.Weekly
             ? LimitBadge.Week
             : LimitBadge.FiveHour;
-        var card = CreateCard(badge, CreateAntigravityIcon);
+        var card = CreateCard(badge);
         card.Container.Margin = new Thickness(8, 0, 0, 0);
         UpdateAntigravityCard(card, window);
         _antigravityCards.Add(card);
@@ -770,7 +770,7 @@ public sealed class UsageOverlayWindow : Window
         return icon;
     }
 
-    private static UsageCardControls CreateCard(LimitBadge badgeKind, Func<Control> createIcon)
+    private static UsageCardControls CreateCard(LimitBadge badgeKind)
     {
         var container = new Border
         {
@@ -779,44 +779,40 @@ public sealed class UsageOverlayWindow : Window
             BorderBrush = Brush("#FF4A4E4A"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(10, 6)
+            ClipToBounds = true
         };
         var grid = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
-            ColumnDefinitions = new ColumnDefinitions("*,Auto")
+            ColumnDefinitions = new ColumnDefinitions("36,*")
         };
-        var icon = createIcon();
-        icon.VerticalAlignment = VerticalAlignment.Center;
-        icon.Margin = new Thickness(0, 0, 6, 0);
-        var badgeText = new TextBlock
+        var railText = new TextBlock
         {
             Text = badgeKind == LimitBadge.Week ? "Week" : "5hr",
-            FontSize = 10.5,
+            FontSize = 11,
             FontWeight = FontWeight.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
-        var badge = new Border
+        railText.RenderTransform = new RotateTransform(-90);
+        railText.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+        var rail = new Border
         {
-            CornerRadius = new CornerRadius(5),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(6, 1),
-            Child = badgeText,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            Child = railText
         };
-        var titleRow = new Grid
+        var content = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*")
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            Margin = new Thickness(9, 7, 10, 7)
         };
-        Grid.SetColumn(icon, 0);
-        Grid.SetColumn(badge, 1);
-        titleRow.Children.Add(icon);
-        titleRow.Children.Add(badge);
+        var informationRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto")
+        };
         var remaining = new TextBlock
         {
             Foreground = Brush("#9CA09C"),
-            FontSize = 15,
+            FontSize = 16,
             FontWeight = FontWeight.Bold,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
@@ -827,12 +823,12 @@ public sealed class UsageOverlayWindow : Window
         var reset = new TextBlock
         {
             Foreground = Brush("#B7BAB6"),
-            FontSize = 11,
-            Margin = new Thickness(0, 0, 0, 2),
+            FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-        Grid.SetRow(reset, 1);
-        Grid.SetColumn(reset, 0);
+        Grid.SetColumn(remaining, 1);
+        informationRow.Children.Add(reset);
+        informationRow.Children.Add(remaining);
         var fill = new Border
         {
             Width = 0,
@@ -850,18 +846,18 @@ public sealed class UsageOverlayWindow : Window
             Child = fill
         };
 
-        Grid.SetRow(bar, 2);
-        Grid.SetColumnSpan(bar, 2);
-        Grid.SetColumnSpan(titleRow, 2);
-        grid.Children.Add(titleRow);
-        grid.Children.Add(remaining);
-        grid.Children.Add(reset);
-        grid.Children.Add(bar);
+        Grid.SetRow(bar, 1);
+        content.Children.Add(informationRow);
+        content.Children.Add(bar);
+        Grid.SetColumn(rail, 0);
+        Grid.SetColumn(content, 1);
+        grid.Children.Add(rail);
+        grid.Children.Add(content);
         container.Child = grid;
         var card = new UsageCardControls(
             container,
-            badge,
-            badgeText,
+            rail,
+            railText,
             badgeKind,
             remaining,
             reset,
