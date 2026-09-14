@@ -5,7 +5,7 @@ namespace CodexUsageCompanion.Tests;
 
 public sealed class GnomeExtensionPackageTests
 {
-    private const string ExtensionId = "claude-codex-usage-companion-fork@gamephat.local";
+    private const string ExtensionId = "claude-codex-usage-companion-fork-v2@gamephat.local";
     private const string ExtensionSourceDirectory = "claude-codex-usage-companion@ychsieh95.github.io";
 
     [Fact]

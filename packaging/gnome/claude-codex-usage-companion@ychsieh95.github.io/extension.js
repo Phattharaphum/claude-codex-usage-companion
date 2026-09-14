@@ -57,7 +57,12 @@ export default class CompanionTopBarExtension extends Extension {
     enable() {
         this._state = null;
         this._stylesheet = this.dir.get_child('stylesheet.css');
-        this.loadStylesheet(this._stylesheet);
+        // GNOME Shell 50 removed Extension.loadStylesheet(). The meter can
+        // still render without the optional popup stylesheet, so only use the
+        // helper on shells which provide it rather than failing enable().
+        this._stylesheetLoaded = typeof this.loadStylesheet === 'function';
+        if (this._stylesheetLoaded)
+            this.loadStylesheet(this._stylesheet);
         this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
         this._label = new St.Label({text: formatPanelText(null)});
         this._indicator.add_child(this._label);
@@ -84,10 +89,12 @@ export default class CompanionTopBarExtension extends Extension {
         this._runtimeDirectory = null;
         this._stateDirectory = null;
         this._stateFile = null;
-        if (this._stylesheet) {
+        if (this._stylesheet && this._stylesheetLoaded &&
+            typeof this.unloadStylesheet === 'function') {
             this.unloadStylesheet(this._stylesheet);
-            this._stylesheet = null;
         }
+        this._stylesheetLoaded = false;
+        this._stylesheet = null;
     }
 
     _installRuntimeMonitor() {

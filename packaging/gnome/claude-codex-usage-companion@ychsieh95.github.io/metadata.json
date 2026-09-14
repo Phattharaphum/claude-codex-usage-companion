@@ -1,5 +1,5 @@
 {
-  "uuid": "claude-codex-usage-companion-fork@gamephat.local",
+  "uuid": "claude-codex-usage-companion-fork-v2@gamephat.local",
   "name": "Usage Companion (Fork)",
   "description": "Shows Claude, Codex, and Antigravity usage meters in the GNOME top bar.",
   "shell-version": ["45", "46", "47", "48", "49", "50"],
