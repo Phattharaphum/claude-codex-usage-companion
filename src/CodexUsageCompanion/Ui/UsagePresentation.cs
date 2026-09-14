@@ -47,7 +47,9 @@ public static class UsagePresentation
         {
             var pools = state.QuotaPools.Select(pool =>
             {
-                var windows = new[] { pool.Weekly, pool.FiveHour }
+                // Keep the short rolling window first in every provider group:
+                // 5hr is the immediate limit, followed by the weekly limit.
+                var windows = new[] { pool.FiveHour, pool.Weekly }
                     .OfType<AntigravityQuotaWindowState>()
                     .ToArray();
                 return new AntigravityQuotaPoolPresentation(pool.Name, windows);

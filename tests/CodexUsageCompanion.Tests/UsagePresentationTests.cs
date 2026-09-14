@@ -46,7 +46,7 @@ public sealed class UsagePresentationTests
     }
 
     [Fact]
-    public void AntigravityPresentationKeepsPoolsAndWindowsSeparateInWeeklyFirstOrder()
+    public void AntigravityPresentationKeepsPoolsAndWindowsSeparateInFiveHourFirstOrder()
     {
         var state = State(
             [
@@ -62,16 +62,16 @@ public sealed class UsagePresentationTests
             gemini =>
             {
                 Assert.Equal("Gemini Models", gemini.Name);
-                Assert.Equal(88, gemini.Windows[0].RemainingPercent);
-                Assert.Equal(AntigravityQuotaCadence.Weekly, gemini.Windows[0].Cadence);
-                Assert.Equal(89, gemini.Windows[1].RemainingPercent);
-                Assert.Equal(AntigravityQuotaCadence.FiveHour, gemini.Windows[1].Cadence);
+                Assert.Equal(89, gemini.Windows[0].RemainingPercent);
+                Assert.Equal(AntigravityQuotaCadence.FiveHour, gemini.Windows[0].Cadence);
+                Assert.Equal(88, gemini.Windows[1].RemainingPercent);
+                Assert.Equal(AntigravityQuotaCadence.Weekly, gemini.Windows[1].Cadence);
             },
             thirdParty =>
             {
                 Assert.Equal("Claude and GPT models", thirdParty.Name);
-                Assert.Equal(80, thirdParty.Windows[0].RemainingPercent);
-                Assert.Equal(100, thirdParty.Windows[1].RemainingPercent);
+                Assert.Equal(100, thirdParty.Windows[0].RemainingPercent);
+                Assert.Equal(80, thirdParty.Windows[1].RemainingPercent);
             });
     }
 
