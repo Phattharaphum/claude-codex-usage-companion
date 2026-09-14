@@ -17,6 +17,60 @@ public sealed class UsageUpdateLogTests
         new RateLimitWindowState(58, 10080, 1786039800),
         2);
 
+    private static readonly AntigravityUsageState AntigravityState = new(
+        "user@example.test",
+        "Pro",
+        [
+            new AntigravityModelQuotaState(
+                "gemini-2.5-pro",
+                "Gemini 2.5 Pro",
+                83,
+                new DateTimeOffset(2026, 8, 1, 9, 0, 0, TimeSpan.Zero)),
+            new AntigravityModelQuotaState(
+                "claude-sonnet-4",
+                "Claude Sonnet 4",
+                79,
+                new DateTimeOffset(2026, 8, 1, 10, 0, 0, TimeSpan.Zero))
+        ],
+        [
+            new AntigravityQuotaPoolState(
+                "gemini-models",
+                "Gemini Models",
+                new AntigravityQuotaWindowState(
+                    "gemini-5hr",
+                    "Five Hour Limit",
+                    AntigravityQuotaCadence.FiveHour,
+                    83,
+                    new DateTimeOffset(2026, 8, 1, 9, 0, 0, TimeSpan.Zero),
+                    TimeSpan.FromHours(5)),
+                new AntigravityQuotaWindowState(
+                    "gemini-week",
+                    "Weekly Limit",
+                    AntigravityQuotaCadence.Weekly,
+                    88,
+                    new DateTimeOffset(2026, 8, 5, 9, 0, 0, TimeSpan.Zero),
+                    TimeSpan.FromDays(7)),
+                ["gemini-2.5-pro"]),
+            new AntigravityQuotaPoolState(
+                "claude-gpt-models",
+                "Claude and GPT models",
+                new AntigravityQuotaWindowState(
+                    "claude-gpt-5hr",
+                    "Five Hour Limit",
+                    AntigravityQuotaCadence.FiveHour,
+                    79,
+                    new DateTimeOffset(2026, 8, 1, 10, 0, 0, TimeSpan.Zero),
+                    TimeSpan.FromHours(5)),
+                new AntigravityQuotaWindowState(
+                    "claude-gpt-week",
+                    "Weekly Limit",
+                    AntigravityQuotaCadence.Weekly,
+                    81,
+                    new DateTimeOffset(2026, 8, 5, 10, 0, 0, TimeSpan.Zero),
+                    TimeSpan.FromDays(7)),
+                ["claude-sonnet-4"])
+        ]);
+
     [Fact]
     public void WritesTextSuccessAndFailureEntries()
     {
@@ -57,7 +111,7 @@ public sealed class UsageUpdateLogTests
             Assert.StartsWith("updated_at,provider,status,", lines[0]);
             Assert.Contains(",codex,success,71,", lines[1]);
             Assert.Contains(",claude,error,", lines[2]);
-            Assert.EndsWith("\"failed, retry\"", lines[2]);
+            Assert.Contains("\"failed, retry\"", lines[2]);
         });
     }
 
@@ -78,6 +132,49 @@ public sealed class UsageUpdateLogTests
             Assert.Equal(71, root.GetProperty("fiveHourRemainingPercent").GetInt32());
             Assert.Equal(58, root.GetProperty("weeklyRemainingPercent").GetInt32());
             Assert.Equal(2, root.GetProperty("availableResetCredits").GetInt32());
+        });
+    }
+
+    [Fact]
+    public void WritesCompleteAntigravityCsvHistoryForPoolsAndObservedModels()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            var log = new UsageUpdateLog();
+
+            log.WriteAntigravity(path, UsageLogOptions.Csv, AntigravityState, null, UpdatedAt);
+
+            var lines = File.ReadAllLines(path);
+            Assert.Equal(5, lines.Length); // Header, two authoritative pools, two model observations.
+            Assert.Contains("scope,scope_id,scope_name,account,plan,model_ids,model_count", lines[0]);
+            Assert.Contains(",antigravity,success,83,2026-08-01T09:00:00.0000000+00:00,88,", lines[1]);
+            Assert.Contains(",quota_pool,gemini-models,Gemini Models,user@example.test,Pro,gemini-2.5-pro,2,", lines[1]);
+            Assert.Contains(",model,gemini-2.5-pro,Gemini 2.5 Pro,user@example.test,Pro,gemini-2.5-pro,2,83,", lines[3]);
+            Assert.Contains(",model,claude-sonnet-4,Claude Sonnet 4,user@example.test,Pro,claude-sonnet-4,2,79,", lines[4]);
+        });
+    }
+
+    [Fact]
+    public void MigratesExistingCsvBeforeAppendingAntigravityHistory()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            File.WriteAllText(
+                path,
+                "updated_at,provider,status,five_hour_remaining_percent,five_hour_reset_at," +
+                "weekly_remaining_percent,weekly_reset_at,available_reset_credits,error\n" +
+                "2026-07-31T02:10:00.0000000+08:00,codex,success,71,,58,,2,\n");
+            var log = new UsageUpdateLog();
+
+            log.WriteAntigravity(path, UsageLogOptions.Csv, AntigravityState, null, UpdatedAt);
+
+            var lines = File.ReadAllLines(path);
+            Assert.Contains("observed_remaining_percent", lines[0]);
+            Assert.Equal(22, lines[1].Split(',').Length);
+            Assert.StartsWith("2026-07-31T02:10:00.0000000+08:00,codex,success,71", lines[1]);
+            Assert.Equal(6, lines.Length);
         });
     }
 

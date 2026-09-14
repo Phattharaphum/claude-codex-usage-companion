@@ -650,6 +650,18 @@ public sealed class App : Application
         string? error,
         DateTimeOffset updatedAt)
     {
+        // A null/null notification is emitted when the Antigravity provider is
+        // disabled; it is a UI-state change, not a usage refresh to preserve.
+        if (_settings.EnableUsageLogging && (state is not null || !string.IsNullOrWhiteSpace(error)))
+        {
+            TryWriteUsageLog(() => _usageUpdateLog.WriteAntigravity(
+                _settings.UsageLogFilePath,
+                _settings.UsageLogFormat,
+                state,
+                error,
+                updatedAt));
+        }
+
         Dispatcher.UIThread.Post(() =>
         {
             if (_window is null)
