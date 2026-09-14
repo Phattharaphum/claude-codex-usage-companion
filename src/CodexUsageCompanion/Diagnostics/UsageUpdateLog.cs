@@ -51,9 +51,9 @@ public sealed class UsageUpdateLog
     }
 
     /// <summary>
-    /// Writes the complete local Antigravity observation. Quota-pool entries
-    /// are authoritative shared limits, while model entries preserve the
-    /// observed fallback values supplied by GetUserStatus.
+    /// Writes only the two authoritative Antigravity shared-quota histories.
+    /// Model-level observations are deliberately excluded: they are fallback
+    /// metadata, not independent shared limits.
     /// </summary>
     public void WriteAntigravity(
         string filePath,
@@ -69,43 +69,27 @@ public sealed class UsageUpdateLog
         {
             foreach (var pool in state.QuotaPools)
             {
-                entries.Add(CreateAntigravityPoolEntry(pool, state, updatedAt));
-            }
-
-            foreach (var model in state.Models)
-            {
-                entries.Add(CreateAntigravityModelEntry(model, state, updatedAt));
+                var provider = AntigravityProviderName(pool.Id);
+                if (provider is not null)
+                {
+                    entries.Add(CreateAntigravityPoolEntry(provider, pool, updatedAt));
+                }
             }
         }
 
-        // A refresh that has no pools/models (or fails) is still significant
-        // history: it lets the CSV show exactly when the local source stopped
-        // providing usable Antigravity information.
+        // Preserve refresh failures under both fixed histories. A successful
+        // response without either authoritative pool has no quota data to add.
+        if (entries.Count == 0 && !string.IsNullOrWhiteSpace(error))
+        {
+            entries.Add(CreateAntigravityFailureEntry(
+                "Antigravity-Gemini", status, error, updatedAt));
+            entries.Add(CreateAntigravityFailureEntry(
+                "Antigravity-ClaudeAndChatGPT", status, error, updatedAt));
+        }
+
         if (entries.Count == 0)
         {
-            entries.Add(new UsageUpdateLogEntry(
-                updatedAt.ToString("O", CultureInfo.InvariantCulture),
-                "antigravity",
-                status,
-                null,
-                null,
-                null,
-                null,
-                null,
-                error,
-                "provider",
-                null,
-                "Antigravity",
-                state?.Account,
-                state?.Plan,
-                null,
-                state?.Models.Count,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null));
+            return;
         }
 
         Write(filePath, format, entries);
@@ -190,13 +174,13 @@ public sealed class UsageUpdateLog
     }
 
     private static UsageUpdateLogEntry CreateAntigravityPoolEntry(
+        string provider,
         AntigravityQuotaPoolState pool,
-        AntigravityUsageState state,
         DateTimeOffset updatedAt)
     {
         return new UsageUpdateLogEntry(
             updatedAt.ToString("O", CultureInfo.InvariantCulture),
-            "antigravity",
+            provider,
             "success",
             pool.FiveHour?.RemainingPercent,
             FormatReset(pool.FiveHour?.ResetAt),
@@ -207,10 +191,10 @@ public sealed class UsageUpdateLog
             "quota_pool",
             pool.Id,
             pool.Name,
-            state.Account,
-            state.Plan,
-            pool.ModelIds.Count == 0 ? null : string.Join(';', pool.ModelIds),
-            state.Models.Count,
+            null,
+            null,
+            null,
+            null,
             null,
             null,
             pool.FiveHour?.Id,
@@ -219,35 +203,44 @@ public sealed class UsageUpdateLog
             pool.Weekly?.Name);
     }
 
-    private static UsageUpdateLogEntry CreateAntigravityModelEntry(
-        AntigravityModelQuotaState model,
-        AntigravityUsageState state,
+    private static UsageUpdateLogEntry CreateAntigravityFailureEntry(
+        string provider,
+        string status,
+        string error,
         DateTimeOffset updatedAt)
     {
         return new UsageUpdateLogEntry(
             updatedAt.ToString("O", CultureInfo.InvariantCulture),
-            "antigravity",
-            "success",
+            provider,
+            status,
+            null,
+            null,
+            null,
+            null,
+            null,
+            error,
+            "quota_pool",
+            null,
+            provider,
             null,
             null,
             null,
             null,
             null,
             null,
-            "model",
-            model.Id,
-            model.Name,
-            state.Account,
-            state.Plan,
-            model.Id,
-            state.Models.Count,
-            model.RemainingPercent,
-            FormatReset(model.ResetAt),
             null,
             null,
             null,
             null);
     }
+
+    private static string? AntigravityProviderName(string poolId) =>
+        poolId switch
+        {
+            "gemini-models" => "Antigravity-Gemini",
+            "claude-and-gpt-models" => "Antigravity-ClaudeAndChatGPT",
+            _ => null
+        };
 
     private static string? FormatReset(long? unixSeconds)
     {

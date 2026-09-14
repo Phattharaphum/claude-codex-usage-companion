@@ -52,7 +52,7 @@ public sealed class UsageUpdateLogTests
                     TimeSpan.FromDays(7)),
                 ["gemini-2.5-pro"]),
             new AntigravityQuotaPoolState(
-                "claude-gpt-models",
+                "claude-and-gpt-models",
                 "Claude and GPT models",
                 new AntigravityQuotaWindowState(
                     "claude-gpt-5hr",
@@ -136,7 +136,7 @@ public sealed class UsageUpdateLogTests
     }
 
     [Fact]
-    public void WritesCompleteAntigravityCsvHistoryForPoolsAndObservedModels()
+    public void WritesOnlyTheTwoAuthoritativeAntigravityPoolHistories()
     {
         WithTemporaryDirectory(directory =>
         {
@@ -146,12 +146,13 @@ public sealed class UsageUpdateLogTests
             log.WriteAntigravity(path, UsageLogOptions.Csv, AntigravityState, null, UpdatedAt);
 
             var lines = File.ReadAllLines(path);
-            Assert.Equal(5, lines.Length); // Header, two authoritative pools, two model observations.
+            Assert.Equal(3, lines.Length); // Header, Gemini pool, Claude/GPT pool.
             Assert.Contains("scope,scope_id,scope_name,account,plan,model_ids,model_count", lines[0]);
-            Assert.Contains(",antigravity,success,83,2026-08-01T09:00:00.0000000+00:00,88,", lines[1]);
-            Assert.Contains(",quota_pool,gemini-models,Gemini Models,user@example.test,Pro,gemini-2.5-pro,2,", lines[1]);
-            Assert.Contains(",model,gemini-2.5-pro,Gemini 2.5 Pro,user@example.test,Pro,gemini-2.5-pro,2,83,", lines[3]);
-            Assert.Contains(",model,claude-sonnet-4,Claude Sonnet 4,user@example.test,Pro,claude-sonnet-4,2,79,", lines[4]);
+            Assert.Contains(",Antigravity-Gemini,success,83,2026-08-01T09:00:00.0000000+00:00,88,", lines[1]);
+            Assert.Contains(",Antigravity-ClaudeAndChatGPT,success,79,2026-08-01T10:00:00.0000000+00:00,81,", lines[2]);
+            Assert.DoesNotContain("Gemini 2.5 Pro", string.Join('\n', lines));
+            Assert.DoesNotContain("Claude Sonnet 4", string.Join('\n', lines));
+            Assert.DoesNotContain("user@example.test", string.Join('\n', lines));
         });
     }
 
@@ -174,7 +175,7 @@ public sealed class UsageUpdateLogTests
             Assert.Contains("observed_remaining_percent", lines[0]);
             Assert.Equal(22, lines[1].Split(',').Length);
             Assert.StartsWith("2026-07-31T02:10:00.0000000+08:00,codex,success,71", lines[1]);
-            Assert.Equal(6, lines.Length);
+            Assert.Equal(4, lines.Length);
         });
     }
 
