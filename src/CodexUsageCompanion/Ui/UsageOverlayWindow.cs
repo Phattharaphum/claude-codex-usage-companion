@@ -18,13 +18,13 @@ namespace CodexUsageCompanion.Ui;
 public sealed class UsageOverlayWindow : Window
 {
     // Header, root padding, and the persistent "Last updated" status row.
-    // This remains outside the cards, so it must be included in the fixed
-    // portion of the no-scroll layout.
-    private const double BaseHeight = 84;
+    // This remains outside the provider sections.
+    private const double BaseHeight = 72;
     private const double CardSpacing = 6;
-    private const double FiveHourCardHeight = 64;
-    private const double WeeklyCardHeight = 64;
-    private const double AntigravityWindowCardHeight = 64;
+    private const double FiveHourCardHeight = 60;
+    private const double WeeklyCardHeight = 60;
+    private const double AntigravityWindowCardHeight = 60;
+    private const double ProviderSectionTitleHeight = 18;
     private const double AntigravitySectionTitleHeight = 18;
     private const double AntigravityGroupTitleHeight = 15;
     private const double AntigravityMessageCardHeight = 52;
@@ -42,7 +42,11 @@ public sealed class UsageOverlayWindow : Window
     private readonly UsageCardControls _codexWeeklyCard;
     private readonly UsageCardControls _claudeFiveHourCard;
     private readonly UsageCardControls _claudeWeeklyCard;
+    private readonly StackPanel _claudeSection;
+    private readonly StackPanel _codexSection;
     private readonly StackPanel _antigravitySection;
+    private readonly TextBlock _claudeHeading;
+    private readonly TextBlock _codexHeading;
     private readonly List<UsageCardControls> _antigravityCards = [];
     private readonly List<TextBlock> _antigravityHeadings = [];
     private readonly List<TextBlock> _antigravityMessages = [];
@@ -130,10 +134,16 @@ public sealed class UsageOverlayWindow : Window
             Margin = new Thickness(0, 0, 0, ContentBottomPadding)
         };
         var header = CreateHeader();
-        _codexFiveHourCard = CreateCard(_text.FiveHourTitle, CreateCodexIcon);
-        _codexWeeklyCard = CreateCard(_text.WeeklyTitle, CreateCodexIcon);
-        _claudeFiveHourCard = CreateCard(_text.ClaudeFiveHourTitle, CreateClaudeIcon);
-        _claudeWeeklyCard = CreateCard(_text.ClaudeWeeklyTitle, CreateClaudeIcon);
+        _codexFiveHourCard = CreateCard(LimitBadge.FiveHour, CreateCodexIcon);
+        _codexWeeklyCard = CreateCard(LimitBadge.Week, CreateCodexIcon);
+        _claudeFiveHourCard = CreateCard(LimitBadge.FiveHour, CreateClaudeIcon);
+        _claudeWeeklyCard = CreateCard(LimitBadge.Week, CreateClaudeIcon);
+        _claudeSection = CreateProviderSection("Claude", CreateClaudeIcon, out _claudeHeading);
+        _claudeSection.Children.Add(_claudeFiveHourCard.Container);
+        _claudeSection.Children.Add(_claudeWeeklyCard.Container);
+        _codexSection = CreateProviderSection("Codex", CreateCodexIcon, out _codexHeading);
+        _codexSection.Children.Add(_codexFiveHourCard.Container);
+        _codexSection.Children.Add(_codexWeeklyCard.Container);
         _antigravitySection = new StackPanel { Spacing = 6 };
         ApplyCardVisibility();
         _status = new TextBlock
@@ -145,10 +155,8 @@ public sealed class UsageOverlayWindow : Window
         };
 
         stack.Children.Add(header);
-        stack.Children.Add(_claudeFiveHourCard.Container);
-        stack.Children.Add(_claudeWeeklyCard.Container);
-        stack.Children.Add(_codexFiveHourCard.Container);
-        stack.Children.Add(_codexWeeklyCard.Container);
+        stack.Children.Add(_claudeSection);
+        stack.Children.Add(_codexSection);
         stack.Children.Add(_antigravitySection);
         stack.Children.Add(_status);
         // The compact layout is deliberately sized to show every quota at
@@ -274,10 +282,6 @@ public sealed class UsageOverlayWindow : Window
         _codexEnabled = settings.EnableCodexUsage;
         _claudeEnabled = settings.EnableClaudeUsage;
         _antigravityEnabled = settings.EnableAntigravityUsage;
-        _codexFiveHourCard.Title.Text = text.FiveHourTitle;
-        _codexWeeklyCard.Title.Text = text.WeeklyTitle;
-        _claudeFiveHourCard.Title.Text = text.ClaudeFiveHourTitle;
-        _claudeWeeklyCard.Title.Text = text.ClaudeWeeklyTitle;
         _headerTitle.Text = text.CombinedUsageHeaderTitle;
         ApplyCardVisibility();
         ApplySizeAndPosition(settings.Position);
@@ -345,39 +349,40 @@ public sealed class UsageOverlayWindow : Window
         _codexWeeklyCard.Container.IsVisible = _showCodexWeekly && _codexEnabled;
         _claudeFiveHourCard.Container.IsVisible = _showClaudeSession && _claudeEnabled;
         _claudeWeeklyCard.Container.IsVisible = _showClaudeWeekly && _claudeEnabled;
+        _claudeSection.IsVisible =
+            _claudeFiveHourCard.Container.IsVisible || _claudeWeeklyCard.Container.IsVisible;
+        _codexSection.IsVisible =
+            _codexFiveHourCard.Container.IsVisible || _codexWeeklyCard.Container.IsVisible;
     }
 
     private double ComputeHeight()
     {
-        var cardHeights = new List<double>();
-        if (_codexEnabled)
+        var sectionHeights = new List<double>();
+        var claudeCards = (_claudeEnabled && _showClaudeSession ? 1 : 0) +
+                          (_claudeEnabled && _showClaudeWeekly ? 1 : 0);
+        var codexCards = (_codexEnabled && _showCodexFiveHour ? 1 : 0) +
+                         (_codexEnabled && _showCodexWeekly ? 1 : 0);
+        if (claudeCards > 0)
         {
-            if (_showCodexFiveHour)
-            {
-                cardHeights.Add(FiveHourCardHeight);
-            }
-            if (_showCodexWeekly)
-            {
-                cardHeights.Add(WeeklyCardHeight);
-            }
+            sectionHeights.Add(ComputeProviderSectionHeight(claudeCards));
         }
-
-        if (_claudeEnabled)
+        if (codexCards > 0)
         {
-            if (_showClaudeSession)
-            {
-                cardHeights.Add(FiveHourCardHeight);
-            }
-            if (_showClaudeWeekly)
-            {
-                cardHeights.Add(WeeklyCardHeight);
-            }
+            sectionHeights.Add(ComputeProviderSectionHeight(codexCards));
         }
-
         var antigravityHeight = ComputeAntigravitySectionHeight();
-        return BaseHeight + ContentBottomPadding + cardHeights.Sum() + antigravityHeight +
-               (CardSpacing * (cardHeights.Count + 1 + (antigravityHeight > 0 ? 1 : 0)));
+        if (antigravityHeight > 0)
+        {
+            sectionHeights.Add(antigravityHeight);
+        }
+        return BaseHeight + ContentBottomPadding + sectionHeights.Sum() +
+               (CardSpacing * (sectionHeights.Count + 1));
     }
+
+    private static double ComputeProviderSectionHeight(int cardCount) =>
+        ProviderSectionTitleHeight +
+        (cardCount * FiveHourCardHeight) +
+        (cardCount * CardSpacing);
 
     private double ComputeAntigravitySectionHeight()
     {
@@ -389,9 +394,12 @@ public sealed class UsageOverlayWindow : Window
         {
             AntigravityPresentationKind.Hidden => 0,
             AntigravityPresentationKind.QuotaPools => AntigravitySectionTitleHeight +
-                presentation.Pools.Sum(pool => AntigravityGroupTitleHeight +
+                presentation.Pools.Sum(pool =>
+                    CardSpacing + AntigravityGroupTitleHeight +
                     (pool.Windows.Count * (AntigravityWindowCardHeight + CardSpacing))) +
-                (string.IsNullOrWhiteSpace(presentation.Error) ? 0 : AntigravityMessageCardHeight + CardSpacing),
+                (string.IsNullOrWhiteSpace(presentation.Error)
+                    ? 0
+                    : AntigravityMessageCardHeight + CardSpacing),
             _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + CardSpacing
         };
     }
@@ -416,7 +424,7 @@ public sealed class UsageOverlayWindow : Window
             {
                 foreach (var pool in presentation.Pools)
                 {
-                    AddAntigravityHeading(pool.Name, sectionTitle: false);
+                    AddAntigravityHeading(CompactPoolName(pool.Name), sectionTitle: false);
                     foreach (var window in pool.Windows)
                     {
                         AddAntigravityWindow(window);
@@ -447,30 +455,85 @@ public sealed class UsageOverlayWindow : Window
         }
     }
 
+    private static StackPanel CreateProviderSection(
+        string providerName,
+        Func<Control> createIcon,
+        out TextBlock heading)
+    {
+        var section = new StackPanel { Spacing = CardSpacing };
+        var icon = createIcon();
+        icon.Width = 16;
+        icon.Height = 16;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        heading = new TextBlock
+        {
+            Text = providerName,
+            FontSize = 12.5,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var headingRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            Height = ProviderSectionTitleHeight,
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        headingRow.Children.Add(icon);
+        headingRow.Children.Add(heading);
+        section.Children.Add(headingRow);
+        return section;
+    }
+
     private void AddAntigravityHeading(string text, bool sectionTitle)
     {
         var heading = new TextBlock
         {
             Text = text,
-            FontSize = sectionTitle ? 12 : 11,
+            FontSize = sectionTitle ? 12.5 : 11,
             FontWeight = sectionTitle ? FontWeight.SemiBold : FontWeight.Medium,
-            Margin = sectionTitle ? new Thickness(0, 2, 0, 0) : new Thickness(2, 2, 0, 0),
+            Margin = sectionTitle ? new Thickness(0, 2, 0, 0) : new Thickness(4, 2, 0, 0),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         _antigravityHeadings.Add(heading);
-        _antigravitySection.Children.Add(heading);
+        if (!sectionTitle)
+        {
+            _antigravitySection.Children.Add(heading);
+            return;
+        }
+
+        var icon = CreateAntigravityIcon();
+        icon.Width = 16;
+        icon.Height = 16;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        var headingRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            Height = AntigravitySectionTitleHeight,
+            Margin = new Thickness(0, 2, 0, 0)
+        };
+        headingRow.Children.Add(icon);
+        headingRow.Children.Add(heading);
+        _antigravitySection.Children.Add(headingRow);
     }
 
     private void AddAntigravityWindow(AntigravityQuotaWindowState window)
     {
-        var card = CreateCard(CompactQuotaTitle(window.Name), CreateAntigravityIcon);
+        var badge = window.Cadence == AntigravityQuotaCadence.Weekly
+            ? LimitBadge.Week
+            : LimitBadge.FiveHour;
+        var card = CreateCard(badge, CreateAntigravityIcon);
+        card.Container.Margin = new Thickness(8, 0, 0, 0);
         UpdateAntigravityCard(card, window);
         _antigravityCards.Add(card);
         _antigravitySection.Children.Add(card.Container);
     }
 
-    private static string CompactQuotaTitle(string title) =>
-        title.Replace(" Remaining", string.Empty, StringComparison.OrdinalIgnoreCase);
+    private static string CompactPoolName(string name) =>
+        string.Equals(name, "Gemini Models", StringComparison.OrdinalIgnoreCase)
+            ? "Gemini"
+            : name;
 
     private void AddAntigravityMessage(string message, bool error)
     {
@@ -707,7 +770,7 @@ public sealed class UsageOverlayWindow : Window
         return icon;
     }
 
-    private static UsageCardControls CreateCard(string title, Func<Control> createIcon)
+    private static UsageCardControls CreateCard(LimitBadge badgeKind, Func<Control> createIcon)
     {
         var container = new Border
         {
@@ -726,22 +789,30 @@ public sealed class UsageOverlayWindow : Window
         var icon = createIcon();
         icon.VerticalAlignment = VerticalAlignment.Center;
         icon.Margin = new Thickness(0, 0, 6, 0);
-        var titleText = new TextBlock
+        var badgeText = new TextBlock
         {
-            Text = title,
-            Foreground = Brush("#F4F5F3"),
-            FontSize = 14,
+            Text = badgeKind == LimitBadge.Week ? "Week" : "5hr",
+            FontSize = 10.5,
             FontWeight = FontWeight.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var badge = new Border
+        {
+            CornerRadius = new CornerRadius(5),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(6, 1),
+            Child = badgeText,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center
         };
         var titleRow = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("Auto,*")
         };
         Grid.SetColumn(icon, 0);
-        Grid.SetColumn(titleText, 1);
+        Grid.SetColumn(badge, 1);
         titleRow.Children.Add(icon);
-        titleRow.Children.Add(titleText);
+        titleRow.Children.Add(badge);
         var remaining = new TextBlock
         {
             Foreground = Brush("#9CA09C"),
@@ -789,7 +860,9 @@ public sealed class UsageOverlayWindow : Window
         container.Child = grid;
         var card = new UsageCardControls(
             container,
-            titleText,
+            badge,
+            badgeText,
+            badgeKind,
             remaining,
             reset,
             bar,
@@ -912,6 +985,8 @@ public sealed class UsageOverlayWindow : Window
                 Color = Color.Parse(_palette.Shadow)
             });
         _headerTitle.Foreground = Brush(_palette.HeaderForeground);
+        _claudeHeading.Foreground = Brush(_palette.CardTitle);
+        _codexHeading.Foreground = Brush(_palette.CardTitle);
         ApplyCardTheme(_codexFiveHourCard);
         ApplyCardTheme(_codexWeeklyCard);
         ApplyCardTheme(_claudeFiveHourCard);
@@ -953,10 +1028,22 @@ public sealed class UsageOverlayWindow : Window
     {
         card.Container.Background = Brush(_palette.CardBackground);
         card.Container.BorderBrush = Brush(_palette.CardBorder);
-        card.Title.Foreground = Brush(_palette.CardTitle);
+        var badgeColors = BadgeColors(card.BadgeKind, ActualThemeVariant == ThemeVariant.Light);
+        card.Badge.Background = Brush(badgeColors.Background);
+        card.Badge.BorderBrush = Brush(badgeColors.Border);
+        card.BadgeText.Foreground = Brush(badgeColors.Foreground);
         card.Reset.Foreground = Brush(_palette.SecondaryText);
         card.ProgressTrack.Background = Brush(_palette.EmptyCell);
     }
+
+    private static BadgePalette BadgeColors(LimitBadge badgeKind, bool isLight) =>
+        (badgeKind, isLight) switch
+        {
+            (LimitBadge.FiveHour, true) => new BadgePalette("#FFF1E5", "#D66700", "#F5C997"),
+            (LimitBadge.Week, true) => new BadgePalette("#EAF0FF", "#3867CE", "#B9CBF8"),
+            (LimitBadge.FiveHour, false) => new BadgePalette("#54320F", "#FFD091", "#976323"),
+            _ => new BadgePalette("#222D5E", "#B8C8FF", "#5268B6")
+        };
 
     private SolidColorBrush SignalBrush(UsageSignal signal) => signal switch
     {
@@ -969,9 +1056,19 @@ public sealed class UsageOverlayWindow : Window
 
     private static SolidColorBrush Brush(string color) => new(Color.Parse(color));
 
+    private enum LimitBadge
+    {
+        FiveHour,
+        Week
+    }
+
+    private sealed record BadgePalette(string Background, string Foreground, string Border);
+
     private sealed record UsageCardControls(
         Border Container,
-        TextBlock Title,
+        Border Badge,
+        TextBlock BadgeText,
+        LimitBadge BadgeKind,
         TextBlock Remaining,
         TextBlock Reset,
         Border ProgressTrack,
