@@ -195,6 +195,96 @@ public sealed record UiText(
 
     public string AntigravityTitle => "Antigravity";
 
+    public string UsageHistoryAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "使用記錄",
+        UiLanguage.SimplifiedChinese => "使用历史",
+        _ => "Usage history"
+    };
+
+    public string UsageHistoryTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "使用記錄 - Claude Codex Usage Companion",
+        UiLanguage.SimplifiedChinese => "使用历史 - Claude Codex Usage Companion",
+        _ => "Usage history - Claude Codex Usage Companion"
+    };
+
+    public string UsageHistoryLatestSnapshot => Language switch
+    {
+        UiLanguage.TraditionalChinese => "最新快照",
+        UiLanguage.SimplifiedChinese => "最新快照",
+        _ => "Latest snapshot"
+    };
+
+    public string UsageHistoryRecords => Language switch
+    {
+        UiLanguage.TraditionalChinese => "記錄時間軸",
+        UiLanguage.SimplifiedChinese => "记录时间线",
+        _ => "History timeline"
+    };
+
+    public string UsageHistoryTimestamp => Language switch
+    {
+        UiLanguage.TraditionalChinese => "時間",
+        UiLanguage.SimplifiedChinese => "时间",
+        _ => "Timestamp"
+    };
+
+    public string UsageHistoryProvider => Language switch
+    {
+        UiLanguage.TraditionalChinese => "來源",
+        UiLanguage.SimplifiedChinese => "来源",
+        _ => "Provider"
+    };
+
+    public string UsageHistoryFiveHour => "5hr";
+
+    public string UsageHistoryWeek => Language switch
+    {
+        UiLanguage.TraditionalChinese => "每週",
+        UiLanguage.SimplifiedChinese => "每周",
+        _ => "Week"
+    };
+
+    public string UsageHistoryError => Language switch
+    {
+        UiLanguage.TraditionalChinese => "錯誤",
+        UiLanguage.SimplifiedChinese => "错误",
+        _ => "Error"
+    };
+
+    public string UsageHistoryEmpty => Language switch
+    {
+        UiLanguage.TraditionalChinese => "尚無使用記錄。請在設定中啟用 CSV 用量記錄，下一次更新後便會顯示在這裡。",
+        UiLanguage.SimplifiedChinese => "暂无使用记录。请在设置中启用 CSV 用量日志，下次刷新后会显示在这里。",
+        _ => "No usage history yet. Enable CSV usage logging in Settings; records will appear after the next refresh."
+    };
+
+    public string UsageHistoryEmptySubtitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "本機 CSV 記錄",
+        UiLanguage.SimplifiedChinese => "本地 CSV 记录",
+        _ => "Local CSV history"
+    };
+
+    public string FormatUsageHistoryCount(int count, int visibleLimit) => Language switch
+    {
+        UiLanguage.TraditionalChinese =>
+            count > visibleLimit ? $"本機 CSV 記錄 · 顯示最新 {visibleLimit} / {count} 筆" : $"本機 CSV 記錄 · {count} 筆",
+        UiLanguage.SimplifiedChinese =>
+            count > visibleLimit ? $"本地 CSV 记录 · 显示最新 {visibleLimit} / {count} 条" : $"本地 CSV 记录 · {count} 条",
+        _ => count > visibleLimit
+            ? $"Local CSV history · newest {visibleLimit} of {count} records"
+            : $"Local CSV history · {count} records"
+    };
+
+    public string FormatUsageHistoryReset(DateTimeOffset resetAt) => Language switch
+    {
+        UiLanguage.TraditionalChinese => $"重置 {resetAt:MMM d HH:mm}",
+        UiLanguage.SimplifiedChinese => $"重置 {resetAt:MMM d HH:mm}",
+        _ => $"Resets {resetAt:MMM d, HH:mm}"
+    };
+
     public string AntigravityObservedFallback => Language switch
     {
         UiLanguage.TraditionalChinese => "觀察到的模型剩餘用量；共用額度尚未提供",

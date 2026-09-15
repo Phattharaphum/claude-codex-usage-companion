@@ -60,6 +60,7 @@ public sealed class UsageOverlayWindow : Window
     private Button _minimizeButton = null!;
     private ToggleButton _pinButton = null!;
     private Button _shortcutsButton = null!;
+    private Button _historyButton = null!;
     private Button _settingsButton = null!;
     private Button _refreshButton = null!;
     private Button _closeButton = null!;
@@ -188,6 +189,7 @@ public sealed class UsageOverlayWindow : Window
     public event EventHandler? RefreshRequested;
     public event EventHandler? SettingsRequested;
     public event EventHandler? ShortcutsRequested;
+    public event EventHandler? HistoryRequested;
     public event Action<bool>? AlwaysOnTopRequested;
 
     private void HandleKeyDown(object? sender, KeyEventArgs eventArgs)
@@ -288,6 +290,7 @@ public sealed class UsageOverlayWindow : Window
         ToolTip.SetTip(_minimizeButton, text.MinimizeAction);
         UpdatePinButton();
         ToolTip.SetTip(_shortcutsButton, text.ShortcutsAction);
+        ToolTip.SetTip(_historyButton, text.UsageHistoryAction);
         ToolTip.SetTip(_settingsButton, text.SettingsAction);
         ToolTip.SetTip(_refreshButton, text.RefreshAction);
         ToolTip.SetTip(_closeButton, CloseTooltip());
@@ -605,7 +608,7 @@ public sealed class UsageOverlayWindow : Window
     {
         var grid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
             Height = 26
         };
         _headerTitle = new TextBlock
@@ -624,20 +627,24 @@ public sealed class UsageOverlayWindow : Window
         _shortcutsButton.Click += (_, _) => ShortcutsRequested?.Invoke(this, EventArgs.Empty);
         Grid.SetColumn(_shortcutsButton, 1);
 
+        _historyButton = HeaderButton("◷", _text.UsageHistoryAction);
+        _historyButton.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
+        Grid.SetColumn(_historyButton, 2);
+
         _pinButton = HeaderToggleButton(CreatePinIcon(), string.Empty);
         _pinButton.IsChecked = Topmost;
         _pinButton.Click += (_, _) =>
             AlwaysOnTopRequested?.Invoke(_pinButton.IsChecked == true);
         UpdatePinButton();
-        Grid.SetColumn(_pinButton, 2);
+        Grid.SetColumn(_pinButton, 3);
 
         _settingsButton = HeaderButton("⚙", _text.SettingsAction);
         _settingsButton.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_settingsButton, 3);
+        Grid.SetColumn(_settingsButton, 4);
 
         _refreshButton = HeaderButton("↻", _text.RefreshAction);
         _refreshButton.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_refreshButton, 4);
+        Grid.SetColumn(_refreshButton, 5);
 
         _minimizeButton = HeaderButton("−", _text.MinimizeAction);
         // A real unmap works on both X11 and native Wayland.  WindowState.Minimized
@@ -645,14 +652,15 @@ public sealed class UsageOverlayWindow : Window
         _minimizeButton.Click += (_, _) => Hide();
         // Sets the window controls apart from the panel actions before them.
         _minimizeButton.Margin = new Thickness(HeaderGroupSpacing, 0, 0, 0);
-        Grid.SetColumn(_minimizeButton, 5);
+        Grid.SetColumn(_minimizeButton, 6);
 
         _closeButton = HeaderButton("×", CloseTooltip());
         _closeButton.Click += (_, _) => Close();
-        Grid.SetColumn(_closeButton, 6);
+        Grid.SetColumn(_closeButton, 7);
 
         grid.Children.Add(_headerTitle);
         grid.Children.Add(_shortcutsButton);
+        grid.Children.Add(_historyButton);
         grid.Children.Add(_pinButton);
         grid.Children.Add(_settingsButton);
         grid.Children.Add(_refreshButton);
