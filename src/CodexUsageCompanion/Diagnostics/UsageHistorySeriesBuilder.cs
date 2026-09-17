@@ -32,6 +32,13 @@ public sealed record UsageHistoryChartSeries(
 public static class UsageHistorySeriesBuilder
 {
     private const int MaximumChartPointsPerSeries = 800;
+    private static readonly string[] SupportedProviders =
+    [
+        "claude",
+        "codex",
+        "antigravity-gemini",
+        "antigravity-claudeandchatgpt"
+    ];
 
     public static IReadOnlyList<UsageHistoryChartSeries> Build(
         IReadOnlyList<UsageHistoryEntry> entries,
@@ -43,6 +50,7 @@ public static class UsageHistorySeriesBuilder
         var successfulEntries = entries
             .Where(entry =>
                 string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase) &&
+                SupportedProviders.Contains(entry.Provider, StringComparer.OrdinalIgnoreCase) &&
                 (providers is null || providers.Contains(entry.Provider)))
             .Select(entry => ToPoint(entry, window))
             .Where(point => point is not null)

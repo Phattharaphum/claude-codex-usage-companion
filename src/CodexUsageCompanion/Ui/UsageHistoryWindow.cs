@@ -27,10 +27,9 @@ public sealed class UsageHistoryWindow : Window
         Spacing = 10
     };
     private readonly StackPanel _rows = new() { Spacing = 5 };
-    private readonly StackPanel _providerFilters = new()
+    private readonly WrapPanel _providerFilters = new()
     {
-        Orientation = Orientation.Horizontal,
-        Spacing = 6
+        Orientation = Orientation.Horizontal
     };
     private readonly TextBlock _subtitle = new();
     private readonly TextBlock _message = new();
@@ -74,16 +73,16 @@ public sealed class UsageHistoryWindow : Window
             RemainingLabel = text.UsageHistoryRemaining,
             ResetLabel = text.UsageHistoryReset,
             NoDataText = text.UsageHistoryNoChartData,
-            ProviderLabelFormatter = DisplayProvider
+            ProviderLabelFormatter = ChartProviderLabel
         };
         _rangeSelector.SelectionChanged += (_, _) => ApplyChartFilters();
         _windowSelector.SelectionChanged += (_, _) => ApplyChartFilters();
 
         Title = text.UsageHistoryTitle;
-        Width = 920;
-        Height = 710;
-        MinWidth = 700;
-        MinHeight = 460;
+        Width = 980;
+        Height = 760;
+        MinWidth = 760;
+        MinHeight = 560;
         ShowInTaskbar = settings.ShowTaskbarIcon;
         Topmost = settings.AlwaysOnTop;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -143,23 +142,31 @@ public sealed class UsageHistoryWindow : Window
         _message.Foreground = Brush("#9C3D35");
         _message.IsVisible = false;
 
-        var filters = new StackPanel
+        var rangeFilters = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             VerticalAlignment = VerticalAlignment.Center
         };
-        filters.Children.Add(CreateFilterLabel(text.UsageHistoryTimeRange));
-        filters.Children.Add(_rangeSelector);
-        filters.Children.Add(CreateFilterLabel(text.UsageHistoryQuotaWindow));
-        filters.Children.Add(_windowSelector);
-        filters.Children.Add(CreateFilterLabel(text.UsageHistoryProvider));
-        filters.Children.Add(_providerFilters);
-        var filterScroll = new ScrollViewer
+        rangeFilters.Children.Add(CreateFilterLabel(text.UsageHistoryTimeRange));
+        rangeFilters.Children.Add(_rangeSelector);
+        rangeFilters.Children.Add(CreateFilterLabel(text.UsageHistoryQuotaWindow));
+        rangeFilters.Children.Add(_windowSelector);
+
+        var providerFilters = new Grid
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = filters
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        providerFilters.Children.Add(CreateFilterLabel(text.UsageHistoryProvider));
+        Grid.SetColumn(_providerFilters, 1);
+        providerFilters.Children.Add(_providerFilters);
+
+        var filters = new StackPanel
+        {
+            Spacing = 6,
+            Children = { rangeFilters, providerFilters }
         };
 
         var chartTitle = new TextBlock
@@ -204,7 +211,7 @@ public sealed class UsageHistoryWindow : Window
         AddRow(layout, header, 0);
         AddRow(layout, summaryTitle, 1);
         AddRow(layout, summaryScroll, 2);
-        AddRow(layout, filterScroll, 3);
+        AddRow(layout, filters, 3);
         AddRow(layout, chartTitle, 4);
         AddRow(layout, chartFrame, 5);
         AddRow(layout, _message, 6);
@@ -232,6 +239,7 @@ public sealed class UsageHistoryWindow : Window
         _providerFilters.Children.Clear();
         foreach (var provider in entries
                      .Where(entry => string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase))
+                     .Where(entry => IsChartProvider(entry.Provider))
                      .Select(entry => entry.Provider)
                      .Distinct(StringComparer.OrdinalIgnoreCase)
                      .OrderBy(ProviderOrder)
@@ -242,7 +250,8 @@ public sealed class UsageHistoryWindow : Window
                 Content = DisplayProvider(provider),
                 IsChecked = true,
                 Tag = provider,
-                FontSize = 11
+                FontSize = 11,
+                Margin = new Thickness(0, 0, 10, 2)
             };
             checkBox.IsCheckedChanged += (_, _) => ApplyChartFilters();
             _providerFilters.Children.Add(checkBox);
@@ -550,6 +559,24 @@ public sealed class UsageHistoryWindow : Window
         "antigravity-gemini" => "Antigravity · Gemini",
         "antigravity-claudeandchatgpt" => "Antigravity · Claude + ChatGPT",
         _ => provider
+    };
+
+    private string ChartProviderLabel(string provider) => provider.ToLowerInvariant() switch
+    {
+        "claude" => "Claude",
+        "codex" => "Codex",
+        "antigravity-gemini" => "Antigravity · Gemini",
+        "antigravity-claudeandchatgpt" => "Antigravity · C+GPT",
+        _ => provider
+    };
+
+    private static bool IsChartProvider(string provider) => provider.ToLowerInvariant() switch
+    {
+        "claude" or
+        "codex" or
+        "antigravity-gemini" or
+        "antigravity-claudeandchatgpt" => true,
+        _ => false
     };
 
     private static int ProviderOrder(string provider) => provider.ToLowerInvariant() switch

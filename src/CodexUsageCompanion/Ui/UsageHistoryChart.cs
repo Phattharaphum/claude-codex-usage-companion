@@ -17,8 +17,10 @@ public sealed class UsageHistoryChart : Control
     private static readonly IBrush GridBrush = Brush("#E1E7E2");
     private static readonly IBrush AxisBrush = Brush("#66706A");
     private static readonly IBrush ThresholdBrush = Brush("#D97706");
+    private static readonly IBrush ResetBrush = Brush("#9B8060");
     private static readonly Pen GridPen = new(GridBrush, 1);
     private static readonly Pen ThresholdPen = new(ThresholdBrush, 1, DashStyle.Dash);
+    private static readonly Pen ResetPen = new(ResetBrush, 1, DashStyle.Dash);
     private static readonly Typeface ChartTypeface = new("Inter");
 
     private IReadOnlyList<UsageHistoryChartSeries> _series = [];
@@ -122,8 +124,7 @@ public sealed class UsageHistoryChart : Control
             foreach (var marker in series.ResetMarkers)
             {
                 var x = X(marker, minimumTime, maximumTime, plot);
-                context.DrawLine(ThresholdPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
-                DrawText(context, ResetLabel, new Point(x + 3, plot.Top + 3), ThresholdBrush, 9);
+                context.DrawLine(ResetPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
             }
         }
 
@@ -152,7 +153,12 @@ public sealed class UsageHistoryChart : Control
                 context.DrawLine(pen, previousPoint, current);
             }
 
-            context.DrawEllipse(ProviderColor(series.Provider), null, current, 3, 3);
+            // Dense refresh logs become unreadable when every sample gets a
+            // marker. The hover tooltip still identifies the nearest sample.
+            if (series.Points.Count <= 80)
+            {
+                context.DrawEllipse(ProviderColor(series.Provider), null, current, 2.25, 2.25);
+            }
             previous = current;
         }
     }
