@@ -223,6 +223,90 @@ public sealed record UiText(
         _ => "History timeline"
     };
 
+    public string UsageHistoryChartTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "剩餘用量趨勢",
+        UiLanguage.SimplifiedChinese => "剩余用量趋势",
+        _ => "Remaining quota trend"
+    };
+
+    public string UsageHistoryTimeRange => Language switch
+    {
+        UiLanguage.TraditionalChinese => "時間範圍",
+        UiLanguage.SimplifiedChinese => "时间范围",
+        _ => "Time range"
+    };
+
+    public string UsageHistoryQuotaWindow => Language switch
+    {
+        UiLanguage.TraditionalChinese => "額度週期",
+        UiLanguage.SimplifiedChinese => "额度周期",
+        _ => "Quota window"
+    };
+
+    public string UsageHistory24Hours => Language switch
+    {
+        UiLanguage.TraditionalChinese => "24 小時",
+        UiLanguage.SimplifiedChinese => "24 小时",
+        _ => "24 hours"
+    };
+
+    public string UsageHistory7Days => Language switch
+    {
+        UiLanguage.TraditionalChinese => "7 天",
+        UiLanguage.SimplifiedChinese => "7 天",
+        _ => "7 days"
+    };
+
+    public string UsageHistory30Days => Language switch
+    {
+        UiLanguage.TraditionalChinese => "30 天",
+        UiLanguage.SimplifiedChinese => "30 天",
+        _ => "30 days"
+    };
+
+    public string UsageHistoryAll => Language switch
+    {
+        UiLanguage.TraditionalChinese => "全部",
+        UiLanguage.SimplifiedChinese => "全部",
+        _ => "All"
+    };
+
+    public string UsageHistoryWeeklyWindow => Language switch
+    {
+        UiLanguage.TraditionalChinese => "每週",
+        UiLanguage.SimplifiedChinese => "每周",
+        _ => "Weekly"
+    };
+
+    public string UsageHistoryFiveHourWindow => Language switch
+    {
+        UiLanguage.TraditionalChinese => "5 小時",
+        UiLanguage.SimplifiedChinese => "5 小时",
+        _ => "5-hour"
+    };
+
+    public string UsageHistoryRemaining => Language switch
+    {
+        UiLanguage.TraditionalChinese => "剩餘",
+        UiLanguage.SimplifiedChinese => "剩余",
+        _ => "Remaining"
+    };
+
+    public string UsageHistoryReset => Language switch
+    {
+        UiLanguage.TraditionalChinese => "重置",
+        UiLanguage.SimplifiedChinese => "重置",
+        _ => "Reset"
+    };
+
+    public string UsageHistoryNoChartData => Language switch
+    {
+        UiLanguage.TraditionalChinese => "此篩選條件沒有可繪製的資料。",
+        UiLanguage.SimplifiedChinese => "此筛选条件没有可绘制的数据。",
+        _ => "No chart data for this selection."
+    };
+
     public string UsageHistoryTimestamp => Language switch
     {
         UiLanguage.TraditionalChinese => "時間",

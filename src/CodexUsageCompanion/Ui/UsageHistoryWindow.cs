@@ -27,8 +27,17 @@ public sealed class UsageHistoryWindow : Window
         Spacing = 10
     };
     private readonly StackPanel _rows = new() { Spacing = 5 };
+    private readonly StackPanel _providerFilters = new()
+    {
+        Orientation = Orientation.Horizontal,
+        Spacing = 6
+    };
     private readonly TextBlock _subtitle = new();
     private readonly TextBlock _message = new();
+    private readonly ComboBox _rangeSelector;
+    private readonly ComboBox _windowSelector;
+    private readonly UsageHistoryChart _chart;
+    private IReadOnlyList<UsageHistoryEntry> _entries = [];
 
     public UsageHistoryWindow(
         CompanionSettings settings,
@@ -38,6 +47,37 @@ public sealed class UsageHistoryWindow : Window
         _settings = settings;
         _text = text;
         _reader = reader ?? new UsageHistoryReader();
+        _rangeSelector = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                text.UsageHistory24Hours,
+                text.UsageHistory7Days,
+                text.UsageHistory30Days,
+                text.UsageHistoryAll
+            },
+            SelectedIndex = 1,
+            MinWidth = 96
+        };
+        _windowSelector = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                text.UsageHistoryWeeklyWindow,
+                text.UsageHistoryFiveHourWindow
+            },
+            SelectedIndex = 0,
+            MinWidth = 105
+        };
+        _chart = new UsageHistoryChart
+        {
+            RemainingLabel = text.UsageHistoryRemaining,
+            ResetLabel = text.UsageHistoryReset,
+            NoDataText = text.UsageHistoryNoChartData,
+            ProviderLabelFormatter = DisplayProvider
+        };
+        _rangeSelector.SelectionChanged += (_, _) => ApplyChartFilters();
+        _windowSelector.SelectionChanged += (_, _) => ApplyChartFilters();
 
         Title = text.UsageHistoryTitle;
         Width = 920;
@@ -103,6 +143,41 @@ public sealed class UsageHistoryWindow : Window
         _message.Foreground = Brush("#9C3D35");
         _message.IsVisible = false;
 
+        var filters = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        filters.Children.Add(CreateFilterLabel(text.UsageHistoryTimeRange));
+        filters.Children.Add(_rangeSelector);
+        filters.Children.Add(CreateFilterLabel(text.UsageHistoryQuotaWindow));
+        filters.Children.Add(_windowSelector);
+        filters.Children.Add(CreateFilterLabel(text.UsageHistoryProvider));
+        filters.Children.Add(_providerFilters);
+        var filterScroll = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = filters
+        };
+
+        var chartTitle = new TextBlock
+        {
+            Text = text.UsageHistoryChartTitle,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 6, 0, 0)
+        };
+        var chartFrame = new Border
+        {
+            Background = Brush("#FBFCFB"),
+            BorderBrush = Brush("#D9DFD9"),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(8, 4),
+            Child = _chart
+        };
+
         var tableTitle = new TextBlock
         {
             Text = text.UsageHistoryRecords,
@@ -122,16 +197,19 @@ public sealed class UsageHistoryWindow : Window
 
         var layout = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"),
             Margin = new Thickness(24),
             RowSpacing = 12
         };
         AddRow(layout, header, 0);
         AddRow(layout, summaryTitle, 1);
         AddRow(layout, summaryScroll, 2);
-        AddRow(layout, _message, 3);
-        AddRow(layout, tableTitle, 4);
-        AddRow(layout, tableScroll, 5);
+        AddRow(layout, filterScroll, 3);
+        AddRow(layout, chartTitle, 4);
+        AddRow(layout, chartFrame, 5);
+        AddRow(layout, _message, 6);
+        AddRow(layout, tableTitle, 7);
+        AddRow(layout, tableScroll, 8);
         Content = layout;
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
         Reload();
@@ -145,10 +223,31 @@ public sealed class UsageHistoryWindow : Window
         _message.IsVisible = !string.IsNullOrWhiteSpace(result.Error);
         _message.Text = result.Error ?? string.Empty;
 
-        var entries = result.Entries;
+        _entries = result.Entries;
+        var entries = _entries;
         _subtitle.Text = entries.Count == 0
             ? _text.UsageHistoryEmptySubtitle
             : _text.FormatUsageHistoryCount(entries.Count, MaximumVisibleRows);
+
+        _providerFilters.Children.Clear();
+        foreach (var provider in entries
+                     .Where(entry => string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase))
+                     .Select(entry => entry.Provider)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(ProviderOrder)
+                     .ThenBy(provider => provider, StringComparer.OrdinalIgnoreCase))
+        {
+            var checkBox = new CheckBox
+            {
+                Content = DisplayProvider(provider),
+                IsChecked = true,
+                Tag = provider,
+                FontSize = 11
+            };
+            checkBox.IsCheckedChanged += (_, _) => ApplyChartFilters();
+            _providerFilters.Children.Add(checkBox);
+        }
+        ApplyChartFilters();
 
         foreach (var entry in LatestEntries(entries))
         {
@@ -165,6 +264,39 @@ public sealed class UsageHistoryWindow : Window
         {
             _rows.Children.Add(CreateRow(entry));
         }
+    }
+
+    private static TextBlock CreateFilterLabel(string text) => new()
+    {
+        Text = text + ":",
+        FontSize = 11,
+        Foreground = Brush("#66706A"),
+        VerticalAlignment = VerticalAlignment.Center
+    };
+
+    private void ApplyChartFilters()
+    {
+        var range = _rangeSelector.SelectedIndex switch
+        {
+            0 => UsageHistoryTimeRange.TwentyFourHours,
+            2 => UsageHistoryTimeRange.ThirtyDays,
+            3 => UsageHistoryTimeRange.All,
+            _ => UsageHistoryTimeRange.SevenDays
+        };
+        var window = _windowSelector.SelectedIndex == 1
+            ? UsageHistoryQuotaWindow.FiveHour
+            : UsageHistoryQuotaWindow.Weekly;
+        var selectedProviders = _providerFilters.Children
+            .OfType<CheckBox>()
+            .Where(checkBox => checkBox.IsChecked == true && checkBox.Tag is string)
+            .Select(checkBox => (string)checkBox.Tag!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _chart.SetSeries(UsageHistorySeriesBuilder.Build(
+            _entries,
+            window,
+            range,
+            providers: selectedProviders));
     }
 
     private static void AddRow(Grid grid, Control control, int row)
@@ -418,6 +550,15 @@ public sealed class UsageHistoryWindow : Window
         "antigravity-gemini" => "Antigravity · Gemini",
         "antigravity-claudeandchatgpt" => "Antigravity · Claude + ChatGPT",
         _ => provider
+    };
+
+    private static int ProviderOrder(string provider) => provider.ToLowerInvariant() switch
+    {
+        "claude" => 0,
+        "codex" => 1,
+        "antigravity-gemini" => 2,
+        "antigravity-claudeandchatgpt" => 3,
+        _ => 4
     };
 
     private static string Percent(int? value) => value is null ? "—" : $"{Math.Clamp(value.Value, 0, 100)}%";
