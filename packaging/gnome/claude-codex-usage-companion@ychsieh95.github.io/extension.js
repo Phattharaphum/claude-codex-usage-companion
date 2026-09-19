@@ -1,5 +1,6 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 import Cairo from 'cairo';
@@ -11,6 +12,11 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {formatPanelText, formatPercent, normalizeState} from './presentation.js';
 
+// Gio async methods are callback-based unless explicitly promisified. Without
+// this, awaiting load_contents_async() throws and the indicator stays at
+// "Usage —" even while the state file contains valid provider values.
+Gio._promisify(Gio.File.prototype, 'load_contents_async', 'load_contents_finish');
+
 const APPLICATION_COMMAND = 'claude-codex-usage-companion';
 const STATE_DIRECTORY = 'claude-codex-usage-companion';
 const STATE_FILE = 'gnome-top-bar.json';
@@ -21,7 +27,7 @@ const METERS = [
     {name: 'Antigravity', glyph: '✦', color: [0.26, 0.52, 0.96], enabled: 'hasAntigravity', value: 'antigravityRemaining'},
 ];
 
-class RingMeter extends St.DrawingArea {
+const RingMeter = GObject.registerClass(class RingMeter extends St.DrawingArea {
     _init(value, color) {
         super._init({style_class: 'ccuc-ring', reactive: false});
         this._value = value;
@@ -51,11 +57,12 @@ class RingMeter extends St.DrawingArea {
 
         cr.$dispose();
     }
-}
+});
 
 export default class CompanionTopBarExtension extends Extension {
     enable() {
         this._state = null;
+        this._reloadSourceId = 0;
         this._stylesheet = this.dir.get_child('stylesheet.css');
         // GNOME Shell 50 removed Extension.loadStylesheet(). The meter can
         // still render without the optional popup stylesheet, so only use the
@@ -74,10 +81,14 @@ export default class CompanionTopBarExtension extends Extension {
         this._stateFile = this._stateDirectory.get_child(STATE_FILE);
         this._installRuntimeMonitor();
         this._installStateDirectoryMonitor();
-        this._reloadState();
+        this._scheduleReload(0);
     }
 
     disable() {
+        if (this._reloadSourceId) {
+            GLib.source_remove(this._reloadSourceId);
+            this._reloadSourceId = 0;
+        }
         this._runtimeMonitor?.cancel();
         this._runtimeMonitor = null;
         this._stateDirectoryMonitor?.cancel();
@@ -104,7 +115,7 @@ export default class CompanionTopBarExtension extends Extension {
                 null);
             this._runtimeMonitor.connect('changed', () => {
                 this._installStateDirectoryMonitor();
-                this._reloadState();
+                this._scheduleReload();
             });
         } catch (error) {
             logError(error, `${this.metadata.uuid}: could not monitor XDG_RUNTIME_DIR`);
@@ -120,10 +131,25 @@ export default class CompanionTopBarExtension extends Extension {
             this._stateDirectoryMonitor = this._stateDirectory.monitor_directory(
                 Gio.FileMonitorFlags.WATCH_MOVES,
                 null);
-            this._stateDirectoryMonitor.connect('changed', () => this._reloadState());
+            this._stateDirectoryMonitor.connect('changed', () => this._scheduleReload());
         } catch (error) {
             logError(error, `${this.metadata.uuid}: could not monitor companion state`);
         }
+    }
+
+    _scheduleReload(delay = 80) {
+        if (this._reloadSourceId)
+            GLib.source_remove(this._reloadSourceId);
+
+        this._reloadSourceId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT,
+            delay,
+            () => {
+                this._reloadSourceId = 0;
+                this._reloadState().catch(error =>
+                    logError(error, `${this.metadata.uuid}: could not update presentation`));
+                return GLib.SOURCE_REMOVE;
+            });
     }
 
     async _reloadState() {
@@ -132,10 +158,11 @@ export default class CompanionTopBarExtension extends Extension {
         }
 
         try {
-            const [, contents] = await this._stateFile.load_contents_async(null);
+            const [contents] = await this._stateFile.load_contents_async(null);
             this._state = normalizeState(JSON.parse(new TextDecoder().decode(contents)));
         } catch (_) {
-            this._state = null;
+            // Keep the last valid state while the producer atomically replaces
+            // the file. A later monitor event will retry after the debounce.
         }
 
         this._updatePresentation();

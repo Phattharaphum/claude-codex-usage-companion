@@ -5,7 +5,7 @@ namespace CodexUsageCompanion.Tests;
 
 public sealed class GnomeExtensionPackageTests
 {
-    private const string ExtensionId = "claude-codex-usage-companion-fork-v2@gamephat.local";
+    private const string ExtensionId = "claude-codex-usage-companion-fork-v3@gamephat.local";
     private const string ExtensionSourceDirectory = "claude-codex-usage-companion@ychsieh95.github.io";
 
     [Fact]
@@ -23,8 +23,13 @@ public sealed class GnomeExtensionPackageTests
         Assert.Contains("45", shellVersions);
         Assert.Contains("50", shellVersions);
         Assert.Contains("resource:///org/gnome/shell/extensions/extension.js", extension);
+        Assert.Contains("GObject.registerClass", extension);
         Assert.Contains("monitor_directory", extension);
         Assert.Contains("load_contents_async", extension);
+        Assert.Contains("Gio._promisify", extension);
+        Assert.Contains("const [contents] = await", extension);
+        Assert.DoesNotContain("const [, contents] = await", extension);
+        Assert.Contains("_scheduleReload", extension);
         Assert.Contains("_runCompanion('refresh')", extension, StringComparison.Ordinal);
         Assert.DoesNotContain("status --json", extension, StringComparison.Ordinal);
         Assert.DoesNotContain("AntigravityUsageClient", extension, StringComparison.Ordinal);
