@@ -377,13 +377,6 @@ public sealed record UiText(
         _ => "Show table"
     };
 
-    public string UsageHistoryHideTimeline => Language switch
-    {
-        UiLanguage.TraditionalChinese => "隱藏表格",
-        UiLanguage.SimplifiedChinese => "隐藏表格",
-        _ => "Hide table"
-    };
-
     public string UsageHistoryChartTitle => Language switch
     {
         UiLanguage.TraditionalChinese => "剩餘用量趨勢",

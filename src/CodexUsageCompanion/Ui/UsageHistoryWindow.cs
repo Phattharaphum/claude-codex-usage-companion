@@ -22,13 +22,11 @@ public sealed class UsageHistoryWindow : Window
     private readonly UiText _text;
     private readonly UsageHistoryReader _reader;
     private readonly WrapPanel _summaryCards = new() { Orientation = Orientation.Horizontal };
-    private readonly StackPanel _rows = new() { Spacing = 6 };
     private readonly WrapPanel _providerFilters = new() { Orientation = Orientation.Horizontal };
     private readonly TextBlock _subtitle = new();
     private readonly TextBlock _periodLabel = new();
     private readonly TextBlock _timelineCaption = new();
     private readonly Button _timelineToggleButton;
-    private readonly ScrollViewer _timelineScroll;
     private readonly TextBlock _message = new();
     private readonly Border _noPeriodData;
     private readonly ComboBox _rangeSelector;
@@ -39,8 +37,10 @@ public sealed class UsageHistoryWindow : Window
     private readonly UsageHistoryChart _chart;
     private IReadOnlyList<UsageHistoryEntry> _entries = [];
     private IReadOnlyList<UsageHistoryEntry> _selection = [];
+    private IReadOnlyList<UsageHistoryEntry> _timelineRecords = [];
     private DateTimeOffset _anchorDate = DateTimeOffset.Now;
     private UsageAnalysisWindow? _analysisWindow;
+    private UsageTimelineWindow? _timelineWindow;
     private int _selectionVersion;
     private int _analysisSelectionVersion = -1;
 
@@ -85,11 +85,11 @@ public sealed class UsageHistoryWindow : Window
         _nextButton = NavigationButton("›", text.UsageHistoryNextPeriod);
         _timelineToggleButton = new Button
         {
-            Content = "▾  " + text.UsageHistoryShowTimeline,
+            Content = "↗  " + text.UsageHistoryShowTimeline,
             MinWidth = 118,
             Padding = new Thickness(12, 6)
         };
-        _timelineToggleButton.Click += (_, _) => ToggleTimeline();
+        _timelineToggleButton.Click += (_, _) => ShowTimelineWindow();
         _chart = new UsageHistoryChart
         {
             RemainingLabel = text.UsageHistoryRemaining,
@@ -238,20 +238,10 @@ public sealed class UsageHistoryWindow : Window
             Children = { _timelineCaption, _timelineToggleButton }
         };
         var timelineHeading = SectionHeading(text.UsageHistoryRecords, string.Empty, timelineActions);
-        var tableContent = new StackPanel { Spacing = 7 };
-        tableContent.Children.Add(CreateTableHeader());
-        tableContent.Children.Add(_rows);
-        _timelineScroll = new ScrollViewer
-        {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = tableContent,
-            IsVisible = false
-        };
 
         var layout = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
             Margin = new Thickness(24),
             RowSpacing = 12
         };
@@ -264,7 +254,6 @@ public sealed class UsageHistoryWindow : Window
         AddRow(layout, _noPeriodData, 6);
         AddRow(layout, _message, 7);
         AddRow(layout, timelineHeading, 8);
-        AddRow(layout, _timelineScroll, 9);
         Content = layout;
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
         Reload();
@@ -366,24 +355,13 @@ public sealed class UsageHistoryWindow : Window
         DateTimeOffset end,
         IReadOnlySet<string> providers)
     {
-        _rows.Children.Clear();
-        var records = _entries
+        _timelineRecords = _entries
             .Where(entry => entry.UpdatedAt >= start && entry.UpdatedAt <= end)
             .Where(entry => providers.Contains(entry.Provider))
             .Take(MaximumVisibleRows)
             .ToArray();
-        _timelineCaption.Text = _text.FormatUsageHistoryVisibleRecords(records.Length, _selection.Count);
-        if (records.Length == 0)
-        {
-            _rows.Children.Add(CreateEmptyState(
-                _entries.Count == 0 ? _text.UsageHistoryEmpty : _text.UsageHistoryNoPeriodData));
-            return;
-        }
-
-        foreach (var entry in records)
-        {
-            _rows.Children.Add(CreateRow(entry));
-        }
+        _timelineCaption.Text = _text.FormatUsageHistoryVisibleRecords(_timelineRecords.Count, _selection.Count);
+        _timelineWindow?.UpdateRecords(_timelineRecords, start, end);
     }
 
     private void MovePeriod(int direction)
@@ -403,12 +381,30 @@ public sealed class UsageHistoryWindow : Window
         ApplySelection();
     }
 
-    private void ToggleTimeline()
+    private void ShowTimelineWindow()
     {
-        _timelineScroll.IsVisible = !_timelineScroll.IsVisible;
-        _timelineToggleButton.Content = _timelineScroll.IsVisible
-            ? "▴  " + _text.UsageHistoryHideTimeline
-            : "▾  " + _text.UsageHistoryShowTimeline;
+        var (start, end) = SelectedPeriod();
+        if (_timelineWindow is not null)
+        {
+            _timelineWindow.UpdateRecords(_timelineRecords, start, end);
+            _timelineWindow.Activate();
+            return;
+        }
+
+        var dialog = new UsageTimelineWindow(_timelineRecords, start, end, _text)
+        {
+            ShowInTaskbar = _settings.ShowTaskbarIcon,
+            Topmost = _settings.AlwaysOnTop
+        };
+        _timelineWindow = dialog;
+        dialog.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_timelineWindow, dialog))
+            {
+                _timelineWindow = null;
+            }
+        };
+        dialog.Show(this);
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) SelectedPeriod()
@@ -577,156 +573,6 @@ public sealed class UsageHistoryWindow : Window
         return card;
     }
 
-    private Control CreateTableHeader()
-    {
-        var grid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("165,210,*,*"),
-            Margin = new Thickness(13, 0)
-        };
-        AddHeaderCell(grid, _text.UsageHistoryTimestamp, 0);
-        AddHeaderCell(grid, _text.UsageHistoryProvider, 1);
-        AddHeaderCell(grid, _text.UsageHistoryFiveHour, 2);
-        AddHeaderCell(grid, _text.UsageHistoryWeek, 3);
-        return grid;
-    }
-
-    private static void AddHeaderCell(Grid grid, string text, int column)
-    {
-        var block = new TextBlock
-        {
-            Text = text,
-            FontSize = 11,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush("#68756D")
-        };
-        Grid.SetColumn(block, column);
-        grid.Children.Add(block);
-    }
-
-    private Control CreateRow(UsageHistoryEntry entry)
-    {
-        var row = new Border
-        {
-            Background = string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase)
-                ? Brush("#FCFDFC") : Brush("#FFF5F3"),
-            BorderBrush = Brush("#E0E6E2"),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(13, 9)
-        };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("165,210,*,*") };
-        grid.Children.Add(new TextBlock
-        {
-            Text = entry.UpdatedAt.ToLocalTime().ToString("yyyy-MM-dd  HH:mm", CultureInfo.CurrentCulture),
-            FontSize = 12,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-        var provider = CreateProviderPill(entry);
-        var fiveHour = CreateLimitCell(entry.FiveHourRemainingPercent, entry.FiveHourResetAt, entry.Error);
-        var week = CreateLimitCell(entry.WeeklyRemainingPercent, entry.WeeklyResetAt, entry.Error);
-        Grid.SetColumn(provider, 1);
-        Grid.SetColumn(fiveHour, 2);
-        Grid.SetColumn(week, 3);
-        grid.Children.Add(provider);
-        grid.Children.Add(fiveHour);
-        grid.Children.Add(week);
-        row.Child = grid;
-        return row;
-    }
-
-    private Control CreateProviderPill(UsageHistoryEntry entry) => new Border
-    {
-        Background = ProviderBrush(entry.Provider, 0.13),
-        CornerRadius = new CornerRadius(12),
-        Padding = new Thickness(9, 4),
-        HorizontalAlignment = HorizontalAlignment.Left,
-        Child = new TextBlock
-        {
-            Text = string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase)
-                ? DisplayProvider(entry.Provider)
-                : $"{DisplayProvider(entry.Provider)} · {_text.UsageHistoryError}",
-            FontSize = 11,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = ProviderBrush(entry.Provider, 1)
-        }
-    };
-
-    private Control CreateLimitCell(int? remainingPercent, DateTimeOffset? resetAt, string? error)
-    {
-        if (!string.IsNullOrWhiteSpace(error))
-        {
-            return new TextBlock
-            {
-                Text = error,
-                Foreground = Brush("#A13C34"),
-                FontSize = 11,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-        }
-        var stack = new StackPanel { Spacing = 4, Margin = new Thickness(0, 0, 12, 0) };
-        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        heading.Children.Add(new TextBlock
-        {
-            Text = resetAt is null ? _text.ResetUnavailable : _text.FormatUsageHistoryReset(resetAt.Value.ToLocalTime()),
-            FontSize = 10,
-            Foreground = Brush("#68756D"),
-            TextTrimming = TextTrimming.CharacterEllipsis
-        });
-        var percent = new TextBlock
-        {
-            Text = Percent(remainingPercent),
-            FontWeight = FontWeight.Bold,
-            Foreground = SignalBrush(remainingPercent),
-            FontSize = 13
-        };
-        Grid.SetColumn(percent, 1);
-        heading.Children.Add(percent);
-        stack.Children.Add(heading);
-        stack.Children.Add(CreateProgress(remainingPercent));
-        return stack;
-    }
-
-    private static Control CreateProgress(int? remainingPercent)
-    {
-        var fill = new Border
-        {
-            Height = 6,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(3),
-            Background = SignalBrush(remainingPercent)
-        };
-        var track = new Border
-        {
-            Height = 6,
-            Background = Brush("#DDE4DF"),
-            CornerRadius = new CornerRadius(3),
-            ClipToBounds = true,
-            Child = fill
-        };
-        track.SizeChanged += (_, _) =>
-            fill.Width = Math.Round(track.Bounds.Width * Math.Clamp(remainingPercent ?? 0, 0, 100) / 100d);
-        return track;
-    }
-
-    private static Control CreateEmptyState(string text) => new Border
-    {
-        Background = Brush("#F6F8F6"),
-        BorderBrush = Brush("#D9DFD9"),
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(10),
-        Padding = new Thickness(22),
-        Child = new TextBlock
-        {
-            Text = text,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = Brush("#68756D"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center
-        }
-    };
-
     private void HandleKeyDown(object? sender, KeyEventArgs eventArgs)
     {
         if (eventArgs.Key == Key.Escape)
@@ -782,32 +628,9 @@ public sealed class UsageHistoryWindow : Window
         _ => 4
     };
 
-    private static string Percent(int? value) => value is null ? "—" : $"{Math.Clamp(value.Value, 0, 100)}%";
-
     private static string FormatDuration(TimeSpan duration) => duration.TotalDays >= 1
         ? $"{(int)duration.TotalDays}d {duration.Hours}h"
         : duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}h {duration.Minutes}m" : $"{Math.Max(0, duration.Minutes)}m";
-
-    private static IBrush SignalBrush(int? remainingPercent) => (remainingPercent ?? 0) switch
-    {
-        < 40 => Brush("#D84A42"),
-        < 60 => Brush("#D97706"),
-        < 80 => Brush("#A98700"),
-        _ => Brush("#0F8A5F")
-    };
-
-    private static IBrush ProviderBrush(string provider, double opacity)
-    {
-        var color = provider.ToLowerInvariant() switch
-        {
-            "claude" => Color.Parse("#C65D3B"),
-            "codex" => Color.Parse("#0F8A5F"),
-            "antigravity-gemini" => Color.Parse("#5B6FEF"),
-            "antigravity-claudeandchatgpt" => Color.Parse("#8A5CD7"),
-            _ => Color.Parse("#66706A")
-        };
-        return new SolidColorBrush(color, opacity);
-    }
 
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));
 }
