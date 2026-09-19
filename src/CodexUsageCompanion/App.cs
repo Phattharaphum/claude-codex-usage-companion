@@ -23,6 +23,7 @@ public sealed class App : Application
     private SettingsWindow? _settingsWindow;
     private ShortcutsWindow? _shortcutsWindow;
     private UsageHistoryWindow? _historyWindow;
+    private ResetEfficiencyWindow? _resetEfficiencyWindow;
     private TrayIcon? _trayIcon;
     private DispatcherTimer? _trayTooltipBridgeTimer;
     private readonly LinuxTrayTooltipBridge _trayTooltipBridge = new();
@@ -72,6 +73,7 @@ public sealed class App : Application
             _window.SettingsRequested += async (_, _) => await ShowSettingsAsync();
             _window.ShortcutsRequested += (_, _) => ShowShortcuts();
             _window.HistoryRequested += (_, _) => ShowUsageHistory();
+            _window.ResetEfficiencyRequested += (_, _) => ShowResetEfficiency();
             _window.AlwaysOnTopRequested += HandleAlwaysOnTopRequested;
             _window.Closing += async (_, eventArgs) =>
             {
@@ -462,6 +464,26 @@ public sealed class App : Application
         dialog.Show(_window);
     }
 
+    private void ShowResetEfficiency()
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        if (_resetEfficiencyWindow is not null)
+        {
+            _resetEfficiencyWindow.Reload();
+            _resetEfficiencyWindow.Activate();
+            return;
+        }
+
+        var dialog = new ResetEfficiencyWindow(_settings, _text);
+        dialog.Closed += (_, _) => _resetEfficiencyWindow = null;
+        _resetEfficiencyWindow = dialog;
+        dialog.Show(_window);
+    }
+
     private async Task ShowSettingsAsync()
     {
         if (_window is null)
@@ -545,6 +567,7 @@ public sealed class App : Application
         // Recreate the history dashboard on the next open so its text, theme,
         // taskbar visibility, and source file all match the new settings.
         _historyWindow?.Close();
+        _resetEfficiencyWindow?.Close();
         _runtime?.UpdateSettings(_settings);
         UpdateGnomeTopBarState();
         UpdateTrayIcon();
@@ -760,6 +783,7 @@ public sealed class App : Application
                     _gnomeTopBarBridge.Clear();
                     _shortcutsWindow?.Hide();
                     _historyWindow?.Hide();
+                    _resetEfficiencyWindow?.Hide();
                     _settingsWindow?.Hide();
                     _window?.Hide();
                 },

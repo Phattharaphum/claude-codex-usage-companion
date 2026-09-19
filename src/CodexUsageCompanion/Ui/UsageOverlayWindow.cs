@@ -61,6 +61,8 @@ public sealed class UsageOverlayWindow : Window
     private ToggleButton _pinButton = null!;
     private Button _shortcutsButton = null!;
     private Button _historyButton = null!;
+    private Button _resetEfficiencyButton = null!;
+    private Button _resetPositionButton = null!;
     private Button _settingsButton = null!;
     private Button _refreshButton = null!;
     private Button _closeButton = null!;
@@ -101,7 +103,7 @@ public sealed class UsageOverlayWindow : Window
         _antigravityEnabled = settings.EnableAntigravityUsage;
 
         Title = "Claude Codex Usage Companion";
-        Width = 370;
+        Width = 410;
         Height = ComputeHeight();
         MinWidth = Width;
         MaxWidth = Width;
@@ -190,6 +192,7 @@ public sealed class UsageOverlayWindow : Window
     public event EventHandler? SettingsRequested;
     public event EventHandler? ShortcutsRequested;
     public event EventHandler? HistoryRequested;
+    public event EventHandler? ResetEfficiencyRequested;
     public event Action<bool>? AlwaysOnTopRequested;
 
     private void HandleKeyDown(object? sender, KeyEventArgs eventArgs)
@@ -286,11 +289,23 @@ public sealed class UsageOverlayWindow : Window
         _antigravityEnabled = settings.EnableAntigravityUsage;
         _headerTitle.Text = text.CombinedUsageHeaderTitle;
         ApplyCardVisibility();
-        ApplySizeAndPosition(settings.Position);
+        var requestedPosition = WindowPosition.Normalize(settings.Position);
+        if (!string.Equals(requestedPosition, _position, StringComparison.Ordinal))
+        {
+            ApplySizeAndPosition(requestedPosition);
+        }
+        else
+        {
+            // Resizing after a refresh or an unrelated settings change must
+            // preserve a position chosen by dragging the window.
+            ApplyComputedHeight();
+        }
         ToolTip.SetTip(_minimizeButton, text.MinimizeAction);
         UpdatePinButton();
         ToolTip.SetTip(_shortcutsButton, text.ShortcutsAction);
         ToolTip.SetTip(_historyButton, text.UsageHistoryAction);
+        ToolTip.SetTip(_resetEfficiencyButton, text.ResetEfficiencyAction);
+        ToolTip.SetTip(_resetPositionButton, ResetPositionTooltip());
         ToolTip.SetTip(_settingsButton, text.SettingsAction);
         ToolTip.SetTip(_refreshButton, text.RefreshAction);
         ToolTip.SetTip(_closeButton, CloseTooltip());
@@ -344,6 +359,10 @@ public sealed class UsageOverlayWindow : Window
     {
         _position = WindowPosition.Normalize(position);
         PositionOnPrimaryScreen();
+        if (_resetPositionButton is not null)
+        {
+            _resetPositionButton.IsVisible = false;
+        }
     }
 
     private void ApplyCardVisibility()
@@ -454,7 +473,10 @@ public sealed class UsageOverlayWindow : Window
         ApplyAntigravityTheme();
         if (applySize)
         {
-            ApplySizeAndPosition(_position);
+            // Provider data can change the overlay height. Keep the current
+            // top-left coordinate instead of snapping a manually moved window
+            // back to its configured anchor.
+            ApplyComputedHeight();
         }
     }
 
@@ -608,7 +630,7 @@ public sealed class UsageOverlayWindow : Window
     {
         var grid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
             Height = 26
         };
         _headerTitle = new TextBlock
@@ -631,20 +653,33 @@ public sealed class UsageOverlayWindow : Window
         _historyButton.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
         Grid.SetColumn(_historyButton, 2);
 
+        _resetEfficiencyButton = HeaderButton("◉", _text.ResetEfficiencyAction);
+        _resetEfficiencyButton.Click += (_, _) => ResetEfficiencyRequested?.Invoke(this, EventArgs.Empty);
+        Grid.SetColumn(_resetEfficiencyButton, 3);
+
+        _resetPositionButton = HeaderButton("⌖", ResetPositionTooltip());
+        _resetPositionButton.IsVisible = false;
+        _resetPositionButton.Click += (_, _) =>
+        {
+            PositionOnPrimaryScreen();
+            _resetPositionButton.IsVisible = false;
+        };
+        Grid.SetColumn(_resetPositionButton, 4);
+
         _pinButton = HeaderToggleButton(CreatePinIcon(), string.Empty);
         _pinButton.IsChecked = Topmost;
         _pinButton.Click += (_, _) =>
             AlwaysOnTopRequested?.Invoke(_pinButton.IsChecked == true);
         UpdatePinButton();
-        Grid.SetColumn(_pinButton, 3);
+        Grid.SetColumn(_pinButton, 5);
 
         _settingsButton = HeaderButton("⚙", _text.SettingsAction);
         _settingsButton.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_settingsButton, 4);
+        Grid.SetColumn(_settingsButton, 6);
 
         _refreshButton = HeaderButton("↻", _text.RefreshAction);
         _refreshButton.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_refreshButton, 5);
+        Grid.SetColumn(_refreshButton, 7);
 
         _minimizeButton = HeaderButton("−", _text.MinimizeAction);
         // A real unmap works on both X11 and native Wayland.  WindowState.Minimized
@@ -652,15 +687,17 @@ public sealed class UsageOverlayWindow : Window
         _minimizeButton.Click += (_, _) => Hide();
         // Sets the window controls apart from the panel actions before them.
         _minimizeButton.Margin = new Thickness(HeaderGroupSpacing, 0, 0, 0);
-        Grid.SetColumn(_minimizeButton, 6);
+        Grid.SetColumn(_minimizeButton, 8);
 
         _closeButton = HeaderButton("×", CloseTooltip());
         _closeButton.Click += (_, _) => Close();
-        Grid.SetColumn(_closeButton, 7);
+        Grid.SetColumn(_closeButton, 9);
 
         grid.Children.Add(_headerTitle);
         grid.Children.Add(_shortcutsButton);
         grid.Children.Add(_historyButton);
+        grid.Children.Add(_resetEfficiencyButton);
+        grid.Children.Add(_resetPositionButton);
         grid.Children.Add(_pinButton);
         grid.Children.Add(_settingsButton);
         grid.Children.Add(_refreshButton);
@@ -671,6 +708,13 @@ public sealed class UsageOverlayWindow : Window
 
     private string CloseTooltip() =>
         _trayEnabled ? _text.HideToTrayAction : _text.CloseAction;
+
+    private string ResetPositionTooltip() => _text.Language switch
+    {
+        UiLanguage.TraditionalChinese => "重設為設定的位置",
+        UiLanguage.SimplifiedChinese => "重置为设置的位置",
+        _ => "Reset to configured position"
+    };
 
     private static Button HeaderButton(string content, string tooltip)
     {
@@ -938,6 +982,7 @@ public sealed class UsageOverlayWindow : Window
     {
         if (eventArgs.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
+            _resetPositionButton.IsVisible = true;
             BeginMoveDrag(eventArgs);
         }
     }

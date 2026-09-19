@@ -202,6 +202,20 @@ public sealed record UiText(
         _ => "Usage history"
     };
 
+    public string ResetEfficiencyAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "重置效率",
+        UiLanguage.SimplifiedChinese => "重置效率",
+        _ => "Reset efficiency"
+    };
+
+    public string ResetEfficiencyTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "重置效率 - Claude Codex Usage Companion",
+        UiLanguage.SimplifiedChinese => "重置效率 - Claude Codex Usage Companion",
+        _ => "Reset efficiency - Claude Codex Usage Companion"
+    };
+
     public string UsageHistoryTitle => Language switch
     {
         UiLanguage.TraditionalChinese => "使用記錄 - Claude Codex Usage Companion",
@@ -209,11 +223,144 @@ public sealed record UiText(
         _ => "Usage history - Claude Codex Usage Companion"
     };
 
-    public string UsageHistoryLatestSnapshot => Language switch
+    public string UsageHistoryDashboardTitle => Language switch
     {
-        UiLanguage.TraditionalChinese => "最新快照",
-        UiLanguage.SimplifiedChinese => "最新快照",
-        _ => "Latest snapshot"
+        UiLanguage.TraditionalChinese => "用量概覽",
+        UiLanguage.SimplifiedChinese => "用量概览",
+        _ => "Usage overview"
+    };
+
+    public string UsageHistorySummaryTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "所選期間摘要",
+        UiLanguage.SimplifiedChinese => "所选期间摘要",
+        _ => "Selected period summary"
+    };
+
+    public string UsageHistorySummarySubtitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "僅依本機記錄估算，額度重置造成的回升不計為使用量",
+        UiLanguage.SimplifiedChinese => "仅根据本地记录估算，额度重置造成的回升不计为使用量",
+        _ => "Estimated from local samples; quota recovery at resets is excluded"
+    };
+
+    public string UsageHistoryChartSubtitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "移動游標查看資料點；橘色虛線代表偵測到重置",
+        UiLanguage.SimplifiedChinese => "移动光标查看数据点；橙色虚线表示检测到重置",
+        _ => "Hover for details; orange dashed lines mark detected resets"
+    };
+
+    public string UsageHistoryShowFullPeriod => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示完整期間",
+        UiLanguage.SimplifiedChinese => "显示完整期间",
+        _ => "Show full period"
+    };
+
+    public string UsageHistoryDataOnly => Language switch
+    {
+        UiLanguage.TraditionalChinese => "僅顯示有資料區段",
+        UiLanguage.SimplifiedChinese => "仅显示有数据区段",
+        _ => "Data span only"
+    };
+
+    public string UsageHistoryPreviousPeriod => Language switch
+    {
+        UiLanguage.TraditionalChinese => "上一個期間 (Alt+←)",
+        UiLanguage.SimplifiedChinese => "上一个期间 (Alt+←)",
+        _ => "Previous period (Alt+←)"
+    };
+
+    public string UsageHistoryNextPeriod => Language switch
+    {
+        UiLanguage.TraditionalChinese => "下一個期間 (Alt+→)",
+        UiLanguage.SimplifiedChinese => "下一个期间 (Alt+→)",
+        _ => "Next period (Alt+→)"
+    };
+
+    public string UsageHistoryNoPeriodData => Language switch
+    {
+        UiLanguage.TraditionalChinese => "此日期範圍沒有資料。可切換日期或確認已啟用 CSV 用量記錄。",
+        UiLanguage.SimplifiedChinese => "此日期范围没有数据。可切换日期或确认已启用 CSV 用量日志。",
+        _ => "No data was recorded in this period. Choose another date or check that CSV usage logging is enabled."
+    };
+
+    public string UsageHistoryAnalyzeAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "分析期間",
+        UiLanguage.SimplifiedChinese => "分析期间",
+        _ => "Analyze period"
+    };
+
+    public string UsageHistorySamples => Language switch
+    {
+        UiLanguage.TraditionalChinese => "有效樣本",
+        UiLanguage.SimplifiedChinese => "有效样本",
+        _ => "Valid samples"
+    };
+
+    public string UsageHistoryObservedTime => Language switch
+    {
+        UiLanguage.TraditionalChinese => "觀察時間",
+        UiLanguage.SimplifiedChinese => "观察时间",
+        _ => "Observed span"
+    };
+
+    public string UsageHistoryDataCoverage => Language switch
+    {
+        UiLanguage.TraditionalChinese => "第一筆到最後一筆資料",
+        UiLanguage.SimplifiedChinese => "第一条到最后一条数据",
+        _ => "First to last sample"
+    };
+
+    public string UsageHistoryFiveHourConsumed => Language switch
+    {
+        UiLanguage.TraditionalChinese => "5 小時用量",
+        UiLanguage.SimplifiedChinese => "5 小时用量",
+        _ => "5-hour consumed"
+    };
+
+    public string UsageHistoryWeeklyConsumed => Language switch
+    {
+        UiLanguage.TraditionalChinese => "每週用量",
+        UiLanguage.SimplifiedChinese => "每周用量",
+        _ => "Weekly consumed"
+    };
+
+    public string UsageHistoryResetsDetected => Language switch
+    {
+        UiLanguage.TraditionalChinese => "偵測到重置",
+        UiLanguage.SimplifiedChinese => "检测到重置",
+        _ => "Resets detected"
+    };
+
+    public string UsageHistoryResetMarkersHint => Language switch
+    {
+        UiLanguage.TraditionalChinese => "圖表上的橘色標記",
+        UiLanguage.SimplifiedChinese => "图表上的橙色标记",
+        _ => "Orange markers on chart"
+    };
+
+    public string FormatUsageHistoryProviders(int count) => Language switch
+    {
+        UiLanguage.TraditionalChinese => $"{count} 個來源",
+        UiLanguage.SimplifiedChinese => $"{count} 个来源",
+        _ => $"{count} provider{(count == 1 ? string.Empty : "s")}"
+    };
+
+    public string FormatUsageHistoryBurnRate(double rate) => Language switch
+    {
+        UiLanguage.TraditionalChinese => $"平均 {rate:0.##}% / 小時",
+        UiLanguage.SimplifiedChinese => $"平均 {rate:0.##}% / 小时",
+        _ => $"Average {rate:0.##}% / hour"
+    };
+
+    public string FormatUsageHistoryVisibleRecords(int visible, int successful) => Language switch
+    {
+        UiLanguage.TraditionalChinese => $"顯示 {visible} 筆 · {successful} 筆有效樣本",
+        UiLanguage.SimplifiedChinese => $"显示 {visible} 条 · {successful} 条有效样本",
+        _ => $"Showing {visible} records · {successful} valid samples"
     };
 
     public string UsageHistoryRecords => Language switch

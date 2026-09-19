@@ -71,6 +71,40 @@ public static class UsageHistorySeriesBuilder
             _ => DateTimeOffset.MinValue
         };
 
+        return BuildSeries(successfulEntries, earliest, latest, window);
+    }
+
+    public static IReadOnlyList<UsageHistoryChartSeries> BuildForPeriod(
+        IReadOnlyList<UsageHistoryEntry> entries,
+        UsageHistoryQuotaWindow window,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        IReadOnlySet<string>? providers = null)
+    {
+        if (end < start)
+        {
+            (start, end) = (end, start);
+        }
+
+        var points = entries
+            .Where(entry =>
+                string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase) &&
+                SupportedProviders.Contains(entry.Provider, StringComparer.OrdinalIgnoreCase) &&
+                (providers is null || providers.Contains(entry.Provider)))
+            .Select(entry => ToPoint(entry, window))
+            .Where(point => point is not null)
+            .Select(point => point!)
+            .ToArray();
+
+        return BuildSeries(points, start, end, window);
+    }
+
+    private static IReadOnlyList<UsageHistoryChartSeries> BuildSeries(
+        IReadOnlyList<ChartPointWithProvider> points,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        UsageHistoryQuotaWindow window)
+    {
         var providerOrder = new[]
         {
             "claude",
@@ -79,15 +113,17 @@ public static class UsageHistorySeriesBuilder
             "antigravity-claudeandchatgpt"
         };
 
-        return successfulEntries
-            .Where(point => point.UpdatedAt >= earliest && point.UpdatedAt <= latest)
+        return points
             .GroupBy(point => point.Provider, StringComparer.OrdinalIgnoreCase)
             .OrderBy(group => ProviderOrder(group.Key, providerOrder))
             .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
             .Select(group => BuildSeries(
                 group.Key,
                 group.OrderBy(point => point.UpdatedAt).Select(point => point.Point).ToArray(),
-                window))
+                window,
+                start,
+                end))
+            .Where(series => series.Points.Count > 0)
             .ToArray();
     }
 
@@ -117,7 +153,9 @@ public static class UsageHistorySeriesBuilder
     private static UsageHistoryChartSeries BuildSeries(
         string provider,
         IReadOnlyList<UsageHistoryChartPoint> points,
-        UsageHistoryQuotaWindow window)
+        UsageHistoryQuotaWindow window,
+        DateTimeOffset start,
+        DateTimeOffset end)
     {
         var resetMarkers = new List<DateTimeOffset>();
         for (var index = 1; index < points.Count; index++)
@@ -126,19 +164,28 @@ public static class UsageHistorySeriesBuilder
             var current = points[index];
             var resetChanged = previous.ResetAt is not null &&
                 current.ResetAt is not null &&
-                previous.ResetAt.Value != current.ResetAt.Value;
+                current.ResetAt.Value > previous.ResetAt.Value;
             var quotaJumped = current.RemainingPercent - previous.RemainingPercent >=
                 (window == UsageHistoryQuotaWindow.FiveHour ? 25 : 20);
+            var crossedExpectedReset = previous.ResetAt is not null &&
+                current.UpdatedAt >= previous.ResetAt.Value.AddMinutes(-5);
 
-            // A reset is represented by a new reset timestamp and a quota
-            // recovery. Requiring both avoids marking ordinary noisy samples.
-            if (resetChanged && quotaJumped)
+            // A changed reset timestamp is the primary signal. Quota recovery
+            // confirms it early; crossing the former expected time also counts
+            // because usage between sparse samples can hide the recovery jump.
+            if (resetChanged && (quotaJumped || crossedExpectedReset))
             {
                 resetMarkers.Add(current.UpdatedAt);
             }
         }
 
-        return new UsageHistoryChartSeries(provider, Downsample(points), resetMarkers);
+        var visiblePoints = points
+            .Where(point => point.UpdatedAt >= start && point.UpdatedAt <= end)
+            .ToArray();
+        return new UsageHistoryChartSeries(
+            provider,
+            Downsample(visiblePoints),
+            resetMarkers.Where(marker => marker >= start && marker <= end).ToArray());
     }
 
     private static IReadOnlyList<UsageHistoryChartPoint> Downsample(
