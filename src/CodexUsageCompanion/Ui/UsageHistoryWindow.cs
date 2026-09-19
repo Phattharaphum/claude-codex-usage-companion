@@ -27,6 +27,8 @@ public sealed class UsageHistoryWindow : Window
     private readonly TextBlock _subtitle = new();
     private readonly TextBlock _periodLabel = new();
     private readonly TextBlock _timelineCaption = new();
+    private readonly Button _timelineToggleButton;
+    private readonly ScrollViewer _timelineScroll;
     private readonly TextBlock _message = new();
     private readonly Border _noPeriodData;
     private readonly ComboBox _rangeSelector;
@@ -81,6 +83,13 @@ public sealed class UsageHistoryWindow : Window
         };
         _previousButton = NavigationButton("‹", text.UsageHistoryPreviousPeriod);
         _nextButton = NavigationButton("›", text.UsageHistoryNextPeriod);
+        _timelineToggleButton = new Button
+        {
+            Content = "▾  " + text.UsageHistoryShowTimeline,
+            MinWidth = 118,
+            Padding = new Thickness(12, 6)
+        };
+        _timelineToggleButton.Click += (_, _) => ToggleTimeline();
         _chart = new UsageHistoryChart
         {
             RemainingLabel = text.UsageHistoryRemaining,
@@ -221,15 +230,23 @@ public sealed class UsageHistoryWindow : Window
         _message.IsVisible = false;
         _timelineCaption.Foreground = Brush("#68756D");
         _timelineCaption.FontSize = 11;
-        var timelineHeading = SectionHeading(text.UsageHistoryRecords, string.Empty, _timelineCaption);
+        var timelineActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _timelineCaption, _timelineToggleButton }
+        };
+        var timelineHeading = SectionHeading(text.UsageHistoryRecords, string.Empty, timelineActions);
         var tableContent = new StackPanel { Spacing = 7 };
         tableContent.Children.Add(CreateTableHeader());
         tableContent.Children.Add(_rows);
-        var tableScroll = new ScrollViewer
+        _timelineScroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = tableContent
+            Content = tableContent,
+            IsVisible = false
         };
 
         var layout = new Grid
@@ -247,7 +264,7 @@ public sealed class UsageHistoryWindow : Window
         AddRow(layout, _noPeriodData, 6);
         AddRow(layout, _message, 7);
         AddRow(layout, timelineHeading, 8);
-        AddRow(layout, tableScroll, 9);
+        AddRow(layout, _timelineScroll, 9);
         Content = layout;
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
         Reload();
@@ -384,6 +401,14 @@ public sealed class UsageHistoryWindow : Window
         }
         _anchorDate = _anchorDate.AddDays(days * direction);
         ApplySelection();
+    }
+
+    private void ToggleTimeline()
+    {
+        _timelineScroll.IsVisible = !_timelineScroll.IsVisible;
+        _timelineToggleButton.Content = _timelineScroll.IsVisible
+            ? "▴  " + _text.UsageHistoryHideTimeline
+            : "▾  " + _text.UsageHistoryShowTimeline;
     }
 
     private (DateTimeOffset Start, DateTimeOffset End) SelectedPeriod()

@@ -370,6 +370,20 @@ public sealed record UiText(
         _ => "History timeline"
     };
 
+    public string UsageHistoryShowTimeline => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示表格",
+        UiLanguage.SimplifiedChinese => "显示表格",
+        _ => "Show table"
+    };
+
+    public string UsageHistoryHideTimeline => Language switch
+    {
+        UiLanguage.TraditionalChinese => "隱藏表格",
+        UiLanguage.SimplifiedChinese => "隐藏表格",
+        _ => "Hide table"
+    };
+
     public string UsageHistoryChartTitle => Language switch
     {
         UiLanguage.TraditionalChinese => "剩餘用量趨勢",

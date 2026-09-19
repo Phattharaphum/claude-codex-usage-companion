@@ -292,11 +292,29 @@ public sealed class UsageHistoryChart : Control
         }
 
         var (minimumTime, maximumTime) = ResolveTimeBounds(points);
+        // Select by actual on-screen distance. Sorting by time first makes a
+        // point on another provider win whenever both samples share (or nearly
+        // share) a timestamp, even when the pointer is directly over a line.
         _hoveredPoint = _series
-            .SelectMany(series => series.Points.Select(point => new HoveredPoint(series.Provider, point)))
-            .Where(candidate => candidate.Point.UpdatedAt >= minimumTime && candidate.Point.UpdatedAt <= maximumTime)
-            .OrderBy(candidate => Math.Abs(X(candidate.Point.UpdatedAt, minimumTime, maximumTime, plot) - pointer.X))
-            .ThenBy(candidate => Math.Abs(Y(candidate.Point.RemainingPercent, plot) - pointer.Y))
+            .SelectMany(series => series.Points.Select(point => new
+            {
+                Hovered = new HoveredPoint(series.Provider, point),
+                ScreenPoint = new Point(
+                    X(point.UpdatedAt, minimumTime, maximumTime, plot),
+                    Y(point.RemainingPercent, plot))
+            }))
+            .Where(candidate =>
+                candidate.Hovered.Point.UpdatedAt >= minimumTime &&
+                candidate.Hovered.Point.UpdatedAt <= maximumTime)
+            .Select(candidate => new
+            {
+                candidate.Hovered,
+                DistanceSquared =
+                    Math.Pow(candidate.ScreenPoint.X - pointer.X, 2) +
+                    Math.Pow(candidate.ScreenPoint.Y - pointer.Y, 2)
+            })
+            .OrderBy(candidate => candidate.DistanceSquared)
+            .Select(candidate => candidate.Hovered)
             .FirstOrDefault();
         InvalidateVisual();
     }
