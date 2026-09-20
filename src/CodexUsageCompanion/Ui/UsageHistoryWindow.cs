@@ -41,9 +41,13 @@ public sealed class UsageHistoryWindow : Window
     private readonly Button _nextButton;
     private readonly Button _refreshButton;
     private readonly Button _analyzeButton;
-    private readonly Button _closeButton;
     private readonly UsageHistoryChart _chart;
     private readonly Border _root;
+    private readonly Border _windowTitleBar;
+    private readonly TextBlock _windowTitleText;
+    private readonly Button _windowMinimizeButton;
+    private readonly Button _windowMaximizeButton;
+    private readonly Button _windowCloseButton;
     private readonly Border _headerCard;
     private readonly Border _filterCard;
     private readonly Border _chartSection;
@@ -51,6 +55,8 @@ public sealed class UsageHistoryWindow : Window
     private readonly Border _timelineCard;
     private readonly Border _periodNavigationSurface;
     private readonly Border _titleMark;
+    private readonly Avalonia.Controls.Shapes.Ellipse _titleClockRing;
+    private readonly Avalonia.Controls.Shapes.Path _titleClockHands;
     private readonly TextBlock _titleText;
     private readonly List<TextBlock> _mutedText = [];
     private readonly Dictionary<Button, HistoryButtonRole> _buttonRoles = [];
@@ -133,6 +139,8 @@ public sealed class UsageHistoryWindow : Window
             Padding = new Thickness(9, 0),
             CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -140,8 +148,8 @@ public sealed class UsageHistoryWindow : Window
                 Children = { _fullPeriodTrack, _fullPeriodLabel }
             }
         };
-        _previousButton = NavigationButton("‹", text.UsageHistoryPreviousPeriod);
-        _nextButton = NavigationButton("›", text.UsageHistoryNextPeriod);
+        _previousButton = NavigationButton(CreateChevronIcon(pointsRight: false), text.UsageHistoryPreviousPeriod);
+        _nextButton = NavigationButton(CreateChevronIcon(pointsRight: true), text.UsageHistoryNextPeriod);
         _timelineToggleButton = new Button
         {
             Content = "↗  " + text.UsageHistoryShowTimeline,
@@ -149,7 +157,9 @@ public sealed class UsageHistoryWindow : Window
             Height = 36,
             Padding = new Thickness(13, 0),
             CornerRadius = new CornerRadius(10),
-            FontWeight = FontWeight.SemiBold
+            FontWeight = FontWeight.SemiBold,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center
         };
         _timelineToggleButton.Click += (_, _) => ShowTimelineWindow();
         _chart = new UsageHistoryChart
@@ -197,20 +207,76 @@ public sealed class UsageHistoryWindow : Window
 
         Title = text.UsageHistoryTitle;
         Width = 1120;
-        Height = 850;
+        Height = 820;
         MinWidth = 860;
         MinHeight = 660;
+        Background = Brushes.Transparent;
+        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
+        WindowDecorations = Avalonia.Controls.WindowDecorations.None;
         ShowInTaskbar = settings.ShowTaskbarIcon;
         Topmost = settings.AlwaysOnTop;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+
+        _windowTitleText = new TextBlock
+        {
+            Text = text.UsageHistoryTitle.Replace(" - Claude Codex Usage Companion", string.Empty),
+            FontSize = 12.5,
+            FontWeight = FontWeight.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        _windowMinimizeButton = WindowControlButton(
+            CreateWindowIcon("M4 11H20V13H4Z"),
+            text.MinimizeAction);
+        _windowMaximizeButton = WindowControlButton(
+            CreateWindowIcon("M5 5H19V7H5ZM5 17H19V19H5ZM5 7H7V17H5ZM17 7H19V17H17Z"),
+            "Maximize");
+        _windowCloseButton = WindowControlButton(
+            CreateWindowIcon("M6.7 5.3L12 10.6L17.3 5.3L18.7 6.7L13.4 12L18.7 17.3L17.3 18.7L12 13.4L6.7 18.7L5.3 17.3L10.6 12L5.3 6.7Z"),
+            text.CloseAction);
+        _windowMinimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
+        _windowMaximizeButton.Click += (_, _) => ToggleMaximized();
+        _windowCloseButton.Click += (_, _) => Close();
+        RegisterWindowControlHover(_windowMinimizeButton, closeButton: false);
+        RegisterWindowControlHover(_windowMaximizeButton, closeButton: false);
+        RegisterWindowControlHover(_windowCloseButton, closeButton: true);
+        var titleBarActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
+            Margin = new Thickness(0, 0, 7, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _windowMinimizeButton, _windowMaximizeButton, _windowCloseButton }
+        };
+        var titleBarLeft = new Border { Background = Brushes.Transparent };
+        var titleBarCenter = new Border
+        {
+            Background = Brushes.Transparent,
+            Child = _windowTitleText
+        };
+        titleBarLeft.PointerPressed += HandleTitleBarPointerPressed;
+        titleBarCenter.PointerPressed += HandleTitleBarPointerPressed;
+        var titleBarGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("100,*,100"),
+            Height = 38
+        };
+        Grid.SetColumn(titleBarCenter, 1);
+        Grid.SetColumn(titleBarActions, 2);
+        titleBarGrid.Children.Add(titleBarLeft);
+        titleBarGrid.Children.Add(titleBarCenter);
+        titleBarGrid.Children.Add(titleBarActions);
+        _windowTitleBar = new Border
+        {
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = titleBarGrid
+        };
 
         _refreshButton = ActionButton("↻  " + text.RefreshAction, 104);
         _refreshButton.Click += (_, _) => Reload();
         _analyzeButton = ActionButton("✦  " + text.UsageHistoryAnalyzeAction, 132);
         _analyzeButton.Click += (_, _) => ShowAnalysis();
-        _closeButton = ActionButton(text.CloseAction, 88);
-        _closeButton.IsCancel = true;
-        _closeButton.Click += (_, _) => Close();
 
         _titleText = new TextBlock
         {
@@ -221,19 +287,35 @@ public sealed class UsageHistoryWindow : Window
         _subtitle.FontSize = 12;
         _mutedText.Add(_subtitle);
         var titleStack = new StackPanel { Spacing = 3, Children = { _titleText, _subtitle } };
+        _titleClockRing = new Avalonia.Controls.Shapes.Ellipse
+        {
+            Width = 18,
+            Height = 18,
+            StrokeThickness = 1.6
+        };
+        Canvas.SetLeft(_titleClockRing, 1);
+        Canvas.SetTop(_titleClockRing, 1);
+        _titleClockHands = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M10 5.2L10 10L14 12.2"),
+            StrokeThickness = 1.7,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round
+        };
+        var titleClock = new Canvas
+        {
+            Width = 20,
+            Height = 20,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _titleClockRing, _titleClockHands }
+        };
         _titleMark = new Border
         {
             Width = 42,
             Height = 42,
             CornerRadius = new CornerRadius(13),
-            Child = new TextBlock
-            {
-                Text = "◷",
-                FontSize = 23,
-                FontWeight = FontWeight.SemiBold,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
+            Child = titleClock
         };
         var titleArea = new StackPanel
         {
@@ -247,7 +329,7 @@ public sealed class UsageHistoryWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { _analyzeButton, _refreshButton, _closeButton }
+            Children = { _analyzeButton, _refreshButton }
         };
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         Grid.SetColumn(actions, 1);
@@ -377,24 +459,41 @@ public sealed class UsageHistoryWindow : Window
                 _timelineCard
             }
         };
+        var bodyScroll = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = layout
+        };
+        var windowLayout = new Grid
+        {
+            RowDefinitions = new RowDefinitions("38,*"),
+            Children = { _windowTitleBar, bodyScroll }
+        };
+        Grid.SetRow(bodyScroll, 1);
         _root = new Border
         {
-            Child = new ScrollViewer
-            {
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = layout
-            }
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(17),
+            ClipToBounds = true,
+            Child = windowLayout
         };
+        _root.SizeChanged += (_, _) => UpdateWindowClip();
         Content = _root;
         RegisterButton(_analyzeButton, HistoryButtonRole.Primary);
         RegisterButton(_refreshButton, HistoryButtonRole.Secondary);
-        RegisterButton(_closeButton, HistoryButtonRole.Neutral);
         RegisterButton(_timelineToggleButton, HistoryButtonRole.AccentSoft);
         RegisterButton(_previousButton, HistoryButtonRole.Secondary);
         RegisterButton(_nextButton, HistoryButtonRole.Secondary);
         ActualThemeVariantChanged += (_, _) => ApplyVisualTheme();
         Opened += (_, _) => ApplyVisualTheme();
+        PropertyChanged += (_, args) =>
+        {
+            if (args.Property == WindowStateProperty)
+            {
+                UpdateWindowShape();
+            }
+        };
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
         ApplyVisualTheme();
         Reload();
@@ -438,7 +537,9 @@ public sealed class UsageHistoryWindow : Window
                 Padding = new Thickness(11, 0),
                 Margin = new Thickness(0, 0, 7, 3),
                 CornerRadius = new CornerRadius(15),
-                BorderThickness = new Thickness(1)
+                BorderThickness = new Thickness(1),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
             };
             button.Click += (_, _) =>
             {
@@ -660,7 +761,7 @@ public sealed class UsageHistoryWindow : Window
         return label;
     }
 
-    private static Button NavigationButton(string content, string tooltip)
+    private static Button NavigationButton(Control content, string tooltip)
     {
         var button = new Button
         {
@@ -668,7 +769,6 @@ public sealed class UsageHistoryWindow : Window
             Width = 34,
             Height = 34,
             Padding = new Thickness(0),
-            FontSize = 21,
             CornerRadius = new CornerRadius(9),
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -676,6 +776,102 @@ public sealed class UsageHistoryWindow : Window
         };
         ToolTip.SetTip(button, tooltip);
         return button;
+    }
+
+    private static Control CreateChevronIcon(bool pointsRight) => new PathIcon
+    {
+        Width = 13,
+        Height = 13,
+        Data = Geometry.Parse(pointsRight
+            ? "M8.59 16.59L10 18L16 12L10 6L8.59 7.41L13.17 12L8.59 16.59Z"
+            : "M15.41 7.41L14 6L8 12L14 18L15.41 16.59L10.83 12L15.41 7.41Z")
+    };
+
+    private static Button WindowControlButton(Control content, string tooltip)
+    {
+        var button = new Button
+        {
+            Content = content,
+            Width = 26,
+            Height = 26,
+            Padding = new Thickness(0),
+            CornerRadius = new CornerRadius(13),
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        ToolTip.SetTip(button, tooltip);
+        return button;
+    }
+
+    private static Control CreateWindowIcon(string geometry) => new PathIcon
+    {
+        Width = 12,
+        Height = 12,
+        Data = Geometry.Parse(geometry)
+    };
+
+    private void RegisterWindowControlHover(Button button, bool closeButton)
+    {
+        button.PointerEntered += (_, _) => ApplyWindowControlTheme(button, closeButton, hovered: true);
+        button.PointerExited += (_, _) => ApplyWindowControlTheme(button, closeButton, hovered: false);
+    }
+
+    private void ApplyWindowControlTheme(Button button, bool closeButton, bool hovered)
+    {
+        if (closeButton && hovered)
+        {
+            button.Background = Brush(_isLightTheme ? "#FFFFE9E7" : "#FF472725");
+            button.BorderBrush = Brush(_isLightTheme ? "#FFFFC8C3" : "#FF74413D");
+            button.Foreground = Brush(_palette.Error);
+            return;
+        }
+
+        button.Background = Brush(hovered ? _palette.Soft : "#00000000");
+        button.BorderBrush = Brush(hovered ? _palette.BorderStrong : "#00000000");
+        button.Foreground = Brush(_palette.Secondary);
+    }
+
+    private void HandleTitleBarPointerPressed(object? sender, PointerPressedEventArgs eventArgs)
+    {
+        if (!eventArgs.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (eventArgs.ClickCount == 2)
+        {
+            ToggleMaximized();
+            eventArgs.Handled = true;
+            return;
+        }
+
+        if (WindowState == WindowState.Normal)
+        {
+            BeginMoveDrag(eventArgs);
+        }
+    }
+
+    private void ToggleMaximized() =>
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+
+    private void UpdateWindowShape()
+    {
+        var maximized = WindowState == WindowState.Maximized;
+        _root.CornerRadius = new CornerRadius(maximized ? 0 : 17);
+        _root.BorderThickness = maximized ? new Thickness(0) : new Thickness(1);
+        UpdateWindowClip();
+    }
+
+    private void UpdateWindowClip()
+    {
+        var radius = WindowState == WindowState.Maximized ? 0 : 17;
+        _root.Clip = new RectangleGeometry(
+            new Rect(0, 0, _root.Bounds.Width, _root.Bounds.Height),
+            radius,
+            radius);
     }
 
     private static Button ActionButton(string content, double minWidth) => new()
@@ -686,7 +882,9 @@ public sealed class UsageHistoryWindow : Window
         Padding = new Thickness(13, 0),
         CornerRadius = new CornerRadius(10),
         BorderThickness = new Thickness(1),
-        FontWeight = FontWeight.SemiBold
+        FontWeight = FontWeight.SemiBold,
+        HorizontalContentAlignment = HorizontalAlignment.Center,
+        VerticalContentAlignment = VerticalAlignment.Center
     };
 
     private Control SectionHeading(string title, string subtitle, Control? trailing = null)
@@ -802,6 +1000,13 @@ public sealed class UsageHistoryWindow : Window
         _palette = _isLightTheme ? HistoryPalette.Light : HistoryPalette.Dark;
         Background = Brush(_palette.Root);
         _root.Background = Brush(_palette.Root);
+        _root.BorderBrush = Brush(_palette.BorderStrong);
+        _windowTitleBar.Background = Brush(_palette.Surface);
+        _windowTitleBar.BorderBrush = Brush(_palette.Border);
+        _windowTitleText.Foreground = Brush(_palette.Primary);
+        ApplyWindowControlTheme(_windowMinimizeButton, closeButton: false, hovered: false);
+        ApplyWindowControlTheme(_windowMaximizeButton, closeButton: false, hovered: false);
+        ApplyWindowControlTheme(_windowCloseButton, closeButton: true, hovered: false);
 
         _headerCard.Background = new LinearGradientBrush
         {
@@ -826,10 +1031,8 @@ public sealed class UsageHistoryWindow : Window
         _titleMark.Background = Brush(_palette.AccentSoft);
         _titleMark.BorderBrush = Tint(_palette.Accent, _isLightTheme ? (byte)80 : (byte)120);
         _titleMark.BorderThickness = new Thickness(1);
-        if (_titleMark.Child is TextBlock titleGlyph)
-        {
-            titleGlyph.Foreground = Brush(_palette.Accent);
-        }
+        _titleClockRing.Stroke = Brush(_palette.Accent);
+        _titleClockHands.Stroke = Brush(_palette.Accent);
 
         ApplySurfaceTheme(_filterCard, _palette.Surface);
         ApplySurfaceTheme(_chartSection, _palette.Surface);
