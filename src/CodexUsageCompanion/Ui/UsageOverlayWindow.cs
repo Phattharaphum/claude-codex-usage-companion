@@ -17,17 +17,16 @@ namespace CodexUsageCompanion.Ui;
 
 public sealed class UsageOverlayWindow : Window
 {
-    // Header, root padding, and the persistent "Last updated" status row.
-    // This remains outside the provider sections.
-    private const double BaseHeight = 72;
-    private const double CardSpacing = 6;
-    private const double FiveHourCardHeight = 64;
-    private const double WeeklyCardHeight = 64;
-    private const double UnavailableCardHeight = 46;
-    private const double AntigravityWindowCardHeight = 64;
-    private const double ProviderSectionTitleHeight = 18;
-    private const double AntigravitySectionTitleHeight = 18;
-    private const double AntigravityGroupTitleHeight = 15;
+    // Header, root padding, and the breathing room around provider sections.
+    private const double BaseHeight = 77;
+    private const double CardSpacing = 7;
+    private const double FiveHourCardHeight = 60;
+    private const double WeeklyCardHeight = 60;
+    private const double UnavailableCardHeight = 44;
+    private const double AntigravityWindowCardHeight = 60;
+    private const double ProviderSectionTitleHeight = 24;
+    private const double AntigravitySectionTitleHeight = 24;
+    private const double AntigravityGroupTitleHeight = 20;
     private const double AntigravityMessageCardHeight = 46;
     private const double AntigravityErrorCardHeight = 52;
     private const double ContentBottomPadding = 4;
@@ -54,10 +53,13 @@ public sealed class UsageOverlayWindow : Window
     private readonly List<TextBlock> _antigravityMessages = [];
     private readonly List<TextBlock> _antigravityErrorMessages = [];
     private readonly List<Border> _antigravityMessageCards = [];
+    private readonly List<Border> _antigravityGroupHeaders = [];
     private UiText _text;
     private readonly Border _root;
+    private Border _headerSurface = null!;
     private TextBlock _headerTitle = null!;
     private readonly TextBlock _status;
+    private Ellipse _statusDot = null!;
     private readonly DispatcherTimer _countdownTimer;
     private Button _minimizeButton = null!;
     private ToggleButton _pinButton = null!;
@@ -105,7 +107,7 @@ public sealed class UsageOverlayWindow : Window
         _antigravityEnabled = settings.EnableAntigravityUsage;
 
         Title = "Claude Codex Usage Companion";
-        Width = 410;
+        Width = 440;
         Height = ComputeHeight();
         MinWidth = Width;
         MaxWidth = Width;
@@ -124,8 +126,8 @@ public sealed class UsageOverlayWindow : Window
             Background = Brush("#F2272927"),
             BorderBrush = Brush("#655B605B"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(16),
-            Padding = new Thickness(12),
+            CornerRadius = new CornerRadius(20),
+            Padding = new Thickness(14),
             BoxShadow = new BoxShadows(new BoxShadow
             {
                 Blur = 22,
@@ -138,32 +140,40 @@ public sealed class UsageOverlayWindow : Window
             Spacing = CardSpacing,
             Margin = new Thickness(0, 0, 0, ContentBottomPadding)
         };
+        _status = new TextBlock
+        {
+            Text = _text.WaitingForData,
+            Foreground = Brush("#8E938E"),
+            FontSize = 10.5,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
         var header = CreateHeader();
         _codexFiveHourCard = CreateCard(LimitBadge.FiveHour);
         _codexWeeklyCard = CreateCard(LimitBadge.Week);
         _claudeFiveHourCard = CreateCard(LimitBadge.FiveHour);
         _claudeWeeklyCard = CreateCard(LimitBadge.Week);
-        _claudeSection = CreateProviderSection("Claude", CreateClaudeIcon, out _claudeHeading);
+        _claudeSection = CreateProviderSection(
+            "Claude",
+            CreateClaudeIcon,
+            "#22D77655",
+            out _claudeHeading);
         _claudeSection.Children.Add(_claudeFiveHourCard.Container);
         _claudeSection.Children.Add(_claudeWeeklyCard.Container);
-        _codexSection = CreateProviderSection("Codex", CreateCodexIcon, out _codexHeading);
+        _codexSection = CreateProviderSection(
+            "Codex",
+            CreateCodexIcon,
+            "#2010A37F",
+            out _codexHeading);
         _codexSection.Children.Add(_codexFiveHourCard.Container);
         _codexSection.Children.Add(_codexWeeklyCard.Container);
-        _antigravitySection = new StackPanel { Spacing = 6 };
+        _antigravitySection = new StackPanel { Spacing = CardSpacing };
         ApplyCardVisibility();
-        _status = new TextBlock
-        {
-            Text = _text.WaitingForData,
-            Foreground = Brush("#8E938E"),
-            FontSize = 11,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
 
         stack.Children.Add(header);
         stack.Children.Add(_claudeSection);
         stack.Children.Add(_codexSection);
         stack.Children.Add(_antigravitySection);
-        stack.Children.Add(_status);
         // The compact layout is deliberately sized to show every quota at
         // once. A scrolling dashboard hides the values the user opened it for.
         _root.Child = stack;
@@ -282,6 +292,7 @@ public sealed class UsageOverlayWindow : Window
         {
             _status.Text = error;
             _status.Foreground = Brush(_palette.ErrorText);
+            _statusDot.Fill = Brush(_palette.ErrorText);
             return;
         }
 
@@ -289,6 +300,7 @@ public sealed class UsageOverlayWindow : Window
             ? _text.WaitingForData
             : _text.FormatUpdatedTime(updatedAt.Value);
         _status.Foreground = Brush(_palette.StatusText);
+        _statusDot.Fill = Brush(updatedAt is null ? _palette.Gray : _palette.Green);
     }
 
     public void ApplySettings(CompanionSettings settings, UiText text)
@@ -470,7 +482,7 @@ public sealed class UsageOverlayWindow : Window
             sectionHeights.Add(antigravityHeight);
         }
         return BaseHeight + ContentBottomPadding + sectionHeights.Sum() +
-               (CardSpacing * (sectionHeights.Count + 1));
+               (CardSpacing * sectionHeights.Count);
     }
 
     private static double ComputeProviderSectionHeight(IReadOnlyCollection<double> cardHeights) =>
@@ -513,6 +525,7 @@ public sealed class UsageOverlayWindow : Window
         _antigravityMessages.Clear();
         _antigravityErrorMessages.Clear();
         _antigravityMessageCards.Clear();
+        _antigravityGroupHeaders.Clear();
         _antigravitySection.IsVisible = presentation.Kind != AntigravityPresentationKind.Hidden;
         if (_antigravitySection.IsVisible)
         {
@@ -558,28 +571,37 @@ public sealed class UsageOverlayWindow : Window
     private static StackPanel CreateProviderSection(
         string providerName,
         Func<Control> createIcon,
+        string iconBackground,
         out TextBlock heading)
     {
         var section = new StackPanel { Spacing = CardSpacing };
         var icon = createIcon();
-        icon.Width = 16;
-        icon.Height = 16;
+        icon.Width = 14;
+        icon.Height = 14;
         icon.VerticalAlignment = VerticalAlignment.Center;
+        var iconBadge = new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(7),
+            Background = Brush(iconBackground),
+            Child = icon
+        };
         heading = new TextBlock
         {
             Text = providerName,
-            FontSize = 12.5,
-            FontWeight = FontWeight.SemiBold,
+            FontSize = 13.5,
+            FontWeight = FontWeight.Bold,
             VerticalAlignment = VerticalAlignment.Center
         };
         var headingRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 7,
+            Spacing = 8,
             Height = ProviderSectionTitleHeight,
-            Margin = new Thickness(0, 2, 0, 0)
+            Margin = new Thickness(1, 2, 0, 0)
         };
-        headingRow.Children.Add(icon);
+        headingRow.Children.Add(iconBadge);
         headingRow.Children.Add(heading);
         section.Children.Add(headingRow);
         return section;
@@ -590,30 +612,47 @@ public sealed class UsageOverlayWindow : Window
         var heading = new TextBlock
         {
             Text = text,
-            FontSize = sectionTitle ? 12.5 : 11,
-            FontWeight = sectionTitle ? FontWeight.SemiBold : FontWeight.Medium,
-            Margin = sectionTitle ? new Thickness(0, 2, 0, 0) : new Thickness(4, 2, 0, 0),
+            FontSize = sectionTitle ? 13.5 : 10.5,
+            FontWeight = sectionTitle ? FontWeight.Bold : FontWeight.SemiBold,
+            Margin = new Thickness(0),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         _antigravityHeadings.Add(heading);
         if (!sectionTitle)
         {
-            _antigravitySection.Children.Add(heading);
+            var groupHeader = new Border
+            {
+                Height = AntigravityGroupTitleHeight,
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 1),
+                Margin = new Thickness(4, 0, 0, 0),
+                Child = heading
+            };
+            _antigravityGroupHeaders.Add(groupHeader);
+            _antigravitySection.Children.Add(groupHeader);
             return;
         }
 
         var icon = CreateAntigravityIcon();
-        icon.Width = 16;
-        icon.Height = 16;
+        icon.Width = 14;
+        icon.Height = 14;
         icon.VerticalAlignment = VerticalAlignment.Center;
+        var iconBadge = new Border
+        {
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(7),
+            Background = Brush("#204285F4"),
+            Child = icon
+        };
         var headingRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 7,
+            Spacing = 8,
             Height = AntigravitySectionTitleHeight,
-            Margin = new Thickness(0, 2, 0, 0)
+            Margin = new Thickness(1, 2, 0, 0)
         };
-        headingRow.Children.Add(icon);
+        headingRow.Children.Add(iconBadge);
         headingRow.Children.Add(heading);
         _antigravitySection.Children.Add(headingRow);
     }
@@ -624,7 +663,7 @@ public sealed class UsageOverlayWindow : Window
             ? LimitBadge.Week
             : LimitBadge.FiveHour;
         var card = CreateCard(badge);
-        card.Container.Margin = new Thickness(8, 0, 0, 0);
+        card.Container.Margin = new Thickness(4, 0, 0, 0);
         UpdateAntigravityCard(card, window);
         _antigravityCards.Add(card);
         _antigravitySection.Children.Add(card.Container);
@@ -712,32 +751,57 @@ public sealed class UsageOverlayWindow : Window
     {
         var grid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
-            Height = 26
+            ColumnDefinitions = new ColumnDefinitions("*,Auto")
         };
         _headerTitle = new TextBlock
         {
             Text = _text.CombinedUsageHeaderTitle,
             Foreground = Brush("#CDD1CD"),
-            FontSize = 11,
-            FontWeight = FontWeight.SemiBold,
-            LetterSpacing = 1.3,
+            FontSize = 14,
+            FontWeight = FontWeight.Bold,
+            LetterSpacing = 0.7,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
-        _headerTitle.PointerPressed += HandleHeaderPointerPressed;
+        _statusDot = new Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            Fill = Brush("#8E938E"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var statusRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 5
+        };
+        statusRow.Children.Add(_statusDot);
+        statusRow.Children.Add(_status);
+        var titleArea = new StackPanel
+        {
+            Spacing = 1,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        titleArea.Children.Add(_headerTitle);
+        titleArea.Children.Add(statusRow);
+        titleArea.PointerPressed += HandleHeaderPointerPressed;
+        grid.Children.Add(titleArea);
+
+        var toolbar = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(toolbar, 1);
 
         _shortcutsButton = HeaderButton("?", _text.ShortcutsAction);
         _shortcutsButton.Click += (_, _) => ShortcutsRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_shortcutsButton, 1);
 
         _historyButton = HeaderButton("◷", _text.UsageHistoryAction);
         _historyButton.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_historyButton, 2);
 
         _resetEfficiencyButton = HeaderButton("◉", _text.ResetEfficiencyAction);
         _resetEfficiencyButton.Click += (_, _) => ResetEfficiencyRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_resetEfficiencyButton, 3);
 
         _resetPositionButton = HeaderButton("⌖", ResetPositionTooltip());
         _resetPositionButton.IsVisible = false;
@@ -746,22 +810,18 @@ public sealed class UsageOverlayWindow : Window
             PositionOnPrimaryScreen();
             _resetPositionButton.IsVisible = false;
         };
-        Grid.SetColumn(_resetPositionButton, 4);
 
         _pinButton = HeaderToggleButton(CreatePinIcon(), string.Empty);
         _pinButton.IsChecked = Topmost;
         _pinButton.Click += (_, _) =>
             AlwaysOnTopRequested?.Invoke(_pinButton.IsChecked == true);
         UpdatePinButton();
-        Grid.SetColumn(_pinButton, 5);
 
         _settingsButton = HeaderButton("⚙", _text.SettingsAction);
         _settingsButton.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_settingsButton, 6);
 
         _refreshButton = HeaderButton("↻", _text.RefreshAction);
         _refreshButton.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
-        Grid.SetColumn(_refreshButton, 7);
 
         _minimizeButton = HeaderButton("−", _text.MinimizeAction);
         // A real unmap works on both X11 and native Wayland.  WindowState.Minimized
@@ -769,23 +829,29 @@ public sealed class UsageOverlayWindow : Window
         _minimizeButton.Click += (_, _) => Hide();
         // Sets the window controls apart from the panel actions before them.
         _minimizeButton.Margin = new Thickness(HeaderGroupSpacing, 0, 0, 0);
-        Grid.SetColumn(_minimizeButton, 8);
 
         _closeButton = HeaderButton("×", CloseTooltip());
         _closeButton.Click += (_, _) => Close();
-        Grid.SetColumn(_closeButton, 9);
 
-        grid.Children.Add(_headerTitle);
-        grid.Children.Add(_shortcutsButton);
-        grid.Children.Add(_historyButton);
-        grid.Children.Add(_resetEfficiencyButton);
-        grid.Children.Add(_resetPositionButton);
-        grid.Children.Add(_pinButton);
-        grid.Children.Add(_settingsButton);
-        grid.Children.Add(_refreshButton);
-        grid.Children.Add(_minimizeButton);
-        grid.Children.Add(_closeButton);
-        return grid;
+        toolbar.Children.Add(_shortcutsButton);
+        toolbar.Children.Add(_historyButton);
+        toolbar.Children.Add(_resetEfficiencyButton);
+        toolbar.Children.Add(_resetPositionButton);
+        toolbar.Children.Add(_pinButton);
+        toolbar.Children.Add(_settingsButton);
+        toolbar.Children.Add(_refreshButton);
+        toolbar.Children.Add(_minimizeButton);
+        toolbar.Children.Add(_closeButton);
+        grid.Children.Add(toolbar);
+
+        _headerSurface = new Border
+        {
+            CornerRadius = new CornerRadius(13),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(10, 7),
+            Child = grid
+        };
+        return _headerSurface;
     }
 
     private string CloseTooltip() =>
@@ -803,11 +869,13 @@ public sealed class UsageOverlayWindow : Window
         var button = new Button
         {
             Content = content,
-            Width = 28,
+            Width = 26,
             Height = 26,
             Padding = new Thickness(0),
-            Margin = new Thickness(4, 0, 0, 0),
-            FontSize = 16,
+            Margin = new Thickness(3, 0, 0, 0),
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            FontSize = 15,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center
         };
@@ -820,10 +888,12 @@ public sealed class UsageOverlayWindow : Window
         var button = new ToggleButton
         {
             Content = content,
-            Width = 28,
+            Width = 26,
             Height = 26,
             Padding = new Thickness(0),
-            Margin = new Thickness(4, 0, 0, 0),
+            Margin = new Thickness(3, 0, 0, 0),
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
             FontSize = 14,
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center
@@ -843,7 +913,15 @@ public sealed class UsageOverlayWindow : Window
     private void UpdatePinButton()
     {
         var pinned = _pinButton.IsChecked == true;
-        _pinButton.Opacity = pinned ? 1d : 0.55d;
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
+        _pinButton.Opacity = 1d;
+        _pinButton.Foreground = Brush(pinned ? _palette.Orange : _palette.SecondaryText);
+        _pinButton.Background = Brush(pinned
+            ? isLight ? "#FFFFE9DA" : "#FF49301F"
+            : isLight ? "#FFFFFFFF" : "#FF2C302D");
+        _pinButton.BorderBrush = Brush(pinned
+            ? isLight ? "#FFFFC69D" : "#FF81502C"
+            : isLight ? "#FFDCE2DC" : "#FF424743");
         ToolTip.SetTip(
             _pinButton,
             pinned ? _text.UnpinFromTopAction : _text.PinOnTopAction);
@@ -912,41 +990,35 @@ public sealed class UsageOverlayWindow : Window
             Background = Brush("#FF353835"),
             BorderBrush = Brush("#FF4A4E4A"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            // Keep the outer one-pixel border above the coloured limit rail.
-            // Without this inset, the rail can overpaint the curved edge.
-            Padding = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(10, 10),
             ClipToBounds = true
-        };
-        var grid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("36,*")
         };
         var railText = new TextBlock
         {
             Text = BadgeText(badgeKind),
-            FontSize = 11,
-            FontWeight = FontWeight.SemiBold,
+            FontSize = 9.5,
+            FontWeight = FontWeight.Bold,
+            LetterSpacing = 0.45,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
-        railText.RenderTransform = new RotateTransform(-90);
-        railText.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
         var rail = new Border
         {
-            CornerRadius = new CornerRadius(8, 0, 0, 8),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            ClipToBounds = true,
+            MinWidth = 43,
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(7, 2),
+            VerticalAlignment = VerticalAlignment.Center,
             Child = railText
         };
         var content = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*"),
-            Margin = new Thickness(9, 5, 10, 5)
+            RowDefinitions = new RowDefinitions("Auto,*")
         };
         var informationRow = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto")
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto")
         };
         var remaining = new TextBlock
         {
@@ -957,41 +1029,42 @@ public sealed class UsageOverlayWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis
         };
-        Grid.SetColumn(remaining, 1);
+        Grid.SetColumn(remaining, 2);
         var reset = new TextBlock
         {
             Foreground = Brush("#B7BAB6"),
-            FontSize = 12,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            FontSize = 11.5,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(9, 0, 6, 0)
         };
-        Grid.SetColumn(remaining, 1);
+        Grid.SetColumn(reset, 1);
         informationRow.Children.Add(reset);
         informationRow.Children.Add(remaining);
+        informationRow.Children.Add(rail);
+        Grid.SetColumn(rail, 0);
         var fill = new Border
         {
             Width = 0,
-            Height = 8,
+            Height = 7,
             HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(4)
+            CornerRadius = new CornerRadius(3.5)
         };
         var bar = new Border
         {
-            Height = 8,
+            Height = 7,
             Background = Brush("#FF4A4D49"),
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(3.5),
             ClipToBounds = true,
             VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 7, 0, 0),
             Child = fill
         };
 
         Grid.SetRow(bar, 1);
         content.Children.Add(informationRow);
         content.Children.Add(bar);
-        Grid.SetColumn(rail, 0);
-        Grid.SetColumn(content, 1);
-        grid.Children.Add(rail);
-        grid.Children.Add(content);
-        container.Child = grid;
+        container.Child = content;
         var card = new UsageCardControls(
             container,
             rail,
@@ -1016,15 +1089,19 @@ public sealed class UsageOverlayWindow : Window
         card.Container.Height = targetHeight;
         if (state is null)
         {
+            card.Container.Padding = new Thickness(10, 10);
             card.BadgeText.Text = dataAvailable
                 ? BadgeText(card.BadgeKind)
                 : "…";
             card.Remaining.Text = "--";
             card.Reset.Text = dataAvailable ? _text.LimitUnavailable : _text.WaitingForData;
+            card.ProgressTrack.IsVisible = false;
             ApplyBar(card, 0, UsageSignal.Gray);
             return;
         }
 
+        card.Container.Padding = new Thickness(10, 8);
+        card.ProgressTrack.IsVisible = true;
         card.BadgeText.Text = BadgeText(card.BadgeKind);
         card.Remaining.Text = FormatPercent(state.RemainingPercent);
         card.Reset.Text = state.ResetsAt is long unixSeconds
@@ -1040,6 +1117,8 @@ public sealed class UsageOverlayWindow : Window
         AntigravityQuotaWindowState window)
     {
         card.Container.Height = AntigravityWindowCardHeight;
+        card.Container.Padding = new Thickness(10, 8);
+        card.ProgressTrack.IsVisible = true;
         card.Remaining.Text = FormatPercent(window.RemainingPercent);
         card.Reset.Text = window.ResetAt is { } resetAt
             ? _text.FormatResetWithCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now)
@@ -1066,7 +1145,7 @@ public sealed class UsageOverlayWindow : Window
     private static string FormatPercent(int percent) => $"{Math.Clamp(percent, 0, 100)}%";
 
     private static string BadgeText(LimitBadge badgeKind) =>
-        badgeKind == LimitBadge.Week ? "Week" : "5hr";
+        badgeKind == LimitBadge.Week ? "WEEK" : "5 HR";
 
     private static void UpdateProgressWidth(UsageCardControls card) =>
         card.ProgressFill.Width = Math.Round(
@@ -1118,7 +1197,8 @@ public sealed class UsageOverlayWindow : Window
 
     private void ApplyThemePalette()
     {
-        _palette = ActualThemeVariant == ThemeVariant.Light
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
+        _palette = isLight
             ? OverlayThemePalette.Light
             : OverlayThemePalette.Dark;
         _root.Background = Brush(_palette.RootBackground);
@@ -1132,6 +1212,20 @@ public sealed class UsageOverlayWindow : Window
                 Color = Color.Parse(_palette.Shadow)
             });
         _headerTitle.Foreground = Brush(_palette.HeaderForeground);
+        _headerSurface.Background = Brush(isLight ? "#FFF5F7F5" : "#FF202321");
+        _headerSurface.BorderBrush = Brush(isLight ? "#FFE0E5DF" : "#FF3B403C");
+        foreach (var button in HeaderButtons())
+        {
+            button.Background = Brush(isLight ? "#FFFFFFFF" : "#FF2C302D");
+            button.BorderBrush = Brush(isLight ? "#FFDCE2DC" : "#FF424743");
+            button.Foreground = Brush(_palette.SecondaryText);
+        }
+        _refreshButton.Foreground = Brush(_palette.Green);
+        _resetPositionButton.Foreground = Brush(_palette.Orange);
+        _closeButton.Background = Brush(isLight ? "#FFFFF1F0" : "#FF3C2928");
+        _closeButton.BorderBrush = Brush(isLight ? "#FFFFD0CC" : "#FF69413E");
+        _closeButton.Foreground = Brush(_palette.ErrorText);
+        UpdatePinButton();
         _claudeHeading.Foreground = Brush(_palette.CardTitle);
         _codexHeading.Foreground = Brush(_palette.CardTitle);
         ApplyCardTheme(_codexFiveHourCard);
@@ -1156,6 +1250,18 @@ public sealed class UsageOverlayWindow : Window
             ApplyCardTheme(card);
         }
 
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
+        foreach (var groupHeader in _antigravityGroupHeaders)
+        {
+            groupHeader.Background = Brush(isLight ? "#FFF3F5F2" : "#FF2B2E2B");
+            groupHeader.BorderBrush = Brush(_palette.CardBorder);
+            groupHeader.BorderThickness = new Thickness(1);
+            if (groupHeader.Child is TextBlock groupLabel)
+            {
+                groupLabel.Foreground = Brush(_palette.SecondaryText);
+            }
+        }
+
         foreach (var card in _antigravityMessageCards)
         {
             card.Background = Brush(_palette.CardBackground);
@@ -1173,9 +1279,18 @@ public sealed class UsageOverlayWindow : Window
 
     private void ApplyCardTheme(UsageCardControls card)
     {
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
         card.Container.Background = Brush(_palette.CardBackground);
         card.Container.BorderBrush = Brush(_palette.CardBorder);
-        var badgeColors = BadgeColors(card.BadgeKind, ActualThemeVariant == ThemeVariant.Light);
+        card.Container.BoxShadow = isLight
+            ? new BoxShadows(new BoxShadow
+            {
+                Blur = 8,
+                OffsetY = 2,
+                Color = Color.Parse("#12000000")
+            })
+            : default;
+        var badgeColors = BadgeColors(card.BadgeKind, isLight);
         card.Badge.Background = Brush(badgeColors.Background);
         card.Badge.BorderBrush = Brush(badgeColors.Border);
         card.BadgeText.Foreground = Brush(badgeColors.Foreground);
@@ -1191,6 +1306,19 @@ public sealed class UsageOverlayWindow : Window
             (LimitBadge.FiveHour, false) => new BadgePalette("#54320F", "#FFD091", "#976323"),
             _ => new BadgePalette("#222D5E", "#B8C8FF", "#5268B6")
         };
+
+    private IEnumerable<Button> HeaderButtons()
+    {
+        yield return _shortcutsButton;
+        yield return _historyButton;
+        yield return _resetEfficiencyButton;
+        yield return _resetPositionButton;
+        yield return _pinButton;
+        yield return _settingsButton;
+        yield return _refreshButton;
+        yield return _minimizeButton;
+        yield return _closeButton;
+    }
 
     private SolidColorBrush SignalBrush(UsageSignal signal) => signal switch
     {
