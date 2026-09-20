@@ -31,7 +31,7 @@ public sealed class UsageOverlayWindow : Window
     private const double AntigravityErrorCardHeight = 52;
     private const double ContentBottomPadding = 4;
     private const double IconSize = 14;
-    private const double HeaderGroupSpacing = 14;
+    private const double HeaderGroupSpacing = 6;
     private const string CodexAccentColor = "#10A37F";
     private const string ClaudeIconBackground = "#D77655";
     private const string ClaudeIconForeground = "#FCF2EE";
@@ -69,6 +69,7 @@ public sealed class UsageOverlayWindow : Window
     private Button _resetPositionButton = null!;
     private Button _settingsButton = null!;
     private Button _refreshButton = null!;
+    private Control _refreshIcon = null!;
     private Button _closeButton = null!;
     private string _position;
     private readonly int _margin;
@@ -281,7 +282,15 @@ public sealed class UsageOverlayWindow : Window
     public void SetLoading(bool loading)
     {
         _refreshButton.IsEnabled = !loading;
-        _refreshButton.Content = loading ? "…" : "↻";
+        _refreshButton.Content = loading
+            ? new ProgressBar
+            {
+                Width = 13,
+                Height = 3,
+                IsIndeterminate = true,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+            : _refreshIcon;
     }
 
     public void SetStatus(DateTimeOffset? updatedAt, string? error)
@@ -770,11 +779,12 @@ public sealed class UsageOverlayWindow : Window
             Fill = Brush("#8E938E"),
             VerticalAlignment = VerticalAlignment.Center
         };
-        var statusRow = new StackPanel
+        var statusRow = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 5
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 5
         };
+        Grid.SetColumn(_status, 1);
         statusRow.Children.Add(_statusDot);
         statusRow.Children.Add(_status);
         var titleArea = new StackPanel
@@ -790,20 +800,25 @@ public sealed class UsageOverlayWindow : Window
         var toolbar = new StackPanel
         {
             Orientation = Orientation.Horizontal,
+            Spacing = 4,
             VerticalAlignment = VerticalAlignment.Center
         };
         Grid.SetColumn(toolbar, 1);
 
-        _shortcutsButton = HeaderButton("?", _text.ShortcutsAction);
+        _shortcutsButton = HeaderButton(CreateHeaderIcon(
+            "M12 2A10 10 0 1 0 12 22A10 10 0 0 0 12 2ZM13 19H11V17H13V19ZM15.07 11.25L14.17 12.17C13.45 12.9 13 13.5 13 15H11V14.5C11 13.4 11.45 12.4 12.17 11.67L13.41 10.41C13.78 10.05 14 9.55 14 9C14 7.9 13.1 7 12 7S10 7.9 10 9H8C8 6.79 9.79 5 12 5S16 6.79 16 9C16 9.88 15.64 10.68 15.07 11.25Z"), _text.ShortcutsAction);
         _shortcutsButton.Click += (_, _) => ShortcutsRequested?.Invoke(this, EventArgs.Empty);
 
-        _historyButton = HeaderButton("◷", _text.UsageHistoryAction);
+        _historyButton = HeaderButton(CreateHeaderIcon(
+            "M12 2A10 10 0 1 0 12 22A10 10 0 0 0 12 2ZM12 4A8 8 0 1 1 12 20A8 8 0 0 1 12 4ZM11 7H13V11.4L16.8 13.6L15.8 15.3L11 12.5V7Z"), _text.UsageHistoryAction);
         _historyButton.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
 
-        _resetEfficiencyButton = HeaderButton("◉", _text.ResetEfficiencyAction);
+        _resetEfficiencyButton = HeaderButton(CreateHeaderIcon(
+            "M11 2V12H21C21 6.48 16.52 2 11 2ZM9 4.07C4.94 4.56 2 8.03 2 12C2 16.42 5.58 20 10 20C13.97 20 17.44 17.06 17.93 13H9V4.07Z"), _text.ResetEfficiencyAction);
         _resetEfficiencyButton.Click += (_, _) => ResetEfficiencyRequested?.Invoke(this, EventArgs.Empty);
 
-        _resetPositionButton = HeaderButton("⌖", ResetPositionTooltip());
+        _resetPositionButton = HeaderButton(CreateHeaderIcon(
+            "M11 2H13V5.08C16.61 5.53 19.47 8.39 19.92 12H23V14H19.92C19.47 17.61 16.61 20.47 13 20.92V24H11V20.92C7.39 20.47 4.53 17.61 4.08 14H1V12H4.08C4.53 8.39 7.39 5.53 11 5.08V2ZM12 7C8.69 7 6 9.69 6 13S8.69 19 12 19 18 16.31 18 13 15.31 7 12 7ZM12 10A3 3 0 1 0 12 16A3 3 0 0 0 12 10Z"), ResetPositionTooltip());
         _resetPositionButton.IsVisible = false;
         _resetPositionButton.Click += (_, _) =>
         {
@@ -817,20 +832,24 @@ public sealed class UsageOverlayWindow : Window
             AlwaysOnTopRequested?.Invoke(_pinButton.IsChecked == true);
         UpdatePinButton();
 
-        _settingsButton = HeaderButton("⚙", _text.SettingsAction);
+        _settingsButton = HeaderButton(CreateHeaderIcon(
+            "M19.43 12.98C19.47 12.66 19.5 12.34 19.5 12S19.47 11.34 19.42 11L21.54 9.35L19.54 5.89L17.05 6.89C16.55 6.5 16 6.18 15.38 5.94L15 3.29H11L10.62 5.94C10 6.18 9.45 6.5 8.95 6.89L6.46 5.89L4.46 9.35L6.58 11C6.53 11.34 6.5 11.67 6.5 12S6.53 12.66 6.58 13L4.46 14.65L6.46 18.11L8.95 17.11C9.45 17.5 10 17.82 10.62 18.06L11 20.71H15L15.38 18.06C16 17.82 16.55 17.5 17.05 17.11L19.54 18.11L21.54 14.65L19.43 12.98ZM13 15.5A3.5 3.5 0 1 1 13 8.5A3.5 3.5 0 0 1 13 15.5Z"), _text.SettingsAction);
         _settingsButton.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
-        _refreshButton = HeaderButton("↻", _text.RefreshAction);
+        _refreshIcon = CreateHeaderIcon(
+            "M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H21V3L17.65 6.35Z");
+        _refreshButton = HeaderButton(_refreshIcon, _text.RefreshAction);
         _refreshButton.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
 
-        _minimizeButton = HeaderButton("−", _text.MinimizeAction);
+        _minimizeButton = HeaderButton(CreateHeaderIcon("M4 11H20V13H4Z"), _text.MinimizeAction);
         // A real unmap works on both X11 and native Wayland.  WindowState.Minimized
         // is only advisory on Wayland and can leave a borderless overlay visible.
         _minimizeButton.Click += (_, _) => Hide();
         // Sets the window controls apart from the panel actions before them.
         _minimizeButton.Margin = new Thickness(HeaderGroupSpacing, 0, 0, 0);
 
-        _closeButton = HeaderButton("×", CloseTooltip());
+        _closeButton = HeaderButton(CreateHeaderIcon(
+            "M6.7 5.3L12 10.6L17.3 5.3L18.7 6.7L13.4 12L18.7 17.3L17.3 18.7L12 13.4L6.7 18.7L5.3 17.3L10.6 12L5.3 6.7Z"), CloseTooltip());
         _closeButton.Click += (_, _) => Close();
 
         toolbar.Children.Add(_shortcutsButton);
@@ -864,20 +883,20 @@ public sealed class UsageOverlayWindow : Window
         _ => "Reset to configured position"
     };
 
-    private static Button HeaderButton(string content, string tooltip)
+    private static Button HeaderButton(Control content, string tooltip)
     {
         var button = new Button
         {
             Content = content,
-            Width = 26,
-            Height = 26,
+            Width = 24,
+            Height = 24,
             Padding = new Thickness(0),
-            Margin = new Thickness(3, 0, 0, 0),
-            CornerRadius = new CornerRadius(8),
+            Margin = new Thickness(0),
+            CornerRadius = new CornerRadius(7),
             BorderThickness = new Thickness(1),
-            FontSize = 15,
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center
+            VerticalContentAlignment = VerticalAlignment.Center,
+            UseLayoutRounding = true
         };
         ToolTip.SetTip(button, tooltip);
         return button;
@@ -888,15 +907,15 @@ public sealed class UsageOverlayWindow : Window
         var button = new ToggleButton
         {
             Content = content,
-            Width = 26,
-            Height = 26,
+            Width = 24,
+            Height = 24,
             Padding = new Thickness(0),
-            Margin = new Thickness(3, 0, 0, 0),
-            CornerRadius = new CornerRadius(8),
+            Margin = new Thickness(0),
+            CornerRadius = new CornerRadius(7),
             BorderThickness = new Thickness(1),
-            FontSize = 14,
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center
+            VerticalContentAlignment = VerticalAlignment.Center,
+            UseLayoutRounding = true
         };
         ToolTip.SetTip(button, tooltip);
         return button;
@@ -904,10 +923,19 @@ public sealed class UsageOverlayWindow : Window
 
     private static Control CreatePinIcon() => new PathIcon
     {
-        Width = 14,
-        Height = 14,
+        Width = 12,
+        Height = 12,
         Data = Geometry.Parse(
             "M16 9V4L17 3V2H7V3L8 4V9C8 10.1 7.1 11 6 11V13H11V20L12 21L13 20V13H18V11C16.9 11 16 10.1 16 9Z")
+    };
+
+    private static Control CreateHeaderIcon(string geometry) => new PathIcon
+    {
+        Width = 12,
+        Height = 12,
+        Data = Geometry.Parse(geometry),
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center
     };
 
     private void UpdatePinButton()
