@@ -16,16 +16,27 @@ public sealed record GnomeTopBarState(
     int? ClaudeGptWeeklyRemaining,
     long? LastUpdatedUnixMilliseconds)
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
-    // Schema 2 adds the three compact meters used by the GNOME Shell
-    // indicator. Keep the individual Antigravity pools above so a future
-    // detailed view does not need to infer anything from a displayed value.
+    // Schema 2 added the three compact meters used by the GNOME Shell
+    // indicator. Schema 3 adds the weekly values, reset times, and publish
+    // heartbeat required by the richer popup and its offline presentation.
+    // Keep the individual Antigravity pools above for backwards compatibility.
     public bool HasClaude { get; init; }
     public int? ClaudeFiveHourRemaining { get; init; }
     public bool HasCodex { get; init; }
     public int? CodexFiveHourRemaining { get; init; }
     public int? AntigravityRemaining { get; init; }
+    public int? ClaudeWeeklyRemaining { get; init; }
+    public int? CodexWeeklyRemaining { get; init; }
+    public int? AntigravityWeeklyRemaining { get; init; }
+    public long? ClaudeFiveHourResetUnixMilliseconds { get; init; }
+    public long? CodexFiveHourResetUnixMilliseconds { get; init; }
+    public long? AntigravityFiveHourResetUnixMilliseconds { get; init; }
+    public long? ClaudeWeeklyResetUnixMilliseconds { get; init; }
+    public long? CodexWeeklyResetUnixMilliseconds { get; init; }
+    public long? AntigravityWeeklyResetUnixMilliseconds { get; init; }
+    public long? PublishedAtUnixMilliseconds { get; init; }
 }
 
 public static class GnomeTopBarStateBuilder
@@ -35,7 +46,9 @@ public static class GnomeTopBarStateBuilder
         AntigravityUsageState? state,
         DateTimeOffset? updatedAt,
         RateLimitState? claude = null,
-        RateLimitState? codex = null)
+        RateLimitState? codex = null,
+        DateTimeOffset? claudeUpdatedAt = null,
+        DateTimeOffset? codexUpdatedAt = null)
     {
         var gemini = antigravityEnabled ? FindPool(state, "gemini-models") : null;
         var claudeGpt = antigravityEnabled ? FindPool(state, "claude-and-gpt-models") : null;
@@ -50,6 +63,37 @@ public static class GnomeTopBarStateBuilder
         int? antigravityRemaining = antigravityValues.Length == 0
             ? null
             : antigravityValues.Min();
+        var antigravityWeeklyValues = new[]
+            {
+                gemini?.Weekly?.RemainingPercent,
+                claudeGpt?.Weekly?.RemainingPercent
+            }
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+        int? antigravityWeeklyRemaining = antigravityWeeklyValues.Length == 0
+            ? null
+            : antigravityWeeklyValues.Min();
+        var antigravityFiveHourReset = new[] { gemini?.FiveHour, claudeGpt?.FiveHour }
+            .Where(window => window is not null)
+            .OrderBy(window => window!.RemainingPercent)
+            .FirstOrDefault()
+            ?.ResetAt;
+        var antigravityWeeklyReset = new[] { gemini?.Weekly, claudeGpt?.Weekly }
+            .Where(window => window is not null)
+            .OrderBy(window => window!.RemainingPercent)
+            .FirstOrDefault()
+            ?.ResetAt;
+        var latestUpdatedAt = new[]
+            {
+                antigravityEnabled && state is not null ? updatedAt : null,
+                claudeUpdatedAt,
+                codexUpdatedAt
+            }
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .DefaultIfEmpty()
+            .Max();
 
         return new GnomeTopBarState(
             GnomeTopBarState.CurrentSchemaVersion,
@@ -58,13 +102,22 @@ public static class GnomeTopBarStateBuilder
             gemini?.Weekly?.RemainingPercent,
             claudeGpt?.FiveHour?.RemainingPercent,
             claudeGpt?.Weekly?.RemainingPercent,
-            antigravityEnabled ? updatedAt?.ToUnixTimeMilliseconds() : null)
+            latestUpdatedAt == default ? null : latestUpdatedAt.ToUnixTimeMilliseconds())
         {
-            HasClaude = claude?.FiveHour is not null,
+            HasClaude = claude?.FiveHour is not null || claude?.Weekly is not null,
             ClaudeFiveHourRemaining = claude?.FiveHour?.RemainingPercent,
-            HasCodex = codex?.FiveHour is not null,
+            HasCodex = codex?.FiveHour is not null || codex?.Weekly is not null,
             CodexFiveHourRemaining = codex?.FiveHour?.RemainingPercent,
-            AntigravityRemaining = antigravityRemaining
+            AntigravityRemaining = antigravityRemaining,
+            ClaudeWeeklyRemaining = claude?.Weekly?.RemainingPercent,
+            CodexWeeklyRemaining = codex?.Weekly?.RemainingPercent,
+            AntigravityWeeklyRemaining = antigravityWeeklyRemaining,
+            ClaudeFiveHourResetUnixMilliseconds = UnixMilliseconds(claude?.FiveHour),
+            CodexFiveHourResetUnixMilliseconds = UnixMilliseconds(codex?.FiveHour),
+            AntigravityFiveHourResetUnixMilliseconds = antigravityFiveHourReset?.ToUnixTimeMilliseconds(),
+            ClaudeWeeklyResetUnixMilliseconds = UnixMilliseconds(claude?.Weekly),
+            CodexWeeklyResetUnixMilliseconds = UnixMilliseconds(codex?.Weekly),
+            AntigravityWeeklyResetUnixMilliseconds = antigravityWeeklyReset?.ToUnixTimeMilliseconds()
         };
     }
 
@@ -98,4 +151,9 @@ public static class GnomeTopBarStateBuilder
     {
         return string.Concat(value.Where(char.IsLetterOrDigit)).ToLowerInvariant();
     }
+
+    private static long? UnixMilliseconds(RateLimitWindowState? window) =>
+        window?.ResetsAt is long seconds
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds).ToUnixTimeMilliseconds()
+            : null;
 }

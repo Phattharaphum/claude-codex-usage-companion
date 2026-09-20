@@ -733,7 +733,9 @@ public sealed class App : Application
             _lastAntigravityUsage,
             _lastAntigravityUpdatedAt,
             _lastClaudeUsage,
-            _lastCodexUsage));
+            _lastCodexUsage,
+            _lastClaudeUpdatedAt,
+            _lastCodexUpdatedAt));
     }
 
     private static void TryWriteUsageLog(Action write)

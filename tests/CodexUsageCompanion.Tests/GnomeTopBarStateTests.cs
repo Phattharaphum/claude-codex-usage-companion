@@ -11,6 +11,10 @@ public sealed class GnomeTopBarStateTests
     public void BuildsBothFiveHourValuesFromNamedAuthoritativePoolsNotListPosition()
     {
         var updatedAt = new DateTimeOffset(2026, 9, 13, 7, 44, 7, TimeSpan.Zero);
+        var geminiFiveHourReset = updatedAt.AddHours(2);
+        var geminiWeeklyReset = updatedAt.AddDays(5);
+        var claudeFiveHourReset = updatedAt.AddHours(3);
+        var claudeWeeklyReset = updatedAt.AddDays(4);
         var state = new AntigravityUsageState(
             "account@example.invalid",
             "Pro",
@@ -22,8 +26,20 @@ public sealed class GnomeTopBarStateTests
                     null))
                 .ToArray(),
             [
-                Pool("claude-and-gpt-models", "Claude and GPT models", 100, 80),
-                Pool("gemini-models", "Gemini Models", 89, 88)
+                Pool(
+                    "claude-and-gpt-models",
+                    "Claude and GPT models",
+                    100,
+                    80,
+                    claudeFiveHourReset,
+                    claudeWeeklyReset),
+                Pool(
+                    "gemini-models",
+                    "Gemini Models",
+                    89,
+                    88,
+                    geminiFiveHourReset,
+                    geminiWeeklyReset)
             ]);
 
         var presentation = GnomeTopBarStateBuilder.Build(true, state, updatedAt);
@@ -34,7 +50,55 @@ public sealed class GnomeTopBarStateTests
         Assert.Equal(100, presentation.ClaudeGptFiveHourRemaining);
         Assert.Equal(80, presentation.ClaudeGptWeeklyRemaining);
         Assert.Equal(89, presentation.AntigravityRemaining);
+        Assert.Equal(80, presentation.AntigravityWeeklyRemaining);
+        Assert.Equal(
+            geminiFiveHourReset.ToUnixTimeMilliseconds(),
+            presentation.AntigravityFiveHourResetUnixMilliseconds);
+        Assert.Equal(
+            claudeWeeklyReset.ToUnixTimeMilliseconds(),
+            presentation.AntigravityWeeklyResetUnixMilliseconds);
         Assert.Equal(updatedAt.ToUnixTimeMilliseconds(), presentation.LastUpdatedUnixMilliseconds);
+        Assert.Equal(GnomeTopBarState.CurrentSchemaVersion, presentation.SchemaVersion);
+    }
+
+    [Fact]
+    public void BuildsProviderWeeklyValuesResetTimesAndLatestUpdate()
+    {
+        var claudeUpdatedAt = new DateTimeOffset(2026, 9, 20, 10, 0, 0, TimeSpan.Zero);
+        var codexUpdatedAt = claudeUpdatedAt.AddMinutes(2);
+        var claudeFiveHourReset = claudeUpdatedAt.AddHours(4).ToUnixTimeSeconds();
+        var claudeWeeklyReset = claudeUpdatedAt.AddDays(4).ToUnixTimeSeconds();
+        var codexFiveHourReset = codexUpdatedAt.AddHours(3).ToUnixTimeSeconds();
+        var codexWeeklyReset = codexUpdatedAt.AddDays(6).ToUnixTimeSeconds();
+        var claude = new RateLimitState(
+            new RateLimitWindowState(73, 300, claudeFiveHourReset),
+            new RateLimitWindowState(61, 10_080, claudeWeeklyReset),
+            null);
+        var codex = new RateLimitState(
+            new RateLimitWindowState(82, 300, codexFiveHourReset),
+            new RateLimitWindowState(45, 10_080, codexWeeklyReset),
+            null);
+
+        var presentation = GnomeTopBarStateBuilder.Build(
+            false,
+            null,
+            null,
+            claude,
+            codex,
+            claudeUpdatedAt,
+            codexUpdatedAt);
+
+        Assert.True(presentation.HasClaude);
+        Assert.True(presentation.HasCodex);
+        Assert.Equal(73, presentation.ClaudeFiveHourRemaining);
+        Assert.Equal(61, presentation.ClaudeWeeklyRemaining);
+        Assert.Equal(82, presentation.CodexFiveHourRemaining);
+        Assert.Equal(45, presentation.CodexWeeklyRemaining);
+        Assert.Equal(claudeFiveHourReset * 1_000, presentation.ClaudeFiveHourResetUnixMilliseconds);
+        Assert.Equal(claudeWeeklyReset * 1_000, presentation.ClaudeWeeklyResetUnixMilliseconds);
+        Assert.Equal(codexFiveHourReset * 1_000, presentation.CodexFiveHourResetUnixMilliseconds);
+        Assert.Equal(codexWeeklyReset * 1_000, presentation.CodexWeeklyResetUnixMilliseconds);
+        Assert.Equal(codexUpdatedAt.ToUnixTimeMilliseconds(), presentation.LastUpdatedUnixMilliseconds);
     }
 
     [Fact]
@@ -89,6 +153,7 @@ public sealed class GnomeTopBarStateTests
             Assert.True(root.GetProperty("hasAntigravity").GetBoolean());
             Assert.Equal(89, root.GetProperty("geminiFiveHourRemaining").GetInt32());
             Assert.Equal(80, root.GetProperty("claudeGptWeeklyRemaining").GetInt32());
+            Assert.True(root.GetProperty("publishedAtUnixMilliseconds").GetInt64() > 0);
             Assert.DoesNotContain("account", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("model", json, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("csrf", json, StringComparison.OrdinalIgnoreCase);
@@ -117,7 +182,9 @@ public sealed class GnomeTopBarStateTests
         string id,
         string name,
         int? fiveHour,
-        int? weekly) =>
+        int? weekly,
+        DateTimeOffset? fiveHourReset = null,
+        DateTimeOffset? weeklyReset = null) =>
         new(
             id,
             name,
@@ -128,7 +195,7 @@ public sealed class GnomeTopBarStateTests
                     "Five Hour",
                     AntigravityQuotaCadence.FiveHour,
                     fiveHour.Value,
-                    null,
+                    fiveHourReset,
                     TimeSpan.FromHours(5)),
             weekly is null
                 ? null
@@ -137,7 +204,7 @@ public sealed class GnomeTopBarStateTests
                     "Weekly",
                     AntigravityQuotaCadence.Weekly,
                     weekly.Value,
-                    null,
+                    weeklyReset,
                     TimeSpan.FromDays(7)),
             []);
 }

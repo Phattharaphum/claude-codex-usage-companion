@@ -47,8 +47,10 @@ public sealed class GnomeExtensionPackageTests
         Assert.Contains("Math.min(...values)", formatter, StringComparison.Ordinal);
         Assert.Contains("hasClaude", formatter, StringComparison.Ordinal);
         Assert.Contains("hasCodex", formatter, StringComparison.Ordinal);
-        Assert.Contains("◉ 89%", test, StringComparison.Ordinal);
-        Assert.Contains("◉ 21%", test, StringComparison.Ordinal);
+        Assert.Contains("Usage 89%", test, StringComparison.Ordinal);
+        Assert.Contains("Usage 21%", test, StringComparison.Ordinal);
+        Assert.Contains("◌ App offline", test, StringComparison.Ordinal);
+        Assert.Contains("formatResetTime", formatter, StringComparison.Ordinal);
         Assert.Contains("gnome-extensions enable", installScript, StringComparison.Ordinal);
         Assert.Contains("stylesheet.css", installScript, StringComparison.Ordinal);
         Assert.DoesNotContain("sudo", installScript, StringComparison.OrdinalIgnoreCase);

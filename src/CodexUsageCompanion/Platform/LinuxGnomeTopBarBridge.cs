@@ -47,6 +47,10 @@ public sealed class LinuxGnomeTopBarBridge
             $".{FileName}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp");
         try
         {
+            state = state with
+            {
+                PublishedAtUnixMilliseconds = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
             Directory.CreateDirectory(directory);
             SetDirectoryPermissions(directory);
             var json = JsonSerializer.Serialize(state, JsonOptions);
