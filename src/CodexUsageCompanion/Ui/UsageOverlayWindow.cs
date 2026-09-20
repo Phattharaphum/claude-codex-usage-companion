@@ -23,11 +23,13 @@ public sealed class UsageOverlayWindow : Window
     private const double CardSpacing = 6;
     private const double FiveHourCardHeight = 64;
     private const double WeeklyCardHeight = 64;
+    private const double UnavailableCardHeight = 46;
     private const double AntigravityWindowCardHeight = 64;
     private const double ProviderSectionTitleHeight = 18;
     private const double AntigravitySectionTitleHeight = 18;
     private const double AntigravityGroupTitleHeight = 15;
-    private const double AntigravityMessageCardHeight = 52;
+    private const double AntigravityMessageCardHeight = 46;
+    private const double AntigravityErrorCardHeight = 52;
     private const double ContentBottomPadding = 4;
     private const double IconSize = 14;
     private const double HeaderGroupSpacing = 14;
@@ -233,14 +235,30 @@ public sealed class UsageOverlayWindow : Window
         if (provider == UsageProvider.Codex)
         {
             _lastCodexState = state;
-            UpdateCard(_codexFiveHourCard, state?.FiveHour, dataAvailable: state is not null);
-            UpdateCard(_codexWeeklyCard, state?.Weekly, dataAvailable: state is not null);
+            UpdateCard(
+                _codexFiveHourCard,
+                state?.FiveHour,
+                dataAvailable: state is not null);
+            UpdateCard(
+                _codexWeeklyCard,
+                state?.Weekly,
+                dataAvailable: state is not null);
+            ApplyCardVisibility();
+            ApplyComputedHeight();
             return;
         }
 
         _lastClaudeState = state;
-        UpdateCard(_claudeFiveHourCard, state?.FiveHour, dataAvailable: state is not null);
-        UpdateCard(_claudeWeeklyCard, state?.Weekly, dataAvailable: state is not null);
+        UpdateCard(
+            _claudeFiveHourCard,
+            state?.FiveHour,
+            dataAvailable: state is not null);
+        UpdateCard(
+            _claudeWeeklyCard,
+            state?.Weekly,
+            dataAvailable: state is not null);
+        ApplyCardVisibility();
+        ApplyComputedHeight();
     }
 
     public void UpdateAntigravityUsage(AntigravityUsageState? state, string? error)
@@ -367,30 +385,84 @@ public sealed class UsageOverlayWindow : Window
 
     private void ApplyCardVisibility()
     {
-        _codexFiveHourCard.Container.IsVisible = _showCodexFiveHour && _codexEnabled;
-        _codexWeeklyCard.Container.IsVisible = _showCodexWeekly && _codexEnabled;
-        _claudeFiveHourCard.Container.IsVisible = _showClaudeSession && _claudeEnabled;
-        _claudeWeeklyCard.Container.IsVisible = _showClaudeWeekly && _claudeEnabled;
+        var (showCodexFiveHour, showCodexWeekly) = VisibleProviderCards(
+            _codexEnabled,
+            _showCodexFiveHour,
+            _showCodexWeekly,
+            _lastCodexState);
+        var (showClaudeFiveHour, showClaudeWeekly) = VisibleProviderCards(
+            _claudeEnabled,
+            _showClaudeSession,
+            _showClaudeWeekly,
+            _lastClaudeState);
+        _codexFiveHourCard.Container.IsVisible = showCodexFiveHour;
+        _codexWeeklyCard.Container.IsVisible = showCodexWeekly;
+        _claudeFiveHourCard.Container.IsVisible = showClaudeFiveHour;
+        _claudeWeeklyCard.Container.IsVisible = showClaudeWeekly;
         _claudeSection.IsVisible =
             _claudeFiveHourCard.Container.IsVisible || _claudeWeeklyCard.Container.IsVisible;
         _codexSection.IsVisible =
             _codexFiveHourCard.Container.IsVisible || _codexWeeklyCard.Container.IsVisible;
     }
 
+    private static (bool FiveHour, bool Weekly) VisibleProviderCards(
+        bool enabled,
+        bool showFiveHour,
+        bool showWeekly,
+        RateLimitState? state)
+    {
+        if (!enabled)
+        {
+            return (false, false);
+        }
+
+        var hasUsage = state?.FiveHour is not null || state?.Weekly is not null;
+        var fiveHourVisible = showFiveHour;
+        // A provider with no data needs one compact status card, not two
+        // identical placeholders. Keep Weekly when it is the only enabled view.
+        var weeklyVisible = showWeekly && (hasUsage || !fiveHourVisible);
+        return (fiveHourVisible, weeklyVisible);
+    }
+
     private double ComputeHeight()
     {
         var sectionHeights = new List<double>();
-        var claudeCards = (_claudeEnabled && _showClaudeSession ? 1 : 0) +
-                          (_claudeEnabled && _showClaudeWeekly ? 1 : 0);
-        var codexCards = (_codexEnabled && _showCodexFiveHour ? 1 : 0) +
-                         (_codexEnabled && _showCodexWeekly ? 1 : 0);
-        if (claudeCards > 0)
+        var (showClaudeFiveHour, showClaudeWeekly) = VisibleProviderCards(
+            _claudeEnabled,
+            _showClaudeSession,
+            _showClaudeWeekly,
+            _lastClaudeState);
+        var claudeCardHeights = new List<double>();
+        if (showClaudeFiveHour)
         {
-            sectionHeights.Add(ComputeProviderSectionHeight(claudeCards));
+            claudeCardHeights.Add(CardHeight(_lastClaudeState?.FiveHour, FiveHourCardHeight));
         }
-        if (codexCards > 0)
+        if (showClaudeWeekly)
         {
-            sectionHeights.Add(ComputeProviderSectionHeight(codexCards));
+            claudeCardHeights.Add(CardHeight(_lastClaudeState?.Weekly, WeeklyCardHeight));
+        }
+        if (claudeCardHeights.Count > 0)
+        {
+            sectionHeights.Add(ComputeProviderSectionHeight(claudeCardHeights));
+        }
+
+        var (showCodexFiveHour, showCodexWeekly) = VisibleProviderCards(
+            _codexEnabled,
+            _showCodexFiveHour,
+            _showCodexWeekly,
+            _lastCodexState);
+        var codexCardHeights = new List<double>();
+        if (showCodexFiveHour)
+        {
+            codexCardHeights.Add(CardHeight(_lastCodexState?.FiveHour, FiveHourCardHeight));
+        }
+        if (showCodexWeekly)
+        {
+            codexCardHeights.Add(CardHeight(_lastCodexState?.Weekly, WeeklyCardHeight));
+        }
+        if (codexCardHeights.Count > 0)
+        {
+            sectionHeights.Add(ComputeProviderSectionHeight(codexCardHeights));
         }
         var antigravityHeight = ComputeAntigravitySectionHeight();
         if (antigravityHeight > 0)
@@ -401,10 +473,11 @@ public sealed class UsageOverlayWindow : Window
                (CardSpacing * (sectionHeights.Count + 1));
     }
 
-    private static double ComputeProviderSectionHeight(int cardCount) =>
-        ProviderSectionTitleHeight +
-        (cardCount * FiveHourCardHeight) +
-        (cardCount * CardSpacing);
+    private static double ComputeProviderSectionHeight(IReadOnlyCollection<double> cardHeights) =>
+        ProviderSectionTitleHeight + cardHeights.Sum() + (cardHeights.Count * CardSpacing);
+
+    private static double CardHeight(RateLimitWindowState? state, double availableHeight) =>
+        state is null ? UnavailableCardHeight : availableHeight;
 
     private double ComputeAntigravitySectionHeight()
     {
@@ -421,7 +494,9 @@ public sealed class UsageOverlayWindow : Window
                     (pool.Windows.Count * (AntigravityWindowCardHeight + CardSpacing))) +
                 (string.IsNullOrWhiteSpace(presentation.Error)
                     ? 0
-                    : AntigravityMessageCardHeight + CardSpacing),
+                    : AntigravityErrorCardHeight + CardSpacing),
+            AntigravityPresentationKind.Error =>
+                AntigravitySectionTitleHeight + AntigravityErrorCardHeight + CardSpacing,
             _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + CardSpacing
         };
     }
@@ -571,7 +646,7 @@ public sealed class UsageOverlayWindow : Window
         };
         var card = new Border
         {
-            Height = AntigravityMessageCardHeight,
+            Height = error ? AntigravityErrorCardHeight : AntigravityMessageCardHeight,
             CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(10, 6),
@@ -589,6 +664,13 @@ public sealed class UsageOverlayWindow : Window
     private void ApplyComputedHeight()
     {
         var targetHeight = ComputeHeight();
+        if (Math.Abs(Height - targetHeight) < 0.1 &&
+            Math.Abs(MinHeight - targetHeight) < 0.1 &&
+            Math.Abs(MaxHeight - targetHeight) < 0.1)
+        {
+            return;
+        }
+
         MinHeight = Math.Min(MinHeight, targetHeight);
         MaxHeight = Math.Max(MaxHeight, targetHeight);
         Height = targetHeight;
@@ -826,7 +908,7 @@ public sealed class UsageOverlayWindow : Window
     {
         var container = new Border
         {
-            Height = FiveHourCardHeight,
+            Height = UnavailableCardHeight,
             Background = Brush("#FF353835"),
             BorderBrush = Brush("#FF4A4E4A"),
             BorderThickness = new Thickness(1),
@@ -842,7 +924,7 @@ public sealed class UsageOverlayWindow : Window
         };
         var railText = new TextBlock
         {
-            Text = badgeKind == LimitBadge.Week ? "Week" : "5hr",
+            Text = BadgeText(badgeKind),
             FontSize = 11,
             FontWeight = FontWeight.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -860,7 +942,7 @@ public sealed class UsageOverlayWindow : Window
         var content = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,*"),
-            Margin = new Thickness(9, 7, 10, 7)
+            Margin = new Thickness(9, 5, 10, 5)
         };
         var informationRow = new Grid
         {
@@ -928,14 +1010,22 @@ public sealed class UsageOverlayWindow : Window
         RateLimitWindowState? state,
         bool dataAvailable)
     {
+        var targetHeight = CardHeight(
+            state,
+            card.BadgeKind == LimitBadge.Week ? WeeklyCardHeight : FiveHourCardHeight);
+        card.Container.Height = targetHeight;
         if (state is null)
         {
+            card.BadgeText.Text = dataAvailable
+                ? BadgeText(card.BadgeKind)
+                : "…";
             card.Remaining.Text = "--";
             card.Reset.Text = dataAvailable ? _text.LimitUnavailable : _text.WaitingForData;
             ApplyBar(card, 0, UsageSignal.Gray);
             return;
         }
 
+        card.BadgeText.Text = BadgeText(card.BadgeKind);
         card.Remaining.Text = FormatPercent(state.RemainingPercent);
         card.Reset.Text = state.ResetsAt is long unixSeconds
             ? _text.FormatResetWithCountdown(
@@ -949,6 +1039,7 @@ public sealed class UsageOverlayWindow : Window
         UsageCardControls card,
         AntigravityQuotaWindowState window)
     {
+        card.Container.Height = AntigravityWindowCardHeight;
         card.Remaining.Text = FormatPercent(window.RemainingPercent);
         card.Reset.Text = window.ResetAt is { } resetAt
             ? _text.FormatResetWithCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now)
@@ -973,6 +1064,9 @@ public sealed class UsageOverlayWindow : Window
     }
 
     private static string FormatPercent(int percent) => $"{Math.Clamp(percent, 0, 100)}%";
+
+    private static string BadgeText(LimitBadge badgeKind) =>
+        badgeKind == LimitBadge.Week ? "Week" : "5hr";
 
     private static void UpdateProgressWidth(UsageCardControls card) =>
         card.ProgressFill.Width = Math.Round(

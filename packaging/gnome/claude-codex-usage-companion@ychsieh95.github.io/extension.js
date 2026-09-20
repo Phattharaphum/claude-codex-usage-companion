@@ -29,7 +29,8 @@ const METERS = [
     {
         id: 'claude',
         name: 'Claude',
-        glyph: '✳',
+        iconFile: 'claude-symbolic.svg',
+        fallbackGlyph: '✳',
         color: [1.0, 0.31, 0.09],
         enabled: 'hasClaude',
         value: 'claudeFiveHourRemaining',
@@ -40,7 +41,8 @@ const METERS = [
     {
         id: 'codex',
         name: 'Codex',
-        glyph: '◌',
+        iconFile: 'openai-symbolic.svg',
+        fallbackGlyph: '◌',
         color: [0.12, 0.89, 0.61],
         enabled: 'hasCodex',
         value: 'codexFiveHourRemaining',
@@ -49,15 +51,34 @@ const METERS = [
         weeklyReset: 'codexWeeklyResetUnixMilliseconds',
     },
     {
-        id: 'antigravity',
-        name: 'Antigravity',
-        glyph: '✦',
-        color: [0.86, 0.96, 0.08],
+        id: 'antigravity-gemini',
+        name: 'Antigravity · Gemini',
+        iconCandidates: [
+            '/snap/antigravity/current/share/icons/hicolor/256x256/apps/antigravity.png',
+            '/opt/antigravity-ide/resources/app/resources/linux/code.png',
+        ],
+        fallbackGlyph: '∩',
+        color: [0.26, 0.58, 1.0],
         enabled: 'hasAntigravity',
-        value: 'antigravityRemaining',
-        weekly: 'antigravityWeeklyRemaining',
-        reset: 'antigravityFiveHourResetUnixMilliseconds',
-        weeklyReset: 'antigravityWeeklyResetUnixMilliseconds',
+        value: 'geminiFiveHourRemaining',
+        weekly: 'geminiWeeklyRemaining',
+        reset: 'geminiFiveHourResetUnixMilliseconds',
+        weeklyReset: 'geminiWeeklyResetUnixMilliseconds',
+    },
+    {
+        id: 'antigravity-claude-gpt',
+        name: 'Antigravity · Claude + GPT',
+        iconCandidates: [
+            '/snap/antigravity/current/share/icons/hicolor/256x256/apps/antigravity.png',
+            '/opt/antigravity-ide/resources/app/resources/linux/code.png',
+        ],
+        fallbackGlyph: '∩',
+        color: [0.75, 0.38, 0.96],
+        enabled: 'hasAntigravity',
+        value: 'claudeGptFiveHourRemaining',
+        weekly: 'claudeGptWeeklyRemaining',
+        reset: 'claudeGptFiveHourResetUnixMilliseconds',
+        weeklyReset: 'claudeGptWeeklyResetUnixMilliseconds',
     },
 ];
 
@@ -306,12 +327,10 @@ export default class CompanionTopBarExtension extends Extension {
                 y_align: Clutter.ActorAlign.CENTER,
             });
             overlay.add_child(new RingMeter(value, meter.color, 20, 2.5));
-            overlay.add_child(new St.Label({
-                text: meter.glyph,
-                style_class: 'ccuc-panel-glyph',
-                x_align: Clutter.ActorAlign.CENTER,
-                y_align: Clutter.ActorAlign.CENTER,
-            }));
+            overlay.add_child(this._createProviderIcon(
+                meter,
+                'ccuc-panel-provider-icon',
+                'ccuc-panel-glyph'));
             item.add_child(overlay);
             item.add_child(new St.Label({
                 text: formatPercent(value),
@@ -348,7 +367,7 @@ export default class CompanionTopBarExtension extends Extension {
                 'The app is running and will update this view automatically.'));
         } else {
             for (const meter of METERS) {
-                if (this._state?.[meter.enabled] === true)
+                if (this._meterHasData(meter))
                     dashboard.add_child(this._createProviderCard(meter));
             }
         }
@@ -433,12 +452,10 @@ export default class CompanionTopBarExtension extends Extension {
             y_align: Clutter.ActorAlign.START,
         });
         overlay.add_child(new RingMeter(headlineValue, meter.color, 48, 4));
-        overlay.add_child(new St.Label({
-            text: meter.glyph,
-            style_class: 'ccuc-provider-glyph',
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.CENTER,
-        }));
+        overlay.add_child(this._createProviderIcon(
+            meter,
+            'ccuc-provider-icon',
+            'ccuc-provider-glyph'));
         card.add_child(overlay);
 
         const content = new St.BoxLayout({
@@ -471,6 +488,40 @@ export default class CompanionTopBarExtension extends Extension {
             meter.color);
         card.add_child(content);
         return card;
+    }
+
+    _meterHasData(meter) {
+        return this._state?.[meter.enabled] === true &&
+            (this._state[meter.value] !== null || this._state[meter.weekly] !== null);
+    }
+
+    _createProviderIcon(meter, iconStyleClass, fallbackStyleClass) {
+        let file = null;
+        if (meter.iconFile) {
+            const candidate = this.dir.get_child('icons').get_child(meter.iconFile);
+            if (candidate.query_exists(null))
+                file = candidate;
+        } else {
+            file = meter.iconCandidates
+                ?.map(path => Gio.File.new_for_path(path))
+                .find(candidate => candidate.query_exists(null)) ?? null;
+        }
+
+        if (file) {
+            return new St.Icon({
+                gicon: new Gio.FileIcon({file}),
+                style_class: iconStyleClass,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+        }
+
+        return new St.Label({
+            text: meter.fallbackGlyph,
+            style_class: fallbackStyleClass,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
     }
 
     _addLimit(parent, name, value, resetAt, color) {

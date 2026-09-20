@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-EXTENSION_ID="claude-codex-usage-companion-fork-v3@gamephat.local"
+EXTENSION_ID="claude-codex-usage-companion-fork-v4@gamephat.local"
 STALE_FORK_EXTENSION_IDS=(
+  "claude-codex-usage-companion-fork-v3@gamephat.local"
   "claude-codex-usage-companion-fork-v2@gamephat.local"
   "claude-codex-usage-companion-fork@gamephat.local"
 )
@@ -22,9 +23,10 @@ if ! command -v gnome-extensions >/dev/null 2>&1; then
 fi
 
 gnome-extensions disable "$EXTENSION_ID" 2>/dev/null || true
-install -d -m 755 "$TARGET"
+install -d -m 755 "$TARGET" "$TARGET/icons"
 install -m 644 "$SOURCE/metadata.json" "$SOURCE/extension.js" \
   "$SOURCE/presentation.js" "$SOURCE/stylesheet.css" "$TARGET/"
+install -m 644 "$SOURCE/icons/"*.svg "$TARGET/icons/"
 gnome-extensions disable "$LEGACY_EXTENSION_ID" 2>/dev/null || true
 for stale_id in "${STALE_FORK_EXTENSION_IDS[@]}"; do
   gnome-extensions disable "$stale_id" 2>/dev/null || true

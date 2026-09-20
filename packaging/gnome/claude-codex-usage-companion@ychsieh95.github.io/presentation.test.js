@@ -34,14 +34,14 @@ assertEquals(formatPanelText(null), '◌ App offline');
 assertEquals(connectionState(null), 'offline');
 
 const waiting = normalizeState({
-    schemaVersion: 3,
+    schemaVersion: 4,
     hasAntigravity: true,
 });
 assertEquals(connectionState(waiting), 'syncing');
 assertEquals(formatPanelText(waiting), '↻ Syncing usage');
 
-const threeProviders = normalizeState({
-    schemaVersion: 3,
+const fourMeters = normalizeState({
+    schemaVersion: 4,
     hasClaude: true,
     claudeFiveHourRemaining: 73,
     claudeWeeklyRemaining: 62,
@@ -49,13 +49,25 @@ const threeProviders = normalizeState({
     codexFiveHourRemaining: 21,
     codexWeeklyRemaining: 48,
     hasAntigravity: true,
-    antigravityRemaining: 52,
-    antigravityWeeklyRemaining: 74,
+    geminiFiveHourRemaining: 52,
+    geminiWeeklyRemaining: 74,
+    claudeGptFiveHourRemaining: 64,
+    claudeGptWeeklyRemaining: 83,
     claudeFiveHourResetUnixMilliseconds: 1_000_000,
+    geminiFiveHourResetUnixMilliseconds: 2_000_000,
 });
-assertEquals(formatPanelText(threeProviders), 'Usage 21%');
-assertEquals(threeProviders.claudeWeeklyRemaining, 62);
-assertEquals(threeProviders.claudeFiveHourResetUnixMilliseconds, 1_000_000);
+assertEquals(formatPanelText(fourMeters), 'Usage 21%');
+assertEquals(fourMeters.claudeWeeklyRemaining, 62);
+assertEquals(fourMeters.claudeFiveHourResetUnixMilliseconds, 1_000_000);
+assertEquals(fourMeters.geminiFiveHourResetUnixMilliseconds, 2_000_000);
+
+const oneAntigravityPool = normalizeState({
+    schemaVersion: 4,
+    hasAntigravity: true,
+    geminiFiveHourRemaining: 67,
+});
+assertEquals(connectionState(oneAntigravityPool), 'live');
+assertEquals(formatPanelText(oneAntigravityPool), 'Usage 67%');
 
 assertEquals(formatResetTime(null, 0), 'Reset time unavailable');
 assertEquals(formatResetTime(30 * 60_000, 0), 'Resets in 30m');

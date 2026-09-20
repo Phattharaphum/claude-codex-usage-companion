@@ -16,11 +16,11 @@ public sealed record GnomeTopBarState(
     int? ClaudeGptWeeklyRemaining,
     long? LastUpdatedUnixMilliseconds)
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     // Schema 2 added the three compact meters used by the GNOME Shell
-    // indicator. Schema 3 adds the weekly values, reset times, and publish
-    // heartbeat required by the richer popup and its offline presentation.
+    // indicator. Schema 3 added weekly values and reset times. Schema 4 keeps
+    // each Antigravity quota pool separate so all four panel rings are honest.
     // Keep the individual Antigravity pools above for backwards compatibility.
     public bool HasClaude { get; init; }
     public int? ClaudeFiveHourRemaining { get; init; }
@@ -36,6 +36,10 @@ public sealed record GnomeTopBarState(
     public long? ClaudeWeeklyResetUnixMilliseconds { get; init; }
     public long? CodexWeeklyResetUnixMilliseconds { get; init; }
     public long? AntigravityWeeklyResetUnixMilliseconds { get; init; }
+    public long? GeminiFiveHourResetUnixMilliseconds { get; init; }
+    public long? GeminiWeeklyResetUnixMilliseconds { get; init; }
+    public long? ClaudeGptFiveHourResetUnixMilliseconds { get; init; }
+    public long? ClaudeGptWeeklyResetUnixMilliseconds { get; init; }
     public long? PublishedAtUnixMilliseconds { get; init; }
 }
 
@@ -117,7 +121,11 @@ public static class GnomeTopBarStateBuilder
             AntigravityFiveHourResetUnixMilliseconds = antigravityFiveHourReset?.ToUnixTimeMilliseconds(),
             ClaudeWeeklyResetUnixMilliseconds = UnixMilliseconds(claude?.Weekly),
             CodexWeeklyResetUnixMilliseconds = UnixMilliseconds(codex?.Weekly),
-            AntigravityWeeklyResetUnixMilliseconds = antigravityWeeklyReset?.ToUnixTimeMilliseconds()
+            AntigravityWeeklyResetUnixMilliseconds = antigravityWeeklyReset?.ToUnixTimeMilliseconds(),
+            GeminiFiveHourResetUnixMilliseconds = UnixMilliseconds(gemini?.FiveHour),
+            GeminiWeeklyResetUnixMilliseconds = UnixMilliseconds(gemini?.Weekly),
+            ClaudeGptFiveHourResetUnixMilliseconds = UnixMilliseconds(claudeGpt?.FiveHour),
+            ClaudeGptWeeklyResetUnixMilliseconds = UnixMilliseconds(claudeGpt?.Weekly)
         };
     }
 
@@ -156,4 +164,7 @@ public static class GnomeTopBarStateBuilder
         window?.ResetsAt is long seconds
             ? DateTimeOffset.FromUnixTimeSeconds(seconds).ToUnixTimeMilliseconds()
             : null;
+
+    private static long? UnixMilliseconds(AntigravityQuotaWindowState? window) =>
+        window?.ResetAt?.ToUnixTimeMilliseconds();
 }

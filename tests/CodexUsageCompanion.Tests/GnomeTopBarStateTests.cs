@@ -57,6 +57,18 @@ public sealed class GnomeTopBarStateTests
         Assert.Equal(
             claudeWeeklyReset.ToUnixTimeMilliseconds(),
             presentation.AntigravityWeeklyResetUnixMilliseconds);
+        Assert.Equal(
+            geminiFiveHourReset.ToUnixTimeMilliseconds(),
+            presentation.GeminiFiveHourResetUnixMilliseconds);
+        Assert.Equal(
+            geminiWeeklyReset.ToUnixTimeMilliseconds(),
+            presentation.GeminiWeeklyResetUnixMilliseconds);
+        Assert.Equal(
+            claudeFiveHourReset.ToUnixTimeMilliseconds(),
+            presentation.ClaudeGptFiveHourResetUnixMilliseconds);
+        Assert.Equal(
+            claudeWeeklyReset.ToUnixTimeMilliseconds(),
+            presentation.ClaudeGptWeeklyResetUnixMilliseconds);
         Assert.Equal(updatedAt.ToUnixTimeMilliseconds(), presentation.LastUpdatedUnixMilliseconds);
         Assert.Equal(GnomeTopBarState.CurrentSchemaVersion, presentation.SchemaVersion);
     }

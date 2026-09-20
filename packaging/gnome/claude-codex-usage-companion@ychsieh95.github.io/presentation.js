@@ -15,7 +15,7 @@ function minimum(values) {
 
 export function normalizeState(value) {
     if (!value || typeof value !== 'object' ||
-        ![1, 2, 3].includes(value.schemaVersion)) {
+        ![1, 2, 3, 4].includes(value.schemaVersion)) {
         return null;
     }
 
@@ -57,6 +57,14 @@ export function normalizeState(value) {
             timestamp(value.antigravityFiveHourResetUnixMilliseconds),
         antigravityWeeklyResetUnixMilliseconds:
             timestamp(value.antigravityWeeklyResetUnixMilliseconds),
+        geminiFiveHourResetUnixMilliseconds:
+            timestamp(value.geminiFiveHourResetUnixMilliseconds),
+        geminiWeeklyResetUnixMilliseconds:
+            timestamp(value.geminiWeeklyResetUnixMilliseconds),
+        claudeGptFiveHourResetUnixMilliseconds:
+            timestamp(value.claudeGptFiveHourResetUnixMilliseconds),
+        claudeGptWeeklyResetUnixMilliseconds:
+            timestamp(value.claudeGptWeeklyResetUnixMilliseconds),
         lastUpdatedUnixMilliseconds: timestamp(value.lastUpdatedUnixMilliseconds),
         publishedAtUnixMilliseconds: timestamp(value.publishedAtUnixMilliseconds),
     };
@@ -74,7 +82,10 @@ export function connectionState(state) {
             ? (state.codexFiveHourRemaining ?? state.codexWeeklyRemaining)
             : null,
         state.hasAntigravity
-            ? (state.antigravityRemaining ?? state.antigravityWeeklyRemaining)
+            ? (state.geminiFiveHourRemaining ?? state.geminiWeeklyRemaining)
+            : null,
+        state.hasAntigravity
+            ? (state.claudeGptFiveHourRemaining ?? state.claudeGptWeeklyRemaining)
             : null,
     ].filter(value => value !== null);
 
@@ -96,7 +107,10 @@ export function formatPanelText(state) {
             ? (state.codexFiveHourRemaining ?? state.codexWeeklyRemaining)
             : null,
         state.hasAntigravity
-            ? (state.antigravityRemaining ?? state.antigravityWeeklyRemaining)
+            ? (state.geminiFiveHourRemaining ?? state.geminiWeeklyRemaining)
+            : null,
+        state.hasAntigravity
+            ? (state.claudeGptFiveHourRemaining ?? state.claudeGptWeeklyRemaining)
             : null,
     ].filter(value => value !== null);
     return `Usage ${Math.min(...values)}%`;

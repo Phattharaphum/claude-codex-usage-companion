@@ -1,5 +1,5 @@
 .ccuc-panel {
-    spacing: 10px;
+    spacing: 7px;
     padding: 0 3px;
 }
 
@@ -10,6 +10,11 @@
 .ccuc-panel-glyph {
     font-size: 8px;
     font-weight: 800;
+    color: #f8f9fb;
+}
+
+.ccuc-panel-provider-icon {
+    icon-size: 10px;
     color: #f8f9fb;
 }
 
@@ -38,14 +43,17 @@
 }
 
 .ccuc-dashboard {
-    min-width: 330px;
+    min-width: 350px;
     spacing: 10px;
     padding: 7px 6px 9px;
 }
 
 .ccuc-header {
     spacing: 12px;
-    padding: 1px 3px 4px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background-color: rgba(24, 27, 31, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .ccuc-header-copy {
@@ -55,12 +63,12 @@
 .ccuc-title {
     font-size: 15px;
     font-weight: 750;
-    color: #f7f8fa;
+    color: #ffffff;
 }
 
 .ccuc-updated {
     font-size: 10px;
-    color: #8f969f;
+    color: #a8afb8;
 }
 
 .ccuc-status {
@@ -104,8 +112,12 @@
     border-color: rgba(31, 226, 155, 0.23);
 }
 
-.ccuc-provider-antigravity {
-    border-color: rgba(218, 244, 20, 0.20);
+.ccuc-provider-antigravity-gemini {
+    border-color: rgba(66, 133, 244, 0.28);
+}
+
+.ccuc-provider-antigravity-claude-gpt {
+    border-color: rgba(187, 97, 239, 0.28);
 }
 
 .ccuc-provider-content {
@@ -118,8 +130,13 @@
     color: #f8f9fb;
 }
 
+.ccuc-provider-icon {
+    icon-size: 20px;
+    color: #f8f9fb;
+}
+
 .ccuc-provider-name {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 750;
     color: #f5f6f8;
 }
@@ -151,17 +168,17 @@
 }
 
 .ccuc-empty {
-    spacing: 6px;
-    padding: 24px 18px 22px;
+    spacing: 4px;
+    padding: 12px 16px 11px;
     border-radius: 15px;
     background-color: rgba(19, 21, 24, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .ccuc-empty-icon {
-    icon-size: 30px;
+    icon-size: 21px;
     color: #9299a3;
-    margin-bottom: 3px;
+    margin-bottom: 1px;
 }
 
 .ccuc-empty-title {

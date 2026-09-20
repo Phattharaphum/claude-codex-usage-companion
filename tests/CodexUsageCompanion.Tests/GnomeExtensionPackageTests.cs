@@ -5,7 +5,7 @@ namespace CodexUsageCompanion.Tests;
 
 public sealed class GnomeExtensionPackageTests
 {
-    private const string ExtensionId = "claude-codex-usage-companion-fork-v3@gamephat.local";
+    private const string ExtensionId = "claude-codex-usage-companion-fork-v4@gamephat.local";
     private const string ExtensionSourceDirectory = "claude-codex-usage-companion@ychsieh95.github.io";
 
     [Fact]
@@ -31,6 +31,8 @@ public sealed class GnomeExtensionPackageTests
         Assert.DoesNotContain("const [, contents] = await", extension);
         Assert.Contains("_scheduleReload", extension);
         Assert.Contains("_runCompanion('refresh')", extension, StringComparison.Ordinal);
+        Assert.Contains("geminiFiveHourRemaining", extension, StringComparison.Ordinal);
+        Assert.Contains("claudeGptFiveHourRemaining", extension, StringComparison.Ordinal);
         Assert.DoesNotContain("status --json", extension, StringComparison.Ordinal);
         Assert.DoesNotContain("AntigravityUsageClient", extension, StringComparison.Ordinal);
         Assert.DoesNotContain("setInterval", extension, StringComparison.Ordinal);
@@ -51,8 +53,11 @@ public sealed class GnomeExtensionPackageTests
         Assert.Contains("Usage 21%", test, StringComparison.Ordinal);
         Assert.Contains("◌ App offline", test, StringComparison.Ordinal);
         Assert.Contains("formatResetTime", formatter, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(root, "icons", "claude-symbolic.svg")));
+        Assert.True(File.Exists(Path.Combine(root, "icons", "openai-symbolic.svg")));
         Assert.Contains("gnome-extensions enable", installScript, StringComparison.Ordinal);
         Assert.Contains("stylesheet.css", installScript, StringComparison.Ordinal);
+        Assert.Contains("$SOURCE/icons/", installScript, StringComparison.Ordinal);
         Assert.DoesNotContain("sudo", installScript, StringComparison.OrdinalIgnoreCase);
     }
 }
