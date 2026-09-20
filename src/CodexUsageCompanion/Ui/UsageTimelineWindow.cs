@@ -47,7 +47,7 @@ public sealed class UsageTimelineWindow : Window
         _text = text;
         Title = $"{text.UsageHistoryRecords} - Claude Codex Usage Companion";
         Width = 1040;
-        Height = 720;
+        Height = 736;
         MinWidth = 820;
         MinHeight = 520;
         Background = Brushes.Transparent;
@@ -103,6 +103,7 @@ public sealed class UsageTimelineWindow : Window
         _titleBar = new Border
         {
             BorderThickness = new Thickness(0, 0, 0, 1),
+            CornerRadius = new CornerRadius(16, 16, 0, 0),
             Child = titleGrid
         };
 
@@ -211,6 +212,7 @@ public sealed class UsageTimelineWindow : Window
         Grid.SetRow(body, 1);
         _root = new Border
         {
+            Margin = new Thickness(8),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(17),
             ClipToBounds = true,
@@ -593,8 +595,12 @@ public sealed class UsageTimelineWindow : Window
     private void UpdateWindowShape()
     {
         var maximized = WindowState == WindowState.Maximized;
+        _root.Margin = maximized ? new Thickness(0) : new Thickness(8);
         _root.CornerRadius = new CornerRadius(maximized ? 0 : 17);
         _root.BorderThickness = maximized ? new Thickness(0) : new Thickness(1);
+        _titleBar.CornerRadius = maximized
+            ? new CornerRadius(0)
+            : new CornerRadius(16, 16, 0, 0);
         UpdateWindowClip();
     }
 

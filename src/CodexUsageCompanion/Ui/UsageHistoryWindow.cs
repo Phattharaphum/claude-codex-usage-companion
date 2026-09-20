@@ -207,7 +207,7 @@ public sealed class UsageHistoryWindow : Window
 
         Title = text.UsageHistoryTitle;
         Width = 1120;
-        Height = 820;
+        Height = 836;
         MinWidth = 860;
         MinHeight = 660;
         Background = Brushes.Transparent;
@@ -270,6 +270,7 @@ public sealed class UsageHistoryWindow : Window
         _windowTitleBar = new Border
         {
             BorderThickness = new Thickness(0, 0, 0, 1),
+            CornerRadius = new CornerRadius(16, 16, 0, 0),
             Child = titleBarGrid
         };
 
@@ -473,6 +474,7 @@ public sealed class UsageHistoryWindow : Window
         Grid.SetRow(bodyScroll, 1);
         _root = new Border
         {
+            Margin = new Thickness(8),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(17),
             ClipToBounds = true,
@@ -860,8 +862,12 @@ public sealed class UsageHistoryWindow : Window
     private void UpdateWindowShape()
     {
         var maximized = WindowState == WindowState.Maximized;
+        _root.Margin = maximized ? new Thickness(0) : new Thickness(8);
         _root.CornerRadius = new CornerRadius(maximized ? 0 : 17);
         _root.BorderThickness = maximized ? new Thickness(0) : new Thickness(1);
+        _windowTitleBar.CornerRadius = maximized
+            ? new CornerRadius(0)
+            : new CornerRadius(16, 16, 0, 0);
         UpdateWindowClip();
     }
 
@@ -998,7 +1004,10 @@ public sealed class UsageHistoryWindow : Window
     {
         _isLightTheme = ActualThemeVariant == ThemeVariant.Light;
         _palette = _isLightTheme ? HistoryPalette.Light : HistoryPalette.Dark;
-        Background = Brush(_palette.Root);
+        // The window surface itself must stay transparent. Painting the theme
+        // color here fills the pixels outside the rounded root and makes all
+        // four corners look square on Linux compositors.
+        Background = Brushes.Transparent;
         _root.Background = Brush(_palette.Root);
         _root.BorderBrush = Brush(_palette.BorderStrong);
         _windowTitleBar.Background = Brush(_palette.Surface);
