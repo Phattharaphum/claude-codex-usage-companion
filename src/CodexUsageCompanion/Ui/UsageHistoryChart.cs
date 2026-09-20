@@ -14,15 +14,19 @@ namespace CodexUsageCompanion.Ui;
 /// </summary>
 public sealed class UsageHistoryChart : Control
 {
-    private static readonly IBrush CanvasBrush = Brush("#FCFDFC");
-    private static readonly IBrush PlotBrush = Brush("#F5F8F6");
-    private static readonly IBrush GridBrush = Brush("#DFE7E2");
-    private static readonly IBrush AxisBrush = Brush("#69756E");
-    private static readonly IBrush ResetBrush = Brush("#E48332");
-    private static readonly Pen GridPen = new(GridBrush, 1);
-    private static readonly Pen ResetPen = new(ResetBrush, 1.5, DashStyle.Dash);
     private static readonly Typeface ChartTypeface = new("Inter");
 
+    private IBrush _canvasBrush = Brush("#FCFDFC");
+    private IBrush _plotBrush = Brush("#F5F8F6");
+    private IBrush _gridBrush = Brush("#DFE7E2");
+    private IBrush _axisBrush = Brush("#69756E");
+    private IBrush _resetBrush = Brush("#E48332");
+    private IBrush _hoverGuideBrush = Brush("#8A9890");
+    private IBrush _tooltipBrush = Brush("#25332C");
+    private IBrush _tooltipBorderBrush = Brush("#506158");
+    private Pen _gridPen = new(Brush("#DFE7E2"), 1);
+    private Pen _resetPen = new(Brush("#E48332"), 1.5, DashStyle.Dash);
+    private bool _isLight = true;
     private IReadOnlyList<UsageHistoryChartSeries> _series = [];
     private HoveredPoint? _hoveredPoint;
     private DateTimeOffset? _viewportStart;
@@ -62,17 +66,33 @@ public sealed class UsageHistoryChart : Control
         InvalidateVisual();
     }
 
+    public void SetTheme(bool isLight)
+    {
+        _isLight = isLight;
+        _canvasBrush = Brush(isLight ? "#FFFFFFFF" : "#FF202421");
+        _plotBrush = Brush(isLight ? "#FFF7F9F7" : "#FF191D1A");
+        _gridBrush = Brush(isLight ? "#FFE1E7E2" : "#FF343A35");
+        _axisBrush = Brush(isLight ? "#FF667169" : "#FFADB7AF");
+        _resetBrush = Brush(isLight ? "#FFE47B2B" : "#FFFFA04F");
+        _hoverGuideBrush = Brush(isLight ? "#FF8A9890" : "#FF758079");
+        _tooltipBrush = Brush(isLight ? "#FF24312A" : "#FFEEF3EF");
+        _tooltipBorderBrush = Brush(isLight ? "#FF506158" : "#FFBEC8C0");
+        _gridPen = new Pen(_gridBrush, 1);
+        _resetPen = new Pen(_resetBrush, 1.5, DashStyle.Dash);
+        InvalidateVisual();
+    }
+
     public override void Render(DrawingContext context)
     {
         base.Render(context);
-        context.DrawRectangle(CanvasBrush, null, new Rect(Bounds.Size));
+        context.DrawRectangle(_canvasBrush, null, new Rect(Bounds.Size));
         var plot = GetPlotBounds();
         if (plot.Width <= 0 || plot.Height <= 0)
         {
             return;
         }
 
-        context.DrawRectangle(PlotBrush, null, plot, 8, 8);
+        context.DrawRectangle(_plotBrush, null, plot, 10, 10);
         var points = _series.SelectMany(series => series.Points).ToArray();
         var (minimumTime, maximumTime) = ResolveTimeBounds(points);
         DrawGrid(context, plot, minimumTime, maximumTime);
@@ -135,20 +155,20 @@ public sealed class UsageHistoryChart : Control
         {
             var percent = 100 - tick * 25;
             var y = plot.Top + plot.Height * tick / 4d;
-            context.DrawLine(GridPen, new Point(plot.Left, y), new Point(plot.Right, y));
-            DrawText(context, $"{percent}%", new Point(7, y - 7), AxisBrush, 10);
+            context.DrawLine(_gridPen, new Point(plot.Left, y), new Point(plot.Right, y));
+            DrawText(context, $"{percent}%", new Point(7, y - 7), _axisBrush, 10);
         }
 
         var span = maximumTime - minimumTime;
         for (var tick = 0; tick <= 4; tick++)
         {
             var x = plot.Left + plot.Width * tick / 4d;
-            context.DrawLine(GridPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
+            context.DrawLine(_gridPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
             var time = minimumTime + TimeSpan.FromTicks(span.Ticks * tick / 4);
             var label = time.ToLocalTime().ToString(
                 span > TimeSpan.FromDays(2) ? "MMM d" : span > TimeSpan.FromHours(26) ? "ddd HH:mm" : "HH:mm",
                 CultureInfo.CurrentCulture);
-            var formatted = Text(label, 10, AxisBrush);
+            var formatted = Text(label, 10, _axisBrush);
             context.DrawText(formatted, new Point(x - formatted.Width / 2, plot.Bottom + 9));
         }
     }
@@ -160,15 +180,15 @@ public sealed class UsageHistoryChart : Control
         {
             var color = ProviderColor(series.Provider);
             context.DrawEllipse(color, null, new Point(legendX + 4, 12), 4, 4);
-            var label = Text(ProviderLabelFormatter?.Invoke(series.Provider) ?? series.Provider, 10, AxisBrush);
+            var label = Text(ProviderLabelFormatter?.Invoke(series.Provider) ?? series.Provider, 10, _axisBrush);
             context.DrawText(label, new Point(legendX + 13, 5));
             legendX += 28 + label.Width;
         }
 
         if (_series.SelectMany(series => series.ResetMarkers).Any())
         {
-            context.DrawLine(ResetPen, new Point(legendX + 2, 5), new Point(legendX + 2, 19));
-            DrawText(context, ResetLabel, new Point(legendX + 9, 5), AxisBrush, 10);
+            context.DrawLine(_resetPen, new Point(legendX + 2, 5), new Point(legendX + 2, 19));
+            DrawText(context, ResetLabel, new Point(legendX + 9, 5), _axisBrush, 10);
         }
     }
 
@@ -180,7 +200,7 @@ public sealed class UsageHistoryChart : Control
         DateTimeOffset maximumTime)
     {
         var x = X(marker, minimumTime, maximumTime, plot);
-        context.DrawLine(ResetPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
+        context.DrawLine(_resetPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
         var triangle = new StreamGeometry();
         using (var geometry = triangle.Open())
         {
@@ -189,7 +209,7 @@ public sealed class UsageHistoryChart : Control
             geometry.LineTo(new Point(x, plot.Top + 7));
             geometry.EndFigure(true);
         }
-        context.DrawGeometry(ResetBrush, null, triangle);
+        context.DrawGeometry(_resetBrush, null, triangle);
     }
 
     private void DrawSeries(
@@ -220,7 +240,7 @@ public sealed class UsageHistoryChart : Control
 
             if (visible.Length <= 100)
             {
-                context.DrawEllipse(CanvasBrush, new Pen(color, 1.5), current, 3, 3);
+                context.DrawEllipse(_canvasBrush, new Pen(color, 1.5), current, 3, 3);
             }
             previous = current;
             previousTime = sample.UpdatedAt;
@@ -229,10 +249,10 @@ public sealed class UsageHistoryChart : Control
 
     private void DrawEmptyState(DrawingContext context, Rect plot)
     {
-        var heading = Text(NoDataText, 12, AxisBrush);
+        var heading = Text(NoDataText, 12, _axisBrush);
         var center = new Point(plot.Center.X, plot.Center.Y);
-        context.DrawEllipse(null, new Pen(GridBrush, 2), new Point(center.X, center.Y - 14), 13, 13);
-        context.DrawLine(new Pen(GridBrush, 2), new Point(center.X - 5, center.Y - 14), new Point(center.X + 5, center.Y - 14));
+        context.DrawEllipse(null, new Pen(_gridBrush, 2), new Point(center.X, center.Y - 14), 13, 13);
+        context.DrawLine(new Pen(_gridBrush, 2), new Point(center.X - 5, center.Y - 14), new Point(center.X + 5, center.Y - 14));
         context.DrawText(heading, new Point(center.X - heading.Width / 2, center.Y + 9));
     }
 
@@ -246,10 +266,10 @@ public sealed class UsageHistoryChart : Control
         var point = new Point(
             X(hovered.Point.UpdatedAt, minimumTime, maximumTime, plot),
             Y(hovered.Point.RemainingPercent, plot));
-        context.DrawLine(new Pen(Brush("#8A9890"), 1, DashStyle.Dash),
+        context.DrawLine(new Pen(_hoverGuideBrush, 1, DashStyle.Dash),
             new Point(point.X, plot.Top), new Point(point.X, plot.Bottom));
         var color = ProviderColor(hovered.Provider);
-        context.DrawEllipse(CanvasBrush, new Pen(color, 2.5), point, 5, 5);
+        context.DrawEllipse(_canvasBrush, new Pen(color, 2.5), point, 5, 5);
         var lines = new[]
         {
             ProviderLabelFormatter?.Invoke(hovered.Provider) ?? hovered.Provider,
@@ -259,7 +279,8 @@ public sealed class UsageHistoryChart : Control
                 ? string.Empty
                 : $"{ResetLabel}: {hovered.Point.ResetAt.Value.ToLocalTime():MMM d, HH:mm}"
         }.Where(line => !string.IsNullOrWhiteSpace(line)).ToArray();
-        var width = Math.Max(166, lines.Max(line => Text(line, 11, Brushes.White).Width) + 22);
+        var tooltipText = _isLight ? Brushes.White : Brush("#FF1F2822");
+        var width = Math.Max(166, lines.Max(line => Text(line, 11, tooltipText).Width) + 22);
         var height = lines.Length * 18 + 14;
         var left = point.X + 14;
         if (left + width > Bounds.Width - 8)
@@ -268,11 +289,11 @@ public sealed class UsageHistoryChart : Control
         }
         var top = Math.Clamp(point.Y - height - 12, 6, Math.Max(6, Bounds.Height - height - 6));
         var bounds = new Rect(left, top, width, height);
-        context.DrawRectangle(Brush("#25332C"), new Pen(Brush("#506158"), 1), bounds, 8, 8);
+        context.DrawRectangle(_tooltipBrush, new Pen(_tooltipBorderBrush, 1), bounds, 9, 9);
         context.DrawRectangle(color, null, new Rect(left, top, 4, height), 2, 2);
         for (var index = 0; index < lines.Length; index++)
         {
-            DrawText(context, lines[index], new Point(left + 12, top + 8 + index * 18), Brushes.White, 11);
+            DrawText(context, lines[index], new Point(left + 12, top + 8 + index * 18), tooltipText, 11);
         }
     }
 
@@ -346,13 +367,13 @@ public sealed class UsageHistoryChart : Control
     private static void DrawText(DrawingContext context, string text, Point point, IBrush brush, double fontSize) =>
         context.DrawText(Text(text, fontSize, brush), point);
 
-    private static IBrush ProviderColor(string provider) => provider.ToLowerInvariant() switch
+    private IBrush ProviderColor(string provider) => provider.ToLowerInvariant() switch
     {
-        "claude" => Brush("#D46A45"),
-        "codex" => Brush("#0F9B72"),
-        "antigravity-gemini" => Brush("#5B6FEF"),
-        "antigravity-claudeandchatgpt" => Brush("#9A62D7"),
-        _ => Brush("#66706A")
+        "claude" => Brush(_isLight ? "#D46A45" : "#F08A66"),
+        "codex" => Brush(_isLight ? "#0F9B72" : "#4AD894"),
+        "antigravity-gemini" => Brush(_isLight ? "#5B6FEF" : "#8794FF"),
+        "antigravity-claudeandchatgpt" => Brush(_isLight ? "#9A62D7" : "#C38AF0"),
+        _ => Brush(_isLight ? "#66706A" : "#A8B1AA")
     };
 
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));

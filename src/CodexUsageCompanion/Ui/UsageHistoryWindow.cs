@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using CodexUsageCompanion.Configuration;
 using CodexUsageCompanion.Diagnostics;
 using CodexUsageCompanion.Localization;
@@ -28,13 +29,36 @@ public sealed class UsageHistoryWindow : Window
     private readonly TextBlock _timelineCaption = new();
     private readonly Button _timelineToggleButton;
     private readonly TextBlock _message = new();
+    private readonly TextBlock _emptyStateText;
     private readonly Border _noPeriodData;
     private readonly ComboBox _rangeSelector;
     private readonly ComboBox _windowSelector;
-    private readonly ToggleSwitch _fullPeriodToggle;
+    private readonly Button _fullPeriodToggle;
+    private readonly Border _fullPeriodTrack;
+    private readonly Border _fullPeriodThumb;
+    private readonly TextBlock _fullPeriodLabel;
     private readonly Button _previousButton;
     private readonly Button _nextButton;
+    private readonly Button _refreshButton;
+    private readonly Button _analyzeButton;
+    private readonly Button _closeButton;
     private readonly UsageHistoryChart _chart;
+    private readonly Border _root;
+    private readonly Border _headerCard;
+    private readonly Border _filterCard;
+    private readonly Border _chartSection;
+    private readonly Border _chartFrame;
+    private readonly Border _timelineCard;
+    private readonly Border _periodNavigationSurface;
+    private readonly Border _titleMark;
+    private readonly TextBlock _titleText;
+    private readonly List<TextBlock> _mutedText = [];
+    private readonly Dictionary<Button, HistoryButtonRole> _buttonRoles = [];
+    private readonly List<Button> _providerButtons = [];
+    private readonly HashSet<string> _selectedProviders = new(StringComparer.OrdinalIgnoreCase);
+    private HistoryPalette _palette = HistoryPalette.Light;
+    private bool _isLightTheme = true;
+    private bool _showFullPeriod = true;
     private IReadOnlyList<UsageHistoryEntry> _entries = [];
     private IReadOnlyList<UsageHistoryEntry> _selection = [];
     private IReadOnlyList<UsageHistoryEntry> _timelineRecords = [];
@@ -62,7 +86,10 @@ public sealed class UsageHistoryWindow : Window
                 text.UsageHistoryAll
             },
             SelectedIndex = 1,
-            MinWidth = 112
+            MinWidth = 126,
+            Height = 36,
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 0)
         };
         _windowSelector = new ComboBox
         {
@@ -72,22 +99,57 @@ public sealed class UsageHistoryWindow : Window
                 text.UsageHistoryFiveHourWindow
             },
             SelectedIndex = 0,
-            MinWidth = 112
+            MinWidth = 118,
+            Height = 34,
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(10, 0)
         };
-        _fullPeriodToggle = new ToggleSwitch
+        _fullPeriodThumb = new Border
         {
-            OnContent = text.UsageHistoryShowFullPeriod,
-            OffContent = text.UsageHistoryDataOnly,
-            IsChecked = true,
+            Width = 14,
+            Height = 14,
+            CornerRadius = new CornerRadius(7),
+            Margin = new Thickness(2),
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
+        };
+        _fullPeriodTrack = new Border
+        {
+            Width = 34,
+            Height = 18,
+            CornerRadius = new CornerRadius(9),
+            Child = _fullPeriodThumb
+        };
+        _fullPeriodLabel = new TextBlock
+        {
+            Text = text.UsageHistoryShowFullPeriod,
+            FontSize = 11.5,
+            FontWeight = FontWeight.Medium,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _fullPeriodToggle = new Button
+        {
+            Height = 34,
+            Padding = new Thickness(9, 0),
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(1),
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Children = { _fullPeriodTrack, _fullPeriodLabel }
+            }
         };
         _previousButton = NavigationButton("‹", text.UsageHistoryPreviousPeriod);
         _nextButton = NavigationButton("›", text.UsageHistoryNextPeriod);
         _timelineToggleButton = new Button
         {
             Content = "↗  " + text.UsageHistoryShowTimeline,
-            MinWidth = 118,
-            Padding = new Thickness(12, 6)
+            MinWidth = 126,
+            Height = 36,
+            Padding = new Thickness(13, 0),
+            CornerRadius = new CornerRadius(10),
+            FontWeight = FontWeight.SemiBold
         };
         _timelineToggleButton.Click += (_, _) => ShowTimelineWindow();
         _chart = new UsageHistoryChart
@@ -95,22 +157,25 @@ public sealed class UsageHistoryWindow : Window
             RemainingLabel = text.UsageHistoryRemaining,
             ResetLabel = text.UsageHistoryReset,
             NoDataText = text.UsageHistoryNoChartData,
-            ProviderLabelFormatter = ChartProviderLabel
+            ProviderLabelFormatter = ChartProviderLabel,
+            Height = 238,
+            MinHeight = 220
+        };
+        _emptyStateText = new TextBlock
+        {
+            Text = text.UsageHistoryNoPeriodData,
+            TextWrapping = TextWrapping.Wrap
         };
         _noPeriodData = new Border
         {
             Background = Brush("#FFF7E8"),
             BorderBrush = Brush("#F2D39B"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(13, 10),
+            CornerRadius = new CornerRadius(11),
+            Padding = new Thickness(14, 11),
+            Margin = new Thickness(0, 10, 0, 0),
             IsVisible = false,
-            Child = new TextBlock
-            {
-                Text = text.UsageHistoryNoPeriodData,
-                Foreground = Brush("#865B19"),
-                TextWrapping = TextWrapping.Wrap
-            }
+            Child = _emptyStateText
         };
 
         _rangeSelector.SelectionChanged += (_, _) =>
@@ -119,50 +184,85 @@ public sealed class UsageHistoryWindow : Window
             ApplySelection();
         };
         _windowSelector.SelectionChanged += (_, _) => ApplySelection();
-        _fullPeriodToggle.IsCheckedChanged += (_, _) => ApplySelection();
+        _fullPeriodToggle.Click += (_, _) =>
+        {
+            _showFullPeriod = !_showFullPeriod;
+            ApplyFullPeriodToggleTheme();
+            ApplySelection();
+        };
+        _fullPeriodToggle.PointerEntered += (_, _) => ApplyFullPeriodToggleTheme(hovered: true);
+        _fullPeriodToggle.PointerExited += (_, _) => ApplyFullPeriodToggleTheme();
         _previousButton.Click += (_, _) => MovePeriod(-1);
         _nextButton.Click += (_, _) => MovePeriod(1);
 
         Title = text.UsageHistoryTitle;
-        Width = 1080;
-        Height = 820;
-        MinWidth = 820;
-        MinHeight = 620;
+        Width = 1120;
+        Height = 850;
+        MinWidth = 860;
+        MinHeight = 660;
         ShowInTaskbar = settings.ShowTaskbarIcon;
         Topmost = settings.AlwaysOnTop;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        var refresh = PrimaryButton("↻  " + text.RefreshAction);
-        refresh.Click += (_, _) => Reload();
-        var analyze = PrimaryButton("✦  " + text.UsageHistoryAnalyzeAction);
-        analyze.Click += (_, _) => ShowAnalysis();
-        var close = new Button { Content = text.CloseAction, MinWidth = 88, IsCancel = true };
-        close.Click += (_, _) => Close();
+        _refreshButton = ActionButton("↻  " + text.RefreshAction, 104);
+        _refreshButton.Click += (_, _) => Reload();
+        _analyzeButton = ActionButton("✦  " + text.UsageHistoryAnalyzeAction, 132);
+        _analyzeButton.Click += (_, _) => ShowAnalysis();
+        _closeButton = ActionButton(text.CloseAction, 88);
+        _closeButton.IsCancel = true;
+        _closeButton.Click += (_, _) => Close();
 
-        var title = new TextBlock
+        _titleText = new TextBlock
         {
             Text = text.UsageHistoryDashboardTitle,
-            FontSize = 25,
+            FontSize = 26,
             FontWeight = FontWeight.Bold
         };
         _subtitle.FontSize = 12;
-        _subtitle.Foreground = Brush("#68756D");
-        var titleStack = new StackPanel { Spacing = 3, Children = { title, _subtitle } };
+        _mutedText.Add(_subtitle);
+        var titleStack = new StackPanel { Spacing = 3, Children = { _titleText, _subtitle } };
+        _titleMark = new Border
+        {
+            Width = 42,
+            Height = 42,
+            CornerRadius = new CornerRadius(13),
+            Child = new TextBlock
+            {
+                Text = "◷",
+                FontSize = 23,
+                FontWeight = FontWeight.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        var titleArea = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _titleMark, titleStack }
+        };
         var actions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { analyze, refresh, close }
+            Children = { _analyzeButton, _refreshButton, _closeButton }
         };
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         Grid.SetColumn(actions, 1);
-        header.Children.Add(titleStack);
+        header.Children.Add(titleArea);
         header.Children.Add(actions);
-
+        _headerCard = new Border
+        {
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(16, 12),
+            Child = header
+        };
         _periodLabel.FontSize = 15;
-        _periodLabel.FontWeight = FontWeight.SemiBold;
-        _periodLabel.MinWidth = 210;
+        _periodLabel.FontWeight = FontWeight.Bold;
+        _periodLabel.MinWidth = 238;
         _periodLabel.TextAlignment = TextAlignment.Center;
         _periodLabel.VerticalAlignment = VerticalAlignment.Center;
         var periodNavigation = new StackPanel
@@ -172,36 +272,45 @@ public sealed class UsageHistoryWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Children = { _previousButton, _periodLabel, _nextButton }
         };
-        var filterRow = new WrapPanel { Orientation = Orientation.Horizontal };
-        filterRow.Children.Add(FilterGroup(text.UsageHistoryTimeRange, _rangeSelector));
-        filterRow.Children.Add(periodNavigation);
-        var filterCard = new Border
+        _periodNavigationSurface = new Border
         {
-            Background = Brush("#F5F8F6"),
-            BorderBrush = Brush("#DCE4DF"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(4),
+            Child = periodNavigation
+        };
+        var filterRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnSpacing = 12
+        };
+        var rangeGroup = FilterGroup(text.UsageHistoryTimeRange, _rangeSelector);
+        Grid.SetColumn(_periodNavigationSurface, 2);
+        filterRow.Children.Add(rangeGroup);
+        filterRow.Children.Add(_periodNavigationSurface);
+        var providerRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 12,
+            Children = { FilterLabel(text.UsageHistoryProvider), _providerFilters }
+        };
+        Grid.SetColumn(_providerFilters, 1);
+        _filterCard = new Border
+        {
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(15),
             Padding = new Thickness(14, 11),
             Child = new StackPanel
             {
                 Spacing = 10,
-                Children =
-                {
-                    filterRow,
-                    new Grid
-                    {
-                        ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-                        ColumnSpacing = 10,
-                        Children = { FilterLabel(text.UsageHistoryProvider), _providerFilters }
-                    }
-                }
+                Children = { filterRow, providerRow }
             }
         };
-        Grid.SetColumn(_providerFilters, 1);
 
         var overviewHeading = SectionHeading(text.UsageHistorySummaryTitle, text.UsageHistorySummarySubtitle);
         var summaryScroll = new ScrollViewer
         {
+            MinHeight = 100,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = _summaryCards
@@ -215,21 +324,29 @@ public sealed class UsageHistoryWindow : Window
             Children = { FilterGroup(text.UsageHistoryQuotaWindow, _windowSelector), _fullPeriodToggle }
         };
         var chartHeading = SectionHeading(text.UsageHistoryChartTitle, text.UsageHistoryChartSubtitle, chartControls);
-        var chartFrame = new Border
+        _chartFrame = new Border
         {
-            Background = Brush("#FCFDFC"),
-            BorderBrush = Brush("#D8E2DC"),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
             ClipToBounds = true,
             Child = _chart
         };
+        _chartSection = new Border
+        {
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(14, 12),
+            Child = new StackPanel
+            {
+                Spacing = 10,
+                Children = { chartHeading, _chartFrame, _noPeriodData }
+            }
+        };
 
         _message.TextWrapping = TextWrapping.Wrap;
-        _message.Foreground = Brush("#A13C34");
         _message.IsVisible = false;
-        _timelineCaption.Foreground = Brush("#68756D");
         _timelineCaption.FontSize = 11;
+        _mutedText.Add(_timelineCaption);
         var timelineActions = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -238,24 +355,48 @@ public sealed class UsageHistoryWindow : Window
             Children = { _timelineCaption, _timelineToggleButton }
         };
         var timelineHeading = SectionHeading(text.UsageHistoryRecords, string.Empty, timelineActions);
-
-        var layout = new Grid
+        _timelineCard = new Border
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
-            Margin = new Thickness(24),
-            RowSpacing = 12
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(16, 12),
+            Child = timelineHeading
         };
-        AddRow(layout, header, 0);
-        AddRow(layout, filterCard, 1);
-        AddRow(layout, overviewHeading, 2);
-        AddRow(layout, summaryScroll, 3);
-        AddRow(layout, chartHeading, 4);
-        AddRow(layout, chartFrame, 5);
-        AddRow(layout, _noPeriodData, 6);
-        AddRow(layout, _message, 7);
-        AddRow(layout, timelineHeading, 8);
-        Content = layout;
+        var layout = new StackPanel
+        {
+            Spacing = 10,
+            Margin = new Thickness(18),
+            Children =
+            {
+                _headerCard,
+                _filterCard,
+                overviewHeading,
+                summaryScroll,
+                _chartSection,
+                _message,
+                _timelineCard
+            }
+        };
+        _root = new Border
+        {
+            Child = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = layout
+            }
+        };
+        Content = _root;
+        RegisterButton(_analyzeButton, HistoryButtonRole.Primary);
+        RegisterButton(_refreshButton, HistoryButtonRole.Secondary);
+        RegisterButton(_closeButton, HistoryButtonRole.Neutral);
+        RegisterButton(_timelineToggleButton, HistoryButtonRole.AccentSoft);
+        RegisterButton(_previousButton, HistoryButtonRole.Secondary);
+        RegisterButton(_nextButton, HistoryButtonRole.Secondary);
+        ActualThemeVariantChanged += (_, _) => ApplyVisualTheme();
+        Opened += (_, _) => ApplyVisualTheme();
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
+        ApplyVisualTheme();
         Reload();
     }
 
@@ -269,12 +410,11 @@ public sealed class UsageHistoryWindow : Window
             ? _text.UsageHistoryEmptySubtitle
             : _text.FormatUsageHistoryCount(_entries.Count, MaximumVisibleRows);
 
-        var selectedBefore = _providerFilters.Children
-            .OfType<CheckBox>()
-            .Where(item => item.IsChecked == true && item.Tag is string)
-            .Select(item => (string)item.Tag!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hadProviderChoices = _providerButtons.Count > 0;
+        var selectedBefore = _selectedProviders.ToHashSet(StringComparer.OrdinalIgnoreCase);
         _providerFilters.Children.Clear();
+        _providerButtons.Clear();
+        _selectedProviders.Clear();
         foreach (var provider in _entries
                      .Where(entry => string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase))
                      .Where(entry => IsChartProvider(entry.Provider))
@@ -283,16 +423,37 @@ public sealed class UsageHistoryWindow : Window
                      .OrderBy(ProviderOrder)
                      .ThenBy(provider => provider, StringComparer.OrdinalIgnoreCase))
         {
-            var checkBox = new CheckBox
+            var selected = !hadProviderChoices || selectedBefore.Contains(provider);
+            if (selected)
+            {
+                _selectedProviders.Add(provider);
+            }
+            var button = new Button
             {
                 Content = DisplayProvider(provider),
-                IsChecked = selectedBefore.Count == 0 || selectedBefore.Contains(provider),
                 Tag = provider,
-                FontSize = 12,
-                Margin = new Thickness(0, 0, 14, 2)
+                FontSize = 11.5,
+                FontWeight = FontWeight.SemiBold,
+                Height = 30,
+                Padding = new Thickness(11, 0),
+                Margin = new Thickness(0, 0, 7, 3),
+                CornerRadius = new CornerRadius(15),
+                BorderThickness = new Thickness(1)
             };
-            checkBox.IsCheckedChanged += (_, _) => ApplySelection();
-            _providerFilters.Children.Add(checkBox);
+            button.Click += (_, _) =>
+            {
+                if (!_selectedProviders.Remove(provider))
+                {
+                    _selectedProviders.Add(provider);
+                }
+                ApplyProviderButtonTheme(button);
+                ApplySelection();
+            };
+            button.PointerEntered += (_, _) => ApplyProviderButtonTheme(button, hovered: true);
+            button.PointerExited += (_, _) => ApplyProviderButtonTheme(button);
+            _providerButtons.Add(button);
+            ApplyProviderButtonTheme(button);
+            _providerFilters.Children.Add(button);
         }
         ApplySelection();
     }
@@ -307,13 +468,16 @@ public sealed class UsageHistoryWindow : Window
             ? UsageHistoryQuotaWindow.FiveHour
             : UsageHistoryQuotaWindow.Weekly;
         var series = UsageHistorySeriesBuilder.BuildForPeriod(_entries, quotaWindow, start, end, providers);
-        _chart.SetViewport(_fullPeriodToggle.IsChecked == true ? start : null,
-            _fullPeriodToggle.IsChecked == true ? end : null);
+        _chart.SetViewport(_showFullPeriod ? start : null,
+            _showFullPeriod ? end : null);
         _chart.SetSeries(series);
         UpdatePeriodLabel(start, end);
         UpdateSummary(_selection);
         UpdateTimeline(start, end, providers);
-        _noPeriodData.IsVisible = _selection.Count == 0 && _entries.Count > 0;
+        _emptyStateText.Text = _entries.Count == 0
+            ? _text.UsageHistoryEmpty
+            : _text.UsageHistoryNoPeriodData;
+        _noPeriodData.IsVisible = _selection.Count == 0;
         _nextButton.IsEnabled = _rangeSelector.SelectedIndex != 3 && end < StartOfToday();
         _previousButton.IsEnabled = _rangeSelector.SelectedIndex != 3;
     }
@@ -327,27 +491,27 @@ public sealed class UsageHistoryWindow : Window
             _text.UsageHistorySamples,
             summary.RecordCount.ToString(CultureInfo.CurrentCulture),
             _text.FormatUsageHistoryProviders(summary.ProviderCount),
-            "#0F8A5F"));
+            _isLightTheme ? "#0F8A5F" : "#4AD894"));
         _summaryCards.Children.Add(SummaryCard(
             _text.UsageHistoryObservedTime,
             FormatDuration(summary.ObservedDuration),
             _text.UsageHistoryDataCoverage,
-            "#4E6FAE"));
+            _isLightTheme ? "#4E6FAE" : "#83A9F2"));
         _summaryCards.Children.Add(SummaryCard(
             _text.UsageHistoryFiveHourConsumed,
-            $"{summary.FiveHour.ConsumedPercent:0.#}%",
+            FormatPercent(summary.FiveHour.ConsumedPercent),
             _text.FormatUsageHistoryBurnRate(summary.FiveHour.ConsumptionPerHour),
-            "#D46A45"));
+            _isLightTheme ? "#D46A45" : "#F08A66"));
         _summaryCards.Children.Add(SummaryCard(
             _text.UsageHistoryWeeklyConsumed,
-            $"{summary.Weekly.ConsumedPercent:0.#}%",
+            FormatPercent(summary.Weekly.ConsumedPercent),
             _text.FormatUsageHistoryBurnRate(summary.Weekly.ConsumptionPerHour),
-            "#8A5CD7"));
+            _isLightTheme ? "#8A5CD7" : "#C38AF0"));
         _summaryCards.Children.Add(SummaryCard(
             _text.UsageHistoryResetsDetected,
             resets.ToString(CultureInfo.CurrentCulture),
             _text.UsageHistoryResetMarkersHint,
-            "#D97706"));
+            _isLightTheme ? "#D97706" : "#FFAD55"));
     }
 
     private void UpdateTimeline(
@@ -465,11 +629,8 @@ public sealed class UsageHistoryWindow : Window
         dialog.Show(this);
     }
 
-    private IReadOnlySet<string> SelectedProviders() => _providerFilters.Children
-        .OfType<CheckBox>()
-        .Where(item => item.IsChecked == true && item.Tag is string)
-        .Select(item => (string)item.Tag!)
-        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlySet<string> SelectedProviders() =>
+        _selectedProviders.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static DateTimeOffset StartOfToday()
     {
@@ -477,23 +638,27 @@ public sealed class UsageHistoryWindow : Window
         return new DateTimeOffset(today, TimeZoneInfo.Local.GetUtcOffset(today));
     }
 
-    private static Control FilterGroup(string label, Control control) => new StackPanel
+    private Control FilterGroup(string label, Control control) => new StackPanel
     {
         Orientation = Orientation.Horizontal,
         Spacing = 8,
-        Margin = new Thickness(0, 0, 18, 0),
         VerticalAlignment = VerticalAlignment.Center,
         Children = { FilterLabel(label), control }
     };
 
-    private static TextBlock FilterLabel(string text) => new()
+    private TextBlock FilterLabel(string text)
     {
-        Text = text + ":",
-        FontSize = 11,
-        FontWeight = FontWeight.SemiBold,
-        Foreground = Brush("#68756D"),
-        VerticalAlignment = VerticalAlignment.Center
-    };
+        var label = new TextBlock
+        {
+            Text = text.ToUpperInvariant(),
+            FontSize = 10,
+            FontWeight = FontWeight.Bold,
+            LetterSpacing = 0.55,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _mutedText.Add(label);
+        return label;
+    }
 
     private static Button NavigationButton(string content, string tooltip)
     {
@@ -501,9 +666,11 @@ public sealed class UsageHistoryWindow : Window
         {
             Content = content,
             Width = 34,
-            Height = 32,
+            Height = 34,
             Padding = new Thickness(0),
             FontSize = 21,
+            CornerRadius = new CornerRadius(9),
+            BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center
         };
@@ -511,66 +678,289 @@ public sealed class UsageHistoryWindow : Window
         return button;
     }
 
-    private static Button PrimaryButton(string content) => new()
+    private static Button ActionButton(string content, double minWidth) => new()
     {
         Content = content,
-        MinWidth = 112,
-        Padding = new Thickness(13, 7)
+        MinWidth = minWidth,
+        Height = 38,
+        Padding = new Thickness(13, 0),
+        CornerRadius = new CornerRadius(10),
+        BorderThickness = new Thickness(1),
+        FontWeight = FontWeight.SemiBold
     };
 
-    private static Control SectionHeading(string title, string subtitle, Control? trailing = null)
+    private Control SectionHeading(string title, string subtitle, Control? trailing = null)
     {
-        var titleStack = new StackPanel { Spacing = 1 };
-        titleStack.Children.Add(new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold });
+        var titleStack = new StackPanel { Spacing = 2 };
+        titleStack.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = 16,
+            FontWeight = FontWeight.Bold,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
         if (!string.IsNullOrWhiteSpace(subtitle))
         {
-            titleStack.Children.Add(new TextBlock { Text = subtitle, FontSize = 11, Foreground = Brush("#718078") });
+            var subtitleText = new TextBlock
+            {
+                Text = subtitle,
+                FontSize = 11,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            _mutedText.Add(subtitleText);
+            titleStack.Children.Add(subtitleText);
         }
         if (trailing is null)
         {
             return titleStack;
         }
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 18
+        };
         Grid.SetColumn(trailing, 1);
         grid.Children.Add(titleStack);
         grid.Children.Add(trailing);
         return grid;
     }
 
-    private static Border SummaryCard(string label, string value, string detail, string accent)
+    private Border SummaryCard(string label, string value, string detail, string accent)
     {
         var card = new Border
         {
-            Width = 192,
-            MinHeight = 88,
-            Background = Brush("#F8FAF9"),
-            BorderBrush = Brush("#DCE4DF"),
+            Width = 198,
+            MinHeight = 92,
+            Background = Brush(_palette.Surface),
+            BorderBrush = Brush(_palette.Border),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(11),
-            Padding = new Thickness(13),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(14, 12),
             Margin = new Thickness(0, 0, 9, 6)
         };
-        card.Child = new Grid
+        if (_isLightTheme)
         {
-            ColumnDefinitions = new ColumnDefinitions("4,*"),
-            ColumnSpacing = 10,
+            card.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Blur = 10,
+                OffsetY = 2,
+                Color = Color.Parse("#10000000")
+            });
+        }
+        card.Child = new StackPanel
+        {
+            Spacing = 3,
             Children =
             {
-                new Border { Background = Brush(accent), CornerRadius = new CornerRadius(2) },
                 new StackPanel
                 {
-                    Spacing = 2,
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 7,
                     Children =
                     {
-                        new TextBlock { Text = label, FontSize = 11, Foreground = Brush("#68756D") },
-                        new TextBlock { Text = value, FontSize = 21, FontWeight = FontWeight.Bold },
-                        new TextBlock { Text = detail, FontSize = 10, Foreground = Brush("#718078"), TextTrimming = TextTrimming.CharacterEllipsis }
+                        new Border
+                        {
+                            Width = 8,
+                            Height = 8,
+                            CornerRadius = new CornerRadius(4),
+                            Background = Brush(accent),
+                            VerticalAlignment = VerticalAlignment.Center
+                        },
+                        new TextBlock
+                        {
+                            Text = label.ToUpperInvariant(),
+                            FontSize = 9.5,
+                            FontWeight = FontWeight.Bold,
+                            LetterSpacing = 0.35,
+                            Foreground = Brush(_palette.Secondary),
+                            TextTrimming = TextTrimming.CharacterEllipsis
+                        }
                     }
+                },
+                new TextBlock
+                {
+                    Text = value,
+                    FontSize = 22,
+                    FontWeight = FontWeight.Bold,
+                    Foreground = Brush(_palette.Primary)
+                },
+                new TextBlock
+                {
+                    Text = detail,
+                    FontSize = 10,
+                    Foreground = Brush(_palette.Secondary),
+                    TextTrimming = TextTrimming.CharacterEllipsis
                 }
             }
         };
-        Grid.SetColumn(((Grid)card.Child).Children[1], 1);
         return card;
+    }
+
+    private void ApplyVisualTheme()
+    {
+        _isLightTheme = ActualThemeVariant == ThemeVariant.Light;
+        _palette = _isLightTheme ? HistoryPalette.Light : HistoryPalette.Dark;
+        Background = Brush(_palette.Root);
+        _root.Background = Brush(_palette.Root);
+
+        _headerCard.Background = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+            GradientStops = new GradientStops
+            {
+                new GradientStop(Color.Parse(_palette.HeaderStart), 0),
+                new GradientStop(Color.Parse(_palette.HeaderEnd), 1)
+            }
+        };
+        _headerCard.BorderBrush = Brush(_palette.Border);
+        _headerCard.BoxShadow = _isLightTheme
+            ? new BoxShadows(new BoxShadow
+            {
+                Blur = 18,
+                OffsetY = 4,
+                Color = Color.Parse("#12000000")
+            })
+            : default;
+        _titleText.Foreground = Brush(_palette.Primary);
+        _titleMark.Background = Brush(_palette.AccentSoft);
+        _titleMark.BorderBrush = Tint(_palette.Accent, _isLightTheme ? (byte)80 : (byte)120);
+        _titleMark.BorderThickness = new Thickness(1);
+        if (_titleMark.Child is TextBlock titleGlyph)
+        {
+            titleGlyph.Foreground = Brush(_palette.Accent);
+        }
+
+        ApplySurfaceTheme(_filterCard, _palette.Surface);
+        ApplySurfaceTheme(_chartSection, _palette.Surface);
+        ApplySurfaceTheme(_timelineCard, _palette.Surface);
+        ApplySurfaceTheme(_periodNavigationSurface, _palette.Soft);
+        _chartFrame.Background = Brush(_palette.Surface);
+        _chartFrame.BorderBrush = Brush(_palette.Border);
+        _chart.SetTheme(_isLightTheme);
+
+        foreach (var text in _mutedText)
+        {
+            text.Foreground = Brush(_palette.Secondary);
+        }
+        _periodLabel.Foreground = Brush(_palette.Primary);
+        _message.Foreground = Brush(_palette.Error);
+        _noPeriodData.Background = Brush(_palette.WarningSoft);
+        _noPeriodData.BorderBrush = Brush(_palette.WarningBorder);
+        if (_noPeriodData.Child is TextBlock warningText)
+        {
+            warningText.Foreground = Brush(_palette.WarningText);
+        }
+
+        foreach (var (button, role) in _buttonRoles)
+        {
+            ApplyButtonRole(button, role, hovered: false);
+        }
+
+        ApplySelectorTheme(_rangeSelector);
+        ApplySelectorTheme(_windowSelector);
+        ApplyFullPeriodToggleTheme();
+        foreach (var provider in _providerButtons)
+        {
+            ApplyProviderButtonTheme(provider);
+        }
+        UpdateSummary(_selection);
+    }
+
+    private void ApplySurfaceTheme(Border surface, string background)
+    {
+        surface.Background = Brush(background);
+        surface.BorderBrush = Brush(_palette.Border);
+    }
+
+    private void RegisterButton(Button button, HistoryButtonRole role)
+    {
+        _buttonRoles[button] = role;
+        button.PointerEntered += (_, _) => ApplyButtonRole(button, role, hovered: true);
+        button.PointerExited += (_, _) => ApplyButtonRole(button, role, hovered: false);
+    }
+
+    private void ApplyButtonRole(Button button, HistoryButtonRole role, bool hovered)
+    {
+        var colors = (role, hovered) switch
+        {
+            (HistoryButtonRole.Primary, false) =>
+                (_palette.AccentFill, "#FFFFFFFF", _palette.AccentFill),
+            (HistoryButtonRole.Primary, true) =>
+                (_palette.AccentFillHover, "#FFFFFFFF", _palette.AccentFillHover),
+            (HistoryButtonRole.Secondary, false) =>
+                (_palette.Surface, _palette.Accent, _palette.BorderStrong),
+            (HistoryButtonRole.Secondary, true) =>
+                (_palette.AccentSoft, _palette.Accent, _palette.AccentBorder),
+            (HistoryButtonRole.AccentSoft, false) =>
+                (_palette.AccentSoft, _palette.Accent, _palette.AccentBorder),
+            (HistoryButtonRole.AccentSoft, true) =>
+                (_palette.HeaderEnd, _palette.Accent, _palette.Accent),
+            (HistoryButtonRole.Neutral, true) =>
+                (_palette.Surface, _palette.Primary, _palette.BorderStrong),
+            _ => (_palette.Soft, _palette.Secondary, _palette.Border)
+        };
+        button.Background = Brush(colors.Item1);
+        button.Foreground = Brush(colors.Item2);
+        button.BorderBrush = Brush(colors.Item3);
+    }
+
+    private void ApplySelectorTheme(ComboBox selector)
+    {
+        selector.Background = Brush(_palette.Soft);
+        selector.Foreground = Brush(_palette.Primary);
+        selector.BorderBrush = Brush(_palette.BorderStrong);
+        selector.BorderThickness = new Thickness(1);
+    }
+
+    private void ApplyFullPeriodToggleTheme(bool hovered = false)
+    {
+        _fullPeriodLabel.Text = _showFullPeriod
+            ? _text.UsageHistoryShowFullPeriod
+            : _text.UsageHistoryDataOnly;
+        _fullPeriodLabel.Foreground = Brush(_showFullPeriod ? _palette.Accent : _palette.Secondary);
+        _fullPeriodToggle.Background = Brush(hovered ? _palette.AccentSoft : _palette.Soft);
+        _fullPeriodToggle.BorderBrush = Brush(hovered || _showFullPeriod
+            ? _palette.AccentBorder
+            : _palette.Border);
+        _fullPeriodTrack.Background = Brush(_showFullPeriod
+            ? _palette.AccentFill
+            : _palette.BorderStrong);
+        _fullPeriodThumb.Background = Brush(_showFullPeriod ? "#FFFFFFFF" : _palette.Secondary);
+        _fullPeriodThumb.HorizontalAlignment = _showFullPeriod
+            ? HorizontalAlignment.Right
+            : HorizontalAlignment.Left;
+    }
+
+    private void ApplyProviderButtonTheme(Button button, bool hovered = false)
+    {
+        var provider = button.Tag as string ?? string.Empty;
+        var selected = _selectedProviders.Contains(provider);
+        var accent = ProviderAccent(provider);
+        button.Background = selected
+            ? Tint(accent, _isLightTheme
+                ? hovered ? (byte)42 : (byte)28
+                : hovered ? (byte)58 : (byte)42)
+            : Brush(hovered ? _palette.AccentSoft : _palette.Soft);
+        button.Foreground = Brush(selected || hovered ? accent : _palette.Secondary);
+        button.BorderBrush = selected
+            ? Tint(accent, _isLightTheme ? (byte)125 : (byte)155)
+            : Brush(hovered ? _palette.AccentBorder : _palette.Border);
+    }
+
+    private string ProviderAccent(string provider) => provider.ToLowerInvariant() switch
+    {
+        "claude" => _isLightTheme ? "#C85F3D" : "#F08A66",
+        "codex" => _isLightTheme ? "#0F8A68" : "#4AD894",
+        "antigravity-gemini" => _isLightTheme ? "#5368DC" : "#8794FF",
+        "antigravity-claudeandchatgpt" => _isLightTheme ? "#8955C5" : "#C38AF0",
+        _ => _palette.Secondary
+    };
+
+    private static SolidColorBrush Tint(string color, byte alpha)
+    {
+        var parsed = Color.Parse(color);
+        return new SolidColorBrush(Color.FromArgb(alpha, parsed.R, parsed.G, parsed.B));
     }
 
     private void HandleKeyDown(object? sender, KeyEventArgs eventArgs)
@@ -590,12 +980,6 @@ public sealed class UsageHistoryWindow : Window
             MovePeriod(1);
             eventArgs.Handled = true;
         }
-    }
-
-    private static void AddRow(Grid grid, Control control, int row)
-    {
-        Grid.SetRow(control, row);
-        grid.Children.Add(control);
     }
 
     private string DisplayProvider(string provider) => provider.ToLowerInvariant() switch
@@ -632,5 +1016,77 @@ public sealed class UsageHistoryWindow : Window
         ? $"{(int)duration.TotalDays}d {duration.Hours}h"
         : duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}h {duration.Minutes}m" : $"{Math.Max(0, duration.Minutes)}m";
 
+    private static string FormatPercent(double value) =>
+        $"{value:#,##0.#}%";
+
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));
+
+    private enum HistoryButtonRole
+    {
+        Primary,
+        Secondary,
+        Neutral,
+        AccentSoft
+    }
+
+    private sealed record HistoryPalette(
+        string Root,
+        string Surface,
+        string Soft,
+        string HeaderStart,
+        string HeaderEnd,
+        string Border,
+        string BorderStrong,
+        string Primary,
+        string Secondary,
+        string Accent,
+        string AccentFill,
+        string AccentFillHover,
+        string AccentSoft,
+        string AccentBorder,
+        string Error,
+        string WarningSoft,
+        string WarningBorder,
+        string WarningText)
+    {
+        public static HistoryPalette Light { get; } = new(
+            "#FFF2F5F3",
+            "#FFFFFFFF",
+            "#FFF7F9F7",
+            "#FFFFFFFF",
+            "#FFEDF8F3",
+            "#FFDCE4DF",
+            "#FFCAD6CE",
+            "#FF1F2822",
+            "#FF67736B",
+            "#FF0F8A68",
+            "#FF0F7B5C",
+            "#FF0D6E53",
+            "#FFE5F5EE",
+            "#FFA8D8C5",
+            "#FFB13A32",
+            "#FFFFF5DF",
+            "#FFF0D08C",
+            "#FF7A5314");
+
+        public static HistoryPalette Dark { get; } = new(
+            "#FF151816",
+            "#FF202421",
+            "#FF292E2A",
+            "#FF252A26",
+            "#FF1C3028",
+            "#FF394039",
+            "#FF4A534C",
+            "#FFF0F4F1",
+            "#FFA9B3AB",
+            "#FF4AD894",
+            "#FF147A59",
+            "#FF178C66",
+            "#FF1D392E",
+            "#FF376D58",
+            "#FFFF8A80",
+            "#FF3A3020",
+            "#FF75582A",
+            "#FFFFD18A");
+    }
 }
