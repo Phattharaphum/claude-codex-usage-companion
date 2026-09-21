@@ -33,6 +33,16 @@ public sealed class UsageHistoryWindow : Window
     private readonly Border _noPeriodData;
     private readonly ComboBox _rangeSelector;
     private readonly ComboBox _windowSelector;
+    private readonly Border _rangeSegmentedSurface;
+    private readonly Dictionary<int, Button> _rangeSegmentedButtons = [];
+    private readonly Border _periodCalendarBadge;
+    private readonly Avalonia.Controls.Shapes.Path _periodCalendarPath;
+    private readonly Button _todayButton;
+    private readonly Avalonia.Controls.Shapes.Path _todayIcon;
+    private readonly TextBlock _todayLabel;
+    private readonly Button _allProvidersButton;
+    private readonly Avalonia.Controls.Shapes.Path _allProvidersIcon;
+    private readonly TextBlock _allProvidersLabel;
     private readonly Button _fullPeriodToggle;
     private readonly Border _fullPeriodTrack;
     private readonly Border _fullPeriodThumb;
@@ -92,11 +102,186 @@ public sealed class UsageHistoryWindow : Window
                 text.UsageHistoryAll
             },
             SelectedIndex = 1,
-            MinWidth = 126,
-            Height = 36,
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(10, 0)
+            IsVisible = false
         };
+
+        _rangeSegmentedSurface = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(3)
+        };
+        var rangePillsPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 3
+        };
+        _rangeSegmentedSurface.Child = rangePillsPanel;
+
+        var rangeOptions = new (int Index, string Label, string Tooltip)[]
+        {
+            (0, "24H", text.UsageHistory24Hours),
+            (1, "7D", text.UsageHistory7Days),
+            (2, "30D", text.UsageHistory30Days),
+            (3, text.UsageHistoryAll, text.UsageHistoryAll)
+        };
+
+        foreach (var (index, label, tooltip) in rangeOptions)
+        {
+            var pill = new Button
+            {
+                Content = label,
+                Height = 28,
+                MinWidth = 42,
+                Padding = new Thickness(10, 0),
+                CornerRadius = new CornerRadius(7),
+                BorderThickness = new Thickness(1),
+                FontSize = 11.5,
+                FontWeight = FontWeight.SemiBold,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            ToolTip.SetTip(pill, tooltip);
+            var pillIndex = index;
+            pill.Click += (_, _) =>
+            {
+                if (_rangeSelector.SelectedIndex != pillIndex)
+                {
+                    _rangeSelector.SelectedIndex = pillIndex;
+                }
+                else
+                {
+                    _anchorDate = DateTimeOffset.Now;
+                    ApplySelection();
+                }
+            };
+            pill.PointerEntered += (_, _) => ApplyRangePillTheme(pill, pillIndex, hovered: true);
+            pill.PointerExited += (_, _) => ApplyRangePillTheme(pill, pillIndex, hovered: false);
+            _rangeSegmentedButtons[pillIndex] = pill;
+            rangePillsPanel.Children.Add(pill);
+        }
+
+        _periodCalendarPath = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h2v2H7v-2zm4 0h2v2h-2v-2zm4 0h2v2h-2v-2z"),
+            Width = 13,
+            Height = 13,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+        _periodCalendarBadge = new Border
+        {
+            Width = 26,
+            Height = 26,
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Child = _periodCalendarPath
+        };
+
+        _todayIcon = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"),
+            Width = 11,
+            Height = 11,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _todayLabel = new TextBlock
+        {
+            Text = text.UsageHistoryToday,
+            FontSize = 11.5,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _todayButton = new Button
+        {
+            Height = 34,
+            Padding = new Thickness(10, 0),
+            CornerRadius = new CornerRadius(9),
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { _todayIcon, _todayLabel }
+            }
+        };
+        ToolTip.SetTip(_todayButton, text.UsageHistoryToday);
+        _todayButton.Click += (_, _) =>
+        {
+            _anchorDate = DateTimeOffset.Now;
+            ApplySelection();
+        };
+        _todayButton.PointerEntered += (_, _) => ApplyTodayButtonTheme(hovered: true);
+        _todayButton.PointerExited += (_, _) => ApplyTodayButtonTheme(hovered: false);
+
+        _allProvidersIcon = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"),
+            Width = 11,
+            Height = 11,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _allProvidersLabel = new TextBlock
+        {
+            Text = text.UsageHistoryAllProviders,
+            FontSize = 11.5,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _allProvidersButton = new Button
+        {
+            Height = 30,
+            Padding = new Thickness(10, 0, 12, 0),
+            Margin = new Thickness(0, 0, 7, 3),
+            CornerRadius = new CornerRadius(15),
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { _allProvidersIcon, _allProvidersLabel }
+            }
+        };
+        ToolTip.SetTip(_allProvidersButton, text.UsageHistoryAllProviders);
+        _allProvidersButton.Click += (_, _) =>
+        {
+            var allChartProviders = _entries
+                .Where(e => string.Equals(e.Status, "success", StringComparison.OrdinalIgnoreCase))
+                .Where(e => IsChartProvider(e.Provider))
+                .Select(e => e.Provider)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (allChartProviders.Count == 0) return;
+
+            if (_selectedProviders.Count < allChartProviders.Count)
+            {
+                foreach (var p in allChartProviders)
+                {
+                    _selectedProviders.Add(p);
+                }
+            }
+            foreach (var btn in _providerButtons)
+            {
+                ApplyProviderButtonTheme(btn);
+            }
+            ApplyAllProvidersButtonTheme();
+            ApplySelection();
+        };
+        _allProvidersButton.PointerEntered += (_, _) => ApplyAllProvidersButtonTheme(hovered: true);
+        _allProvidersButton.PointerExited += (_, _) => ApplyAllProvidersButtonTheme(hovered: false);
+
         _windowSelector = new ComboBox
         {
             ItemsSource = new[]
@@ -191,6 +376,7 @@ public sealed class UsageHistoryWindow : Window
         _rangeSelector.SelectionChanged += (_, _) =>
         {
             _anchorDate = DateTimeOffset.Now;
+            UpdateRangePillsStyle();
             ApplySelection();
         };
         _windowSelector.SelectionChanged += (_, _) => ApplySelection();
@@ -343,17 +529,25 @@ public sealed class UsageHistoryWindow : Window
             Padding = new Thickness(16, 12),
             Child = header
         };
-        _periodLabel.FontSize = 15;
-        _periodLabel.FontWeight = FontWeight.Bold;
-        _periodLabel.MinWidth = 238;
+        _periodLabel.FontSize = 14;
+        _periodLabel.FontWeight = FontWeight.SemiBold;
+        _periodLabel.MinWidth = 210;
         _periodLabel.TextAlignment = TextAlignment.Center;
         _periodLabel.VerticalAlignment = VerticalAlignment.Center;
+        var periodCenterStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            Margin = new Thickness(4, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { _periodCalendarBadge, _periodLabel }
+        };
         var periodNavigation = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 6,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { _previousButton, _periodLabel, _nextButton }
+            Children = { _previousButton, periodCenterStack, _nextButton, _todayButton }
         };
         _periodNavigationSurface = new Border
         {
@@ -367,7 +561,7 @@ public sealed class UsageHistoryWindow : Window
             ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
             ColumnSpacing = 12
         };
-        var rangeGroup = FilterGroup(text.UsageHistoryTimeRange, _rangeSelector);
+        var rangeGroup = FilterGroup(text.UsageHistoryTimeRange, _rangeSegmentedSurface);
         Grid.SetColumn(_periodNavigationSurface, 2);
         filterRow.Children.Add(rangeGroup);
         filterRow.Children.Add(_periodNavigationSurface);
@@ -516,27 +710,60 @@ public sealed class UsageHistoryWindow : Window
         _providerFilters.Children.Clear();
         _providerButtons.Clear();
         _selectedProviders.Clear();
-        foreach (var provider in _entries
-                     .Where(entry => string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase))
-                     .Where(entry => IsChartProvider(entry.Provider))
-                     .Select(entry => entry.Provider)
-                     .Distinct(StringComparer.OrdinalIgnoreCase)
-                     .OrderBy(ProviderOrder)
-                     .ThenBy(provider => provider, StringComparer.OrdinalIgnoreCase))
+        var chartProviders = _entries
+            .Where(entry => string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase))
+            .Where(entry => IsChartProvider(entry.Provider))
+            .Select(entry => entry.Provider)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(ProviderOrder)
+            .ThenBy(provider => provider, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (chartProviders.Count > 0)
+        {
+            _allProvidersButton.IsVisible = true;
+            _providerFilters.Children.Add(_allProvidersButton);
+        }
+        else
+        {
+            _allProvidersButton.IsVisible = false;
+        }
+
+        foreach (var provider in chartProviders)
         {
             var selected = !hadProviderChoices || selectedBefore.Contains(provider);
             if (selected)
             {
                 _selectedProviders.Add(provider);
             }
-            var button = new Button
+            var icon = new Avalonia.Controls.Shapes.Path
             {
-                Content = DisplayProvider(provider),
-                Tag = provider,
+                Data = Geometry.Parse(ProviderIconGeometry(provider)),
+                Width = 12,
+                Height = 12,
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var label = new TextBlock
+            {
+                Text = DisplayProvider(provider),
                 FontSize = 11.5,
                 FontWeight = FontWeight.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            var chipStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { icon, label }
+            };
+            var button = new Button
+            {
+                Content = chipStack,
+                Tag = provider,
                 Height = 30,
-                Padding = new Thickness(11, 0),
+                Padding = new Thickness(10, 0, 12, 0),
                 Margin = new Thickness(0, 0, 7, 3),
                 CornerRadius = new CornerRadius(15),
                 BorderThickness = new Thickness(1),
@@ -550,6 +777,7 @@ public sealed class UsageHistoryWindow : Window
                     _selectedProviders.Add(provider);
                 }
                 ApplyProviderButtonTheme(button);
+                ApplyAllProvidersButtonTheme();
                 ApplySelection();
             };
             button.PointerEntered += (_, _) => ApplyProviderButtonTheme(button, hovered: true);
@@ -558,6 +786,7 @@ public sealed class UsageHistoryWindow : Window
             ApplyProviderButtonTheme(button);
             _providerFilters.Children.Add(button);
         }
+        ApplyAllProvidersButtonTheme();
         ApplySelection();
     }
 
@@ -583,6 +812,10 @@ public sealed class UsageHistoryWindow : Window
         _noPeriodData.IsVisible = _selection.Count == 0;
         _nextButton.IsEnabled = _rangeSelector.SelectedIndex != 3 && end < StartOfToday();
         _previousButton.IsEnabled = _rangeSelector.SelectedIndex != 3;
+        _todayButton.IsEnabled = _rangeSelector.SelectedIndex != 3 && end < StartOfToday();
+        ApplyTodayButtonTheme();
+        UpdateRangePillsStyle();
+        ApplyAllProvidersButtonTheme();
     }
 
     private void UpdateSummary(IReadOnlyList<UsageHistoryEntry> entries)
@@ -1044,9 +1277,56 @@ public sealed class UsageHistoryWindow : Window
         _titleClockHands.Stroke = Brush(_palette.Accent);
 
         ApplySurfaceTheme(_filterCard, _palette.Surface);
+        _filterCard.BoxShadow = _isLightTheme
+            ? new BoxShadows(new BoxShadow
+            {
+                Blur = 10,
+                OffsetY = 2,
+                Color = Color.Parse("#0D000000")
+            })
+            : default;
+
         ApplySurfaceTheme(_chartSection, _palette.Surface);
+        _chartSection.BoxShadow = _isLightTheme
+            ? new BoxShadows(new BoxShadow
+            {
+                Blur = 12,
+                OffsetY = 3,
+                Color = Color.Parse("#0D000000")
+            })
+            : default;
+
         ApplySurfaceTheme(_timelineCard, _palette.Surface);
+        _timelineCard.BoxShadow = _isLightTheme
+            ? new BoxShadows(new BoxShadow
+            {
+                Blur = 10,
+                OffsetY = 2,
+                Color = Color.Parse("#0D000000")
+            })
+            : default;
+
         ApplySurfaceTheme(_periodNavigationSurface, _palette.Soft);
+        _periodCalendarBadge.Background = Brush(_palette.AccentSoft);
+        _periodCalendarBadge.BorderBrush = Brush(_palette.AccentBorder);
+        _periodCalendarPath.Fill = Brush(_palette.Accent);
+
+        _rangeSegmentedSurface.Background = Brush(_palette.Soft);
+        _rangeSegmentedSurface.BorderBrush = Brush(_palette.Border);
+        if (_isLightTheme)
+        {
+            _rangeSegmentedSurface.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Blur = 4,
+                OffsetY = 1,
+                Color = Color.Parse("#08000000")
+            });
+        }
+        else
+        {
+            _rangeSegmentedSurface.BoxShadow = default;
+        }
+
         _chartFrame.Background = Brush(_palette.Surface);
         _chartFrame.BorderBrush = Brush(_palette.Border);
         _chart.SetTheme(_isLightTheme);
@@ -1069,7 +1349,9 @@ public sealed class UsageHistoryWindow : Window
             ApplyButtonRole(button, role, hovered: false);
         }
 
-        ApplySelectorTheme(_rangeSelector);
+        UpdateRangePillsStyle();
+        ApplyTodayButtonTheme();
+        ApplyAllProvidersButtonTheme();
         ApplySelectorTheme(_windowSelector);
         ApplyFullPeriodToggleTheme();
         foreach (var provider in _providerButtons)
@@ -1125,6 +1407,78 @@ public sealed class UsageHistoryWindow : Window
         selector.BorderThickness = new Thickness(1);
     }
 
+    private void UpdateRangePillsStyle()
+    {
+        foreach (var (index, pill) in _rangeSegmentedButtons)
+        {
+            ApplyRangePillTheme(pill, index, hovered: false);
+        }
+    }
+
+    private void ApplyRangePillTheme(Button pill, int index, bool hovered)
+    {
+        var isSelected = _rangeSelector.SelectedIndex == index;
+        if (isSelected)
+        {
+            pill.Background = Brush(_palette.Surface);
+            pill.Foreground = Brush(_palette.Accent);
+            pill.BorderBrush = Brush(_palette.AccentBorder);
+            pill.FontWeight = FontWeight.Bold;
+        }
+        else
+        {
+            pill.Background = Brush(hovered ? _palette.AccentSoft : "#00000000");
+            pill.Foreground = Brush(hovered ? _palette.Accent : _palette.Secondary);
+            pill.BorderBrush = Brush(hovered ? _palette.AccentBorder : "#00000000");
+            pill.FontWeight = FontWeight.Medium;
+        }
+    }
+
+    private void ApplyTodayButtonTheme(bool hovered = false)
+    {
+        if (!_todayButton.IsEnabled)
+        {
+            _todayButton.Background = Brush(_palette.Soft);
+            _todayButton.BorderBrush = Brush(_palette.Border);
+            _todayButton.Foreground = Brush(_palette.Secondary);
+            _todayButton.Opacity = 0.42;
+        }
+        else
+        {
+            _todayButton.Opacity = 1.0;
+            _todayButton.Background = Brush(hovered ? _palette.AccentSoft : _palette.Surface);
+            _todayButton.BorderBrush = Brush(hovered ? _palette.AccentBorder : _palette.BorderStrong);
+            _todayButton.Foreground = Brush(_palette.Accent);
+        }
+        _todayIcon.Fill = _todayButton.Foreground;
+        _todayLabel.Foreground = _todayButton.Foreground;
+    }
+
+    private void ApplyAllProvidersButtonTheme(bool hovered = false)
+    {
+        var allChartProviders = _entries
+            .Where(e => string.Equals(e.Status, "success", StringComparison.OrdinalIgnoreCase))
+            .Where(e => IsChartProvider(e.Provider))
+            .Select(e => e.Provider)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var isAllSelected = allChartProviders.Count > 0 && _selectedProviders.Count == allChartProviders.Count;
+        var accent = _palette.Accent;
+        _allProvidersButton.Background = isAllSelected
+            ? Tint(accent, _isLightTheme
+                ? hovered ? (byte)42 : (byte)28
+                : hovered ? (byte)58 : (byte)42)
+            : Brush(hovered ? _palette.AccentSoft : _palette.Soft);
+        _allProvidersButton.Foreground = Brush(isAllSelected || hovered ? accent : _palette.Secondary);
+        _allProvidersButton.BorderBrush = isAllSelected
+            ? Tint(accent, _isLightTheme ? (byte)125 : (byte)155)
+            : Brush(hovered ? _palette.AccentBorder : _palette.Border);
+        _allProvidersIcon.Fill = _allProvidersButton.Foreground;
+        _allProvidersLabel.Foreground = _allProvidersButton.Foreground;
+        _allProvidersLabel.FontWeight = isAllSelected ? FontWeight.Bold : FontWeight.Medium;
+    }
+
     private void ApplyFullPeriodToggleTheme(bool hovered = false)
     {
         _fullPeriodLabel.Text = _showFullPeriod
@@ -1158,13 +1512,38 @@ public sealed class UsageHistoryWindow : Window
         button.BorderBrush = selected
             ? Tint(accent, _isLightTheme ? (byte)125 : (byte)155)
             : Brush(hovered ? _palette.AccentBorder : _palette.Border);
+
+        if (button.Content is StackPanel sp)
+        {
+            foreach (var child in sp.Children)
+            {
+                if (child is Avalonia.Controls.Shapes.Path path)
+                {
+                    path.Fill = button.Foreground;
+                }
+                else if (child is TextBlock tb)
+                {
+                    tb.Foreground = button.Foreground;
+                    tb.FontWeight = selected ? FontWeight.Bold : FontWeight.Medium;
+                }
+            }
+        }
     }
+
+    private static string ProviderIconGeometry(string provider) => provider.ToLowerInvariant() switch
+    {
+        "claude" => "M12 2L13.8 8.7L20.5 7L16.2 12L21.8 15.2L15.3 16.5L16.8 23L12 18.5L7.2 23L8.7 16.5L2.2 15.2L7.8 12L3.5 7L10.2 8.7L12 2Z",
+        "codex" => "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM12 4C16.42 4 20 7.58 20 12C20 13.91 19.33 15.66 18.21 17.03L6.97 5.79C8.34 4.67 10.09 4 12 4ZM4 12C4 10.09 4.67 8.34 5.79 6.97L17.03 18.21C15.66 19.33 13.91 20 12 20C7.58 20 4 16.42 4 12Z",
+        "antigravity-gemini" => "M12 2L13.7 7.3L19 9L13.7 10.7L12 16L10.3 10.7L5 9L10.3 7.3ZM19 15L20 18L23 19L20 20L19 23L18 20L15 19L18 18Z",
+        "antigravity-claudeandchatgpt" => "M12 2L14.5 8.5L21 9.5L16 14L17.5 20.5L12 17L6.5 20.5L8 14L3 9.5L9.5 8.5L12 2Z",
+        _ => "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"
+    };
 
     private string ProviderAccent(string provider) => provider.ToLowerInvariant() switch
     {
         "claude" => _isLightTheme ? "#C85F3D" : "#F08A66",
         "codex" => _isLightTheme ? "#0F8A68" : "#4AD894",
-        "antigravity-gemini" => _isLightTheme ? "#5368DC" : "#8794FF",
+        "antigravity-gemini" => _isLightTheme ? "#3B82F6" : "#8794FF",
         "antigravity-claudeandchatgpt" => _isLightTheme ? "#8955C5" : "#C38AF0",
         _ => _palette.Secondary
     };
@@ -1191,6 +1570,15 @@ public sealed class UsageHistoryWindow : Window
         {
             MovePeriod(1);
             eventArgs.Handled = true;
+        }
+        else if (eventArgs.Key == Key.Home && (eventArgs.KeyModifiers == KeyModifiers.Alt || eventArgs.KeyModifiers == KeyModifiers.None))
+        {
+            if (_todayButton.IsEnabled)
+            {
+                _anchorDate = DateTimeOffset.Now;
+                ApplySelection();
+                eventArgs.Handled = true;
+            }
         }
     }
 

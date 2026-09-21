@@ -279,6 +279,20 @@ public sealed record UiText(
         _ => "Next period (Alt+→)"
     };
 
+    public string UsageHistoryToday => Language switch
+    {
+        UiLanguage.TraditionalChinese => "今天",
+        UiLanguage.SimplifiedChinese => "今天",
+        _ => "Today"
+    };
+
+    public string UsageHistoryAllProviders => Language switch
+    {
+        UiLanguage.TraditionalChinese => "全部提供者",
+        UiLanguage.SimplifiedChinese => "全部提供商",
+        _ => "All Providers"
+    };
+
     public string UsageHistoryNoPeriodData => Language switch
     {
         UiLanguage.TraditionalChinese => "此日期範圍沒有資料。可切換日期或確認已啟用 CSV 用量記錄。",

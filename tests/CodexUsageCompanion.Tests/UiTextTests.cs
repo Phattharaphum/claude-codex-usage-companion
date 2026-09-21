@@ -712,5 +712,7 @@ public sealed class UiTextTests
         Assert.False(string.IsNullOrWhiteSpace(text.BrowseFileAction));
         Assert.False(string.IsNullOrWhiteSpace(text.ScreenPositionVisual));
         Assert.False(string.IsNullOrWhiteSpace(text.QuickPresetsLabel));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryToday));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryAllProviders));
     }
 }
