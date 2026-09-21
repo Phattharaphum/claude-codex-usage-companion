@@ -603,6 +603,83 @@ public sealed record UiText(
         _ => "Key analytical takeaways and quota velocity"
     };
 
+    public string UsageAnalysisRunwaySafe => Language switch
+    {
+        UiLanguage.TraditionalChinese => "安全",
+        UiLanguage.SimplifiedChinese => "安全",
+        _ => "Safe"
+    };
+
+    public string UsageAnalysisRunwayModerate => Language switch
+    {
+        UiLanguage.TraditionalChinese => "適中",
+        UiLanguage.SimplifiedChinese => "适中",
+        _ => "Moderate"
+    };
+
+    public string UsageAnalysisRunwayUrgent => Language switch
+    {
+        UiLanguage.TraditionalChinese => "吃緊",
+        UiLanguage.SimplifiedChinese => "吃紧",
+        _ => "Urgent"
+    };
+
+    public string UsageAnalysisRunwayStable => Language switch
+    {
+        UiLanguage.TraditionalChinese => "穩定",
+        UiLanguage.SimplifiedChinese => "稳定",
+        _ => "Stable"
+    };
+
+    public string UsageAnalysisRunwayExhausted => Language switch
+    {
+        UiLanguage.TraditionalChinese => "已耗盡",
+        UiLanguage.SimplifiedChinese => "已耗尽",
+        _ => "Exhausted"
+    };
+
+    public string UsageAnalysisRunwayNoData => Language switch
+    {
+        UiLanguage.TraditionalChinese => "無消耗數據",
+        UiLanguage.SimplifiedChinese => "无消耗数据",
+        _ => "No burn data"
+    };
+
+    public string UsageAnalysisDeltaUsed => Language switch
+    {
+        UiLanguage.TraditionalChinese => "已耗",
+        UiLanguage.SimplifiedChinese => "已耗",
+        _ => "used"
+    };
+
+    public string UsageAnalysisDeltaRestored => Language switch
+    {
+        UiLanguage.TraditionalChinese => "補充",
+        UiLanguage.SimplifiedChinese => "补充",
+        _ => "restored"
+    };
+
+    public string UsageAnalysisDeltaUnchanged => Language switch
+    {
+        UiLanguage.TraditionalChinese => "無變動",
+        UiLanguage.SimplifiedChinese => "无变动",
+        _ => "unchanged"
+    };
+
+    public string UsageAnalysisCycleReset => Language switch
+    {
+        UiLanguage.TraditionalChinese => "週期重置",
+        UiLanguage.SimplifiedChinese => "周期重置",
+        _ => "cycle reset"
+    };
+
+    public string UsageAnalysisIndefinite => Language switch
+    {
+        UiLanguage.TraditionalChinese => "無限（每小時 0%）",
+        UiLanguage.SimplifiedChinese => "无限（每小时 0%）",
+        _ => "Indefinite (0% / hr)"
+    };
+
     public string FormatUsageHistoryCount(int count, int visibleLimit) => Language switch
     {
         UiLanguage.TraditionalChinese =>

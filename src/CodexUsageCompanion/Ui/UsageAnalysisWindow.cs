@@ -349,22 +349,47 @@ public sealed class UsageAnalysisWindow : Window
         };
         AddShadow(hero, 18, 4);
 
-        var cards = new WrapPanel { Orientation = Orientation.Horizontal };
-        cards.Children.Add(MetricCard(
-            L("5hr : week rate", "5 小時：每週比率", "5 小时：每周比率"), ratio,
-            L("Consumed quota ratio", "已用額度比率", "已用额度比率"), _palette.Blue));
-        cards.Children.Add(MetricCard(
-            L("Observed span", "觀察時間", "观察时间"), FormatDuration(_summary.ObservedDuration),
+        var metricGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*,*,*"),
+            ColumnSpacing = 10
+        };
+
+        var rateCard = MetricCard(
+            L("5hr : week rate", "5 小時：每週比率", "5 小时：每周比率"),
+            ratio,
+            L("Consumed quota ratio", "已用額度比率", "已用额度比率"),
+            _palette.Blue,
+            "M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z");
+        Grid.SetColumn(rateCard, 0);
+        metricGrid.Children.Add(rateCard);
+
+        var spanCard = MetricCard(
+            L("Observed span", "觀察時間", "观察时间"),
+            FormatDuration(_summary.ObservedDuration),
             L($"{_summary.RecordCount:#,##0} valid samples", $"{_summary.RecordCount:#,##0} 筆有效樣本", $"{_summary.RecordCount:#,##0} 条有效样本"),
-            _palette.Green));
-        cards.Children.Add(MetricCard(
-            L("5-hour consumed", "5 小時用量", "5 小时用量"), FormatPercent(_summary.FiveHour.ConsumedPercent),
+            _palette.Green,
+            "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm.5-13H11v6l5.2 3.1.8-1.3-4.5-2.7z");
+        Grid.SetColumn(spanCard, 1);
+        metricGrid.Children.Add(spanCard);
+
+        var fiveHourCard = MetricCard(
+            L("5-hour consumed", "5 小時用量", "5 小时用量"),
+            FormatPercent(_summary.FiveHour.ConsumedPercent),
             L($"{_summary.FiveHour.ConsumptionPerHour:0.##}% per hour", $"每小時 {_summary.FiveHour.ConsumptionPerHour:0.##}%", $"每小时 {_summary.FiveHour.ConsumptionPerHour:0.##}%"),
-            _palette.Orange));
-        cards.Children.Add(MetricCard(
-            L("Weekly consumed", "每週用量", "每周用量"), FormatPercent(_summary.Weekly.ConsumedPercent),
+            _palette.Orange,
+            "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z");
+        Grid.SetColumn(fiveHourCard, 2);
+        metricGrid.Children.Add(fiveHourCard);
+
+        var weeklyMetricCard = MetricCard(
+            L("Weekly consumed", "每週用量", "每周用量"),
+            FormatPercent(_summary.Weekly.ConsumedPercent),
             L($"{_summary.Weekly.ConsumptionPerHour:0.##}% per hour", $"每小時 {_summary.Weekly.ConsumptionPerHour:0.##}%", $"每小时 {_summary.Weekly.ConsumptionPerHour:0.##}%"),
-            _palette.Purple));
+            _palette.Purple,
+            "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z");
+        Grid.SetColumn(weeklyMetricCard, 3);
+        metricGrid.Children.Add(weeklyMetricCard);
 
         var detailGrid = new Grid
         {
@@ -442,7 +467,7 @@ public sealed class UsageAnalysisWindow : Window
                 SectionHeading(
                     L("Key metrics", "主要指標", "主要指标"),
                     L("A concise view of consumption in the selected period", "所選期間的用量摘要", "所选期间的用量摘要")),
-                cards,
+                metricGrid,
                 InsightCard(),
                 SectionHeading(
                     L("Quota detail", "額度明細", "额度明细"),
@@ -917,9 +942,200 @@ public sealed class UsageAnalysisWindow : Window
 
     private Control WindowDetailCard(UsageWindowMetrics metrics, string title, string badge, string accent)
     {
-        var projected = metrics.LastRemainingPercent is int remaining && metrics.ConsumptionPerHour > 0
-            ? FormatDuration(TimeSpan.FromHours(remaining / metrics.ConsumptionPerHour))
-            : "—";
+        var runwayHours = metrics.LastRemainingPercent is int remaining && metrics.ConsumptionPerHour > 0
+            ? remaining / metrics.ConsumptionPerHour
+            : (double?)null;
+
+        string projectedText = runwayHours is not null
+            ? FormatDuration(TimeSpan.FromHours(runwayHours.Value))
+            : (metrics.ConsumptionPerHour <= 0 && metrics.LastRemainingPercent is not null && metrics.LastRemainingPercent > 0
+                ? _text.UsageAnalysisIndefinite
+                : "—");
+
+        (string runwayStatusText, string runwayStatusColor) = runwayHours switch
+        {
+            null when metrics.LastRemainingPercent == 0 =>
+                (_text.UsageAnalysisRunwayExhausted, _palette.Error),
+            null when metrics.ConsumptionPerHour <= 0 && metrics.LastRemainingPercent > 0 =>
+                (_text.UsageAnalysisRunwayStable, _isLightTheme ? "#0F8A5F" : "#4AD894"),
+            null =>
+                (_text.UsageAnalysisRunwayNoData, _palette.Secondary),
+            >= 12 =>
+                (_text.UsageAnalysisRunwaySafe, _isLightTheme ? "#0F8A5F" : "#4AD894"),
+            >= 4 =>
+                (_text.UsageAnalysisRunwayModerate, _isLightTheme ? "#D97706" : "#FBBF24"),
+            _ =>
+                (_text.UsageAnalysisRunwayUrgent, _palette.Error)
+        };
+
+        var runwayStatusBadge = new Border
+        {
+            Background = Tint(runwayStatusColor, _isLightTheme ? (byte)22 : (byte)36),
+            BorderBrush = Tint(runwayStatusColor, _isLightTheme ? (byte)70 : (byte)110),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    new Border
+                    {
+                        Width = 5,
+                        Height = 5,
+                        CornerRadius = new CornerRadius(2.5),
+                        Background = Brush(runwayStatusColor),
+                        VerticalAlignment = VerticalAlignment.Center
+                    },
+                    new TextBlock
+                    {
+                        Text = runwayStatusText,
+                        FontSize = 9.5,
+                        FontWeight = FontWeight.Bold,
+                        Foreground = Brush(runwayStatusColor),
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                }
+            }
+        };
+
+        var runwayValuePanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 7,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = projectedText,
+                    FontSize = 11,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = Brush(_palette.Primary),
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                runwayStatusBadge
+            }
+        };
+
+        int? first = metrics.FirstRemainingPercent;
+        int? last = metrics.LastRemainingPercent;
+        string rangeText = $"{Percent(first)} → {Percent(last)}";
+
+        Control startLatestValue;
+        if (first is not null && last is not null)
+        {
+            int delta = last.Value - first.Value;
+            string deltaText;
+            string deltaColor;
+
+            if (delta < 0)
+            {
+                deltaText = $"↓ {Math.Abs(delta)}% {_text.UsageAnalysisDeltaUsed}";
+                deltaColor = Math.Abs(delta) >= 20 ? _palette.Error : (_isLightTheme ? "#D97706" : "#FBBF24");
+            }
+            else if (delta > 0)
+            {
+                deltaText = $"↑ +{delta}% {_text.UsageAnalysisDeltaRestored}";
+                deltaColor = _isLightTheme ? "#0F8A5F" : "#4AD894";
+            }
+            else
+            {
+                deltaText = $"— {_text.UsageAnalysisDeltaUnchanged}";
+                deltaColor = _palette.Secondary;
+            }
+
+            var deltaBadge = new Border
+            {
+                Background = Tint(deltaColor, _isLightTheme ? (byte)20 : (byte)32),
+                BorderBrush = Tint(deltaColor, _isLightTheme ? (byte)60 : (byte)95),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(5, 1.5),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = deltaText,
+                    FontSize = 9,
+                    FontWeight = FontWeight.Bold,
+                    Foreground = Brush(deltaColor),
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+
+            startLatestValue = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = rangeText,
+                        FontSize = 11,
+                        FontWeight = FontWeight.SemiBold,
+                        Foreground = Brush(_palette.Primary),
+                        VerticalAlignment = VerticalAlignment.Center
+                    },
+                    deltaBadge
+                }
+            };
+        }
+        else
+        {
+            startLatestValue = new TextBlock
+            {
+                Text = rangeText,
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = Brush(_palette.Primary),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        var resetsValue = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = metrics.ResetCount.ToString(CultureInfo.CurrentCulture),
+                    FontSize = 11,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = Brush(metrics.ResetCount > 0 ? accent : _palette.Primary),
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
+        if (metrics.ResetCount > 0)
+        {
+            resetsValue.Children.Add(new Border
+            {
+                Background = Tint(accent, _isLightTheme ? (byte)20 : (byte)32),
+                BorderBrush = Tint(accent, _isLightTheme ? (byte)60 : (byte)95),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(5, 1.5),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new TextBlock
+                {
+                    Text = _text.UsageAnalysisCycleReset,
+                    FontSize = 8.5,
+                    FontWeight = FontWeight.Bold,
+                    Foreground = Brush(accent),
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            });
+        }
+
         var badgeControl = new Border
         {
             Background = Tint(accent, _isLightTheme ? (byte)24 : (byte)38),
@@ -986,9 +1202,9 @@ public sealed class UsageAnalysisWindow : Window
                 new Border { Height = 1, Background = Brush(_palette.Border) },
                 average,
                 Progress(metrics.AverageRemainingPercent, accent),
-                DetailRow(L("Start → latest", "開始 → 最新", "开始 → 最新"), $"{Percent(metrics.FirstRemainingPercent)} → {Percent(metrics.LastRemainingPercent)}"),
-                DetailRow(L("Detected resets", "偵測到重置", "检测到重置"), metrics.ResetCount.ToString(CultureInfo.CurrentCulture)),
-                DetailRow(L("Projected runway", "預估可用時間", "预计可用时间"), projected)
+                DetailRow(L("Start → latest", "開始 → 最新", "开始 → 最新"), startLatestValue),
+                DetailRow(L("Detected resets", "偵測到重置", "检测到重置"), resetsValue),
+                DetailRow(L("Projected runway", "預估可用時間", "预计可用时间"), runwayValuePanel)
             }
         };
         var card = Card(content, 14, new Thickness(15, 13));
@@ -1105,72 +1321,140 @@ public sealed class UsageAnalysisWindow : Window
         }
     };
 
-    private Border MetricCard(string label, string value, string detail, string accent)
+    private Border MetricCard(string label, string value, string detail, string accent, string iconGeometry)
     {
+        var labelText = new TextBlock
+        {
+            Text = label.ToUpperInvariant(),
+            FontSize = 9.5,
+            FontWeight = FontWeight.Bold,
+            LetterSpacing = 0.4,
+            Foreground = Brush(_palette.Secondary),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var iconPath = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(iconGeometry),
+            Width = 13,
+            Height = 13,
+            Stretch = Stretch.Uniform,
+            Fill = Brush(accent),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var iconBadge = new Border
+        {
+            Width = 26,
+            Height = 26,
+            CornerRadius = new CornerRadius(8),
+            Background = Tint(accent, _isLightTheme ? (byte)24 : (byte)38),
+            BorderBrush = Tint(accent, _isLightTheme ? (byte)80 : (byte)120),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Child = iconPath
+        };
+
+        var headerGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Children = { labelText, iconBadge }
+        };
+        Grid.SetColumn(iconBadge, 1);
+
+        var valueText = new TextBlock
+        {
+            Text = value,
+            FontSize = 22,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush(_palette.Primary),
+            Margin = new Thickness(0, 2, 0, 4),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+
+        var detailDot = new Border
+        {
+            Width = 5,
+            Height = 5,
+            CornerRadius = new CornerRadius(2.5),
+            Background = Brush(accent),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var detailText = new TextBlock
+        {
+            Text = detail,
+            FontSize = 9.5,
+            FontWeight = FontWeight.Medium,
+            Foreground = Brush(_palette.Secondary),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var detailPill = new Border
+        {
+            Background = Tint(accent, _isLightTheme ? (byte)16 : (byte)26),
+            BorderBrush = Tint(accent, _isLightTheme ? (byte)50 : (byte)75),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(6, 2.5),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { detailDot, detailText }
+            }
+        };
+
         var card = Card(
             new StackPanel
             {
-                Spacing = 4,
-                Children =
-                {
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 7,
-                        Children =
-                        {
-                            new Border
-                            {
-                                Width = 8,
-                                Height = 8,
-                                CornerRadius = new CornerRadius(4),
-                                Background = Brush(accent),
-                                VerticalAlignment = VerticalAlignment.Center
-                            },
-                            new TextBlock
-                            {
-                                Text = label.ToUpperInvariant(),
-                                FontSize = 9.5,
-                                FontWeight = FontWeight.Bold,
-                                LetterSpacing = 0.35,
-                                Foreground = Brush(_palette.Secondary),
-                                TextTrimming = TextTrimming.CharacterEllipsis
-                            }
-                        }
-                    },
-                    new TextBlock
-                    {
-                        Text = value,
-                        FontSize = 22,
-                        FontWeight = FontWeight.Bold,
-                        Foreground = Brush(_palette.Primary)
-                    },
-                    new TextBlock
-                    {
-                        Text = detail,
-                        FontSize = 10,
-                        Foreground = Brush(_palette.Secondary),
-                        TextTrimming = TextTrimming.CharacterEllipsis
-                    }
-                }
+                Spacing = 2,
+                Children = { headerGrid, valueText, detailPill }
             }, 14, new Thickness(14, 12));
-        card.Width = 198;
-        card.MinHeight = 94;
-        card.Margin = new Thickness(0, 0, 9, 6);
+
+        card.MinHeight = 100;
         AddShadow(card, 10, 2);
+
+        card.PointerEntered += (_, _) =>
+        {
+            card.Background = Brush(_isLightTheme ? "#FFFFFFFF" : _palette.SurfaceHover);
+            card.BorderBrush = Tint(accent, _isLightTheme ? (byte)130 : (byte)170);
+            if (_isLightTheme)
+            {
+                card.BoxShadow = new BoxShadows(new BoxShadow
+                {
+                    Blur = 14,
+                    OffsetY = 3,
+                    Color = Color.Parse("#14000000")
+                });
+            }
+        };
+        card.PointerExited += (_, _) =>
+        {
+            card.Background = Brush(_palette.Surface);
+            card.BorderBrush = Brush(_palette.Border);
+            if (_isLightTheme)
+            {
+                card.BoxShadow = new BoxShadows(new BoxShadow
+                {
+                    Blur = 10,
+                    OffsetY = 2,
+                    Color = Color.Parse("#08000000")
+                });
+            }
+        };
+
         return card;
     }
 
-    private Control DetailRow(string label, string value)
+    private Control DetailRow(string label, Control content)
     {
-        var result = new TextBlock
-        {
-            Text = value,
-            FontSize = 11,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = Brush(_palette.Primary),
-            VerticalAlignment = VerticalAlignment.Center
-        };
         var grid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
@@ -1184,33 +1468,73 @@ public sealed class UsageAnalysisWindow : Window
                     Foreground = Brush(_palette.Secondary),
                     VerticalAlignment = VerticalAlignment.Center
                 },
-                result
+                content
             }
         };
-        Grid.SetColumn(result, 1);
+        Grid.SetColumn(content, 1);
         return grid;
     }
+
+    private Control DetailRow(string label, string value) => DetailRow(label, new TextBlock
+    {
+        Text = value,
+        FontSize = 11,
+        FontWeight = FontWeight.SemiBold,
+        Foreground = Brush(_palette.Primary),
+        VerticalAlignment = VerticalAlignment.Center
+    });
 
     private Control Progress(double value, string accent)
     {
         var fill = new Border
         {
-            Height = 6,
+            Height = 8,
             HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(3),
+            CornerRadius = new CornerRadius(4),
             Background = Brush(accent)
         };
         var track = new Border
         {
-            Height = 6,
+            Height = 8,
             Background = Brush(_palette.Track),
-            CornerRadius = new CornerRadius(3),
+            BorderBrush = Brush(_palette.Border),
+            BorderThickness = new Thickness(0.5),
+            CornerRadius = new CornerRadius(4),
             ClipToBounds = true,
             Child = fill
         };
         track.SizeChanged += (_, _) =>
             fill.Width = Math.Round(track.Bounds.Width * Math.Clamp(value, 0, 100) / 100d);
-        return track;
+
+        var scaleRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            Margin = new Thickness(1, 2, 1, 0),
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "0%",
+                    FontSize = 8.5,
+                    Foreground = Brush(_palette.Secondary),
+                    HorizontalAlignment = HorizontalAlignment.Left
+                },
+                new TextBlock
+                {
+                    Text = "100%",
+                    FontSize = 8.5,
+                    Foreground = Brush(_palette.Secondary),
+                    HorizontalAlignment = HorizontalAlignment.Right
+                }
+            }
+        };
+        Grid.SetColumn(scaleRow.Children[1], 1);
+
+        return new StackPanel
+        {
+            Spacing = 2,
+            Children = { track, scaleRow }
+        };
     }
 
     private Control SectionHeading(string title, string subtitle) => new StackPanel

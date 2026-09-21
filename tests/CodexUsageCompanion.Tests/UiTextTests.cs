@@ -726,5 +726,16 @@ public sealed class UiTextTests
         Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisQuotaBalance));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisResetRecovery));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisKeyTakeaways));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisRunwaySafe));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisRunwayModerate));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisRunwayUrgent));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisRunwayStable));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisRunwayExhausted));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisRunwayNoData));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisDeltaUsed));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisDeltaRestored));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisDeltaUnchanged));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisCycleReset));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisIndefinite));
     }
 }
