@@ -561,6 +561,48 @@ public sealed record UiText(
         _ => "Open Full Timeline"
     };
 
+    public string UsageAnalysisCopyReport => Language switch
+    {
+        UiLanguage.TraditionalChinese => "複製報告",
+        UiLanguage.SimplifiedChinese => "复制报告",
+        _ => "Copy Report"
+    };
+
+    public string UsageAnalysisReportCopied => Language switch
+    {
+        UiLanguage.TraditionalChinese => "報告已複製！",
+        UiLanguage.SimplifiedChinese => "报告已复制！",
+        _ => "Report Copied!"
+    };
+
+    public string UsageAnalysisBurnRatePace => Language switch
+    {
+        UiLanguage.TraditionalChinese => "消耗速度與步調",
+        UiLanguage.SimplifiedChinese => "消耗速度与步调",
+        _ => "Burn Rate & Pace"
+    };
+
+    public string UsageAnalysisQuotaBalance => Language switch
+    {
+        UiLanguage.TraditionalChinese => "額度消耗比率",
+        UiLanguage.SimplifiedChinese => "额度消耗比率",
+        _ => "Quota Balance"
+    };
+
+    public string UsageAnalysisResetRecovery => Language switch
+    {
+        UiLanguage.TraditionalChinese => "額度重置與補充",
+        UiLanguage.SimplifiedChinese => "额度重置与补充",
+        _ => "Replenishment & Resets"
+    };
+
+    public string UsageAnalysisKeyTakeaways => Language switch
+    {
+        UiLanguage.TraditionalChinese => "關鍵分析摘要與額度變化速率",
+        UiLanguage.SimplifiedChinese => "关键分析摘要与额度变化速率",
+        _ => "Key analytical takeaways and quota velocity"
+    };
+
     public string FormatUsageHistoryCount(int count, int visibleLimit) => Language switch
     {
         UiLanguage.TraditionalChinese =>

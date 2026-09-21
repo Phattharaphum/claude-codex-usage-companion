@@ -720,5 +720,11 @@ public sealed class UiTextTests
         Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryBurnRateHigh));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryRecentActivity));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryOpenFullTimeline));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisCopyReport));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisReportCopied));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisBurnRatePace));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisQuotaBalance));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisResetRecovery));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisKeyTakeaways));
     }
 }
