@@ -63,13 +63,16 @@ public sealed class UsageOverlayWindow : Window
     private readonly DispatcherTimer _countdownTimer;
     private Button _minimizeButton = null!;
     private ToggleButton _pinButton = null!;
-    private Button _shortcutsButton = null!;
     private Button _historyButton = null!;
-    private Button _resetEfficiencyButton = null!;
-    private Button _resetPositionButton = null!;
     private Button _settingsButton = null!;
+    private Button _moreButton = null!;
+    private Border _headerSeparator = null!;
+    private Button _resetPositionButton = null!;
     private Button _refreshButton = null!;
     private Control _refreshIcon = null!;
+    private readonly RotateTransform _refreshRotation = new();
+    private readonly DispatcherTimer _spinTimer;
+    private double _spinAngle;
     private Button _closeButton = null!;
     private string _position;
     private readonly int _margin;
@@ -149,11 +152,21 @@ public sealed class UsageOverlayWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
+        _spinTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(25)
+        };
+        _spinTimer.Tick += (_, _) =>
+        {
+            _spinAngle = (_spinAngle + 18) % 360;
+            _refreshRotation.Angle = _spinAngle;
+        };
+
         var header = CreateHeader();
-        _codexFiveHourCard = CreateCard(LimitBadge.FiveHour);
-        _codexWeeklyCard = CreateCard(LimitBadge.Week);
-        _claudeFiveHourCard = CreateCard(LimitBadge.FiveHour);
-        _claudeWeeklyCard = CreateCard(LimitBadge.Week);
+        _codexFiveHourCard = CreateCard(LimitBadge.FiveHour, "Codex");
+        _codexWeeklyCard = CreateCard(LimitBadge.Week, "Codex");
+        _claudeFiveHourCard = CreateCard(LimitBadge.FiveHour, "Claude");
+        _claudeWeeklyCard = CreateCard(LimitBadge.Week, "Claude");
         _claudeSection = CreateProviderSection(
             "Claude",
             CreateClaudeIcon,
@@ -197,7 +210,11 @@ public sealed class UsageOverlayWindow : Window
             ApplyThemePalette();
             _countdownTimer.Start();
         };
-        Closed += (_, _) => _countdownTimer.Stop();
+        Closed += (_, _) =>
+        {
+            _countdownTimer.Stop();
+            _spinTimer.Stop();
+        };
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
     }
 
@@ -282,15 +299,19 @@ public sealed class UsageOverlayWindow : Window
     public void SetLoading(bool loading)
     {
         _refreshButton.IsEnabled = !loading;
-        _refreshButton.Content = loading
-            ? new ProgressBar
+        if (loading)
+        {
+            if (!_spinTimer.IsEnabled)
             {
-                Width = 13,
-                Height = 3,
-                IsIndeterminate = true,
-                VerticalAlignment = VerticalAlignment.Center
+                _spinTimer.Start();
             }
-            : _refreshIcon;
+        }
+        else
+        {
+            _spinTimer.Stop();
+            _spinAngle = 0;
+            _refreshRotation.Angle = 0;
+        }
     }
 
     public void SetStatus(DateTimeOffset? updatedAt, string? error)
@@ -339,14 +360,14 @@ public sealed class UsageOverlayWindow : Window
             // preserve a position chosen by dragging the window.
             ApplyComputedHeight();
         }
-        ToolTip.SetTip(_minimizeButton, text.MinimizeAction);
-        UpdatePinButton();
-        ToolTip.SetTip(_shortcutsButton, text.ShortcutsAction);
+        ToolTip.SetTip(_refreshButton, $"{text.RefreshAction} (Ctrl+R)");
         ToolTip.SetTip(_historyButton, text.UsageHistoryAction);
-        ToolTip.SetTip(_resetEfficiencyButton, text.ResetEfficiencyAction);
+        ToolTip.SetTip(_settingsButton, $"{text.SettingsAction} (S)");
+        ToolTip.SetTip(_moreButton, MoreActionsTooltip());
+        _moreButton.Flyout = CreateMoreMenuFlyout();
         ToolTip.SetTip(_resetPositionButton, ResetPositionTooltip());
-        ToolTip.SetTip(_settingsButton, text.SettingsAction);
-        ToolTip.SetTip(_refreshButton, text.RefreshAction);
+        UpdatePinButton();
+        ToolTip.SetTip(_minimizeButton, text.MinimizeAction);
         ToolTip.SetTip(_closeButton, CloseTooltip());
         ApplyThemePalette();
         UpdateUsage(UsageProvider.Codex, _lastCodexState);
@@ -671,7 +692,7 @@ public sealed class UsageOverlayWindow : Window
         var badge = window.Cadence == AntigravityQuotaCadence.Weekly
             ? LimitBadge.Week
             : LimitBadge.FiveHour;
-        var card = CreateCard(badge);
+        var card = CreateCard(badge, "Gemini");
         card.Container.Margin = new Thickness(4, 0, 0, 0);
         UpdateAntigravityCard(card, window);
         _antigravityCards.Add(card);
@@ -766,9 +787,9 @@ public sealed class UsageOverlayWindow : Window
         {
             Text = _text.CombinedUsageHeaderTitle,
             Foreground = Brush("#CDD1CD"),
-            FontSize = 14,
+            FontSize = 13.5,
             FontWeight = FontWeight.Bold,
-            LetterSpacing = 0.7,
+            LetterSpacing = 0.5,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -782,15 +803,16 @@ public sealed class UsageOverlayWindow : Window
         var statusRow = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            ColumnSpacing = 5
+            ColumnSpacing = 6
         };
         Grid.SetColumn(_status, 1);
         statusRow.Children.Add(_statusDot);
         statusRow.Children.Add(_status);
         var titleArea = new StackPanel
         {
-            Spacing = 1,
-            VerticalAlignment = VerticalAlignment.Center
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand)
         };
         titleArea.Children.Add(_headerTitle);
         titleArea.Children.Add(statusRow);
@@ -805,17 +827,24 @@ public sealed class UsageOverlayWindow : Window
         };
         Grid.SetColumn(toolbar, 1);
 
-        _shortcutsButton = HeaderButton(CreateHeaderIcon(
-            "M12 2A10 10 0 1 0 12 22A10 10 0 0 0 12 2ZM13 19H11V17H13V19ZM15.07 11.25L14.17 12.17C13.45 12.9 13 13.5 13 15H11V14.5C11 13.4 11.45 12.4 12.17 11.67L13.41 10.41C13.78 10.05 14 9.55 14 9C14 7.9 13.1 7 12 7S10 7.9 10 9H8C8 6.79 9.79 5 12 5S16 6.79 16 9C16 9.88 15.64 10.68 15.07 11.25Z"), _text.ShortcutsAction);
-        _shortcutsButton.Click += (_, _) => ShortcutsRequested?.Invoke(this, EventArgs.Empty);
+        _refreshIcon = CreateHeaderIcon(
+            "M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H21V3L17.65 6.35Z");
+        _refreshIcon.RenderTransform = _refreshRotation;
+        _refreshIcon.RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative);
+        _refreshButton = HeaderButton(_refreshIcon, $"{_text.RefreshAction} (Ctrl+R)");
+        _refreshButton.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
 
         _historyButton = HeaderButton(CreateHeaderIcon(
             "M12 2A10 10 0 1 0 12 22A10 10 0 0 0 12 2ZM12 4A8 8 0 1 1 12 20A8 8 0 0 1 12 4ZM11 7H13V11.4L16.8 13.6L15.8 15.3L11 12.5V7Z"), _text.UsageHistoryAction);
         _historyButton.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
 
-        _resetEfficiencyButton = HeaderButton(CreateHeaderIcon(
-            "M11 2V12H21C21 6.48 16.52 2 11 2ZM9 4.07C4.94 4.56 2 8.03 2 12C2 16.42 5.58 20 10 20C13.97 20 17.44 17.06 17.93 13H9V4.07Z"), _text.ResetEfficiencyAction);
-        _resetEfficiencyButton.Click += (_, _) => ResetEfficiencyRequested?.Invoke(this, EventArgs.Empty);
+        _settingsButton = HeaderButton(CreateHeaderIcon(
+            "M19.43 12.98C19.47 12.66 19.5 12.34 19.5 12S19.47 11.34 19.42 11L21.54 9.35L19.54 5.89L17.05 6.89C16.55 6.5 16 6.18 15.38 5.94L15 3.29H11L10.62 5.94C10 6.18 9.45 6.5 8.95 6.89L6.46 5.89L4.46 9.35L6.58 11C6.53 11.34 6.5 11.67 6.5 12S6.53 12.66 6.58 13L4.46 14.65L6.46 18.11L8.95 17.11C9.45 17.5 10 17.82 10.62 18.06L11 20.71H15L15.38 18.06C16 17.82 16.55 17.5 17.05 17.11L19.54 18.11L21.54 14.65L19.43 12.98ZM13 15.5A3.5 3.5 0 1 1 13 8.5A3.5 3.5 0 0 1 13 15.5Z"), $"{_text.SettingsAction} (S)");
+        _settingsButton.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
+        _moreButton = HeaderButton(CreateHeaderIcon(
+            "M6 10C4.9 10 4 10.9 4 12C4 13.1 4.9 14 6 14C7.1 14 8 13.1 8 12C8 10.9 7.1 10 6 10ZM12 10C10.9 10 10 10.9 10 12C10 13.1 10.9 14 12 14C13.1 14 14 13.1 14 12C14 10.9 13.1 10 12 10ZM18 10C16.9 10 16 10.9 16 12C16 13.1 16.9 14 18 14C19.1 14 20 13.1 20 12C20 10.9 19.1 10 18 10Z"), MoreActionsTooltip());
+        _moreButton.Flyout = CreateMoreMenuFlyout();
 
         _resetPositionButton = HeaderButton(CreateHeaderIcon(
             "M11 2H13V5.08C16.61 5.53 19.47 8.39 19.92 12H23V14H19.92C19.47 17.61 16.61 20.47 13 20.92V24H11V20.92C7.39 20.47 4.53 17.61 4.08 14H1V12H4.08C4.53 8.39 7.39 5.53 11 5.08V2ZM12 7C8.69 7 6 9.69 6 13S8.69 19 12 19 18 16.31 18 13 15.31 7 12 7ZM12 10A3 3 0 1 0 12 16A3 3 0 0 0 12 10Z"), ResetPositionTooltip());
@@ -826,39 +855,36 @@ public sealed class UsageOverlayWindow : Window
             _resetPositionButton.IsVisible = false;
         };
 
+        _headerSeparator = new Border
+        {
+            Width = 1,
+            Height = 14,
+            Margin = new Thickness(3, 0, 3, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
         _pinButton = HeaderToggleButton(CreatePinIcon(), string.Empty);
         _pinButton.IsChecked = Topmost;
         _pinButton.Click += (_, _) =>
             AlwaysOnTopRequested?.Invoke(_pinButton.IsChecked == true);
         UpdatePinButton();
 
-        _settingsButton = HeaderButton(CreateHeaderIcon(
-            "M19.43 12.98C19.47 12.66 19.5 12.34 19.5 12S19.47 11.34 19.42 11L21.54 9.35L19.54 5.89L17.05 6.89C16.55 6.5 16 6.18 15.38 5.94L15 3.29H11L10.62 5.94C10 6.18 9.45 6.5 8.95 6.89L6.46 5.89L4.46 9.35L6.58 11C6.53 11.34 6.5 11.67 6.5 12S6.53 12.66 6.58 13L4.46 14.65L6.46 18.11L8.95 17.11C9.45 17.5 10 17.82 10.62 18.06L11 20.71H15L15.38 18.06C16 17.82 16.55 17.5 17.05 17.11L19.54 18.11L21.54 14.65L19.43 12.98ZM13 15.5A3.5 3.5 0 1 1 13 8.5A3.5 3.5 0 0 1 13 15.5Z"), _text.SettingsAction);
-        _settingsButton.Click += (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty);
-
-        _refreshIcon = CreateHeaderIcon(
-            "M17.65 6.35C16.2 4.9 14.21 4 12 4C7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18C8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H21V3L17.65 6.35Z");
-        _refreshButton = HeaderButton(_refreshIcon, _text.RefreshAction);
-        _refreshButton.Click += (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty);
-
         _minimizeButton = HeaderButton(CreateHeaderIcon("M4 11H20V13H4Z"), _text.MinimizeAction);
         // A real unmap works on both X11 and native Wayland.  WindowState.Minimized
         // is only advisory on Wayland and can leave a borderless overlay visible.
         _minimizeButton.Click += (_, _) => Hide();
-        // Sets the window controls apart from the panel actions before them.
-        _minimizeButton.Margin = new Thickness(HeaderGroupSpacing, 0, 0, 0);
 
         _closeButton = HeaderButton(CreateHeaderIcon(
             "M6.7 5.3L12 10.6L17.3 5.3L18.7 6.7L13.4 12L18.7 17.3L17.3 18.7L12 13.4L6.7 18.7L5.3 17.3L10.6 12L5.3 6.7Z"), CloseTooltip());
         _closeButton.Click += (_, _) => Close();
 
-        toolbar.Children.Add(_shortcutsButton);
-        toolbar.Children.Add(_historyButton);
-        toolbar.Children.Add(_resetEfficiencyButton);
-        toolbar.Children.Add(_resetPositionButton);
-        toolbar.Children.Add(_pinButton);
-        toolbar.Children.Add(_settingsButton);
         toolbar.Children.Add(_refreshButton);
+        toolbar.Children.Add(_historyButton);
+        toolbar.Children.Add(_settingsButton);
+        toolbar.Children.Add(_moreButton);
+        toolbar.Children.Add(_resetPositionButton);
+        toolbar.Children.Add(_headerSeparator);
+        toolbar.Children.Add(_pinButton);
         toolbar.Children.Add(_minimizeButton);
         toolbar.Children.Add(_closeButton);
         grid.Children.Add(toolbar);
@@ -873,14 +899,139 @@ public sealed class UsageOverlayWindow : Window
         return _headerSurface;
     }
 
+    private MenuFlyout CreateMoreMenuFlyout()
+    {
+        var flyout = new MenuFlyout();
+
+        var resetEfficiencyItem = new MenuItem
+        {
+            Header = _text.ResetEfficiencyAction,
+            Icon = CreateHeaderIcon("M11 2V12H21C21 6.48 16.52 2 11 2ZM9 4.07C4.94 4.56 2 8.03 2 12C2 16.42 5.58 20 10 20C13.97 20 17.44 17.06 17.93 13H9V4.07Z")
+        };
+        resetEfficiencyItem.Click += (_, _) => ResetEfficiencyRequested?.Invoke(this, EventArgs.Empty);
+
+        var shortcutsItem = new MenuItem
+        {
+            Header = $"{_text.ShortcutsAction} (F1)",
+            Icon = CreateHeaderIcon("M12 2A10 10 0 1 0 12 22A10 10 0 0 0 12 2ZM13 19H11V17H13V19ZM15.07 11.25L14.17 12.17C13.45 12.9 13 13.5 13 15H11V14.5C11 13.4 11.45 12.4 12.17 11.67L13.41 10.41C13.78 10.05 14 9.55 14 9C14 7.9 13.1 7 12 7S10 7.9 10 9H8C8 6.79 9.79 5 12 5S16 6.79 16 9C16 9.88 15.64 10.68 15.07 11.25Z")
+        };
+        shortcutsItem.Click += (_, _) => ShortcutsRequested?.Invoke(this, EventArgs.Empty);
+
+        var copySummaryItem = new MenuItem
+        {
+            Header = CopySummaryText(),
+            Icon = CreateHeaderIcon("M16 1H4C2.9 1 2 1.9 2 3V17H4V3H16V1ZM19 5H8C6.9 5 6 5.9 6 7V21C6 22.1 6.9 23 8 23H19C20.1 23 21 22.1 21 21V7C21 5.9 20.1 5 19 5ZM19 21H8V7H19V21Z")
+        };
+        copySummaryItem.Click += async (_, _) => await CopyUsageSummaryToClipboardAsync();
+
+        var resetPositionItem = new MenuItem
+        {
+            Header = ResetPositionTooltip(),
+            Icon = CreateHeaderIcon("M11 2H13V5.08C16.61 5.53 19.47 8.39 19.92 12H23V14H19.92C19.47 17.61 16.61 20.47 13 20.92V24H11V20.92C7.39 20.47 4.53 17.61 4.08 14H1V12H4.08C4.53 8.39 7.39 5.53 11 5.08V2ZM12 7C8.69 7 6 9.69 6 13S8.69 19 12 19 18 16.31 18 13 15.31 7 12 7ZM12 10A3 3 0 1 0 12 16A3 3 0 0 0 12 10Z")
+        };
+        resetPositionItem.Click += (_, _) =>
+        {
+            PositionOnPrimaryScreen();
+            if (_resetPositionButton is not null)
+            {
+                _resetPositionButton.IsVisible = false;
+            }
+        };
+
+        flyout.Items.Add(resetEfficiencyItem);
+        flyout.Items.Add(shortcutsItem);
+        flyout.Items.Add(copySummaryItem);
+        flyout.Items.Add(new Separator());
+        flyout.Items.Add(resetPositionItem);
+
+        return flyout;
+    }
+
+    private async Task CopyUsageSummaryToClipboardAsync()
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.Clipboard is null)
+        {
+            return;
+        }
+
+        var parts = new List<string>();
+        if (_claudeEnabled && _lastClaudeState is not null)
+        {
+            if (_lastClaudeState.FiveHour is { } f)
+            {
+                parts.Add($"Claude 5h: {f.RemainingPercent}%");
+            }
+            if (_lastClaudeState.Weekly is { } w)
+            {
+                parts.Add($"Claude Week: {w.RemainingPercent}%");
+            }
+        }
+        if (_codexEnabled && _lastCodexState is not null)
+        {
+            if (_lastCodexState.FiveHour is { } f)
+            {
+                parts.Add($"Codex 5h: {f.RemainingPercent}%");
+            }
+            if (_lastCodexState.Weekly is { } w)
+            {
+                parts.Add($"Codex Week: {w.RemainingPercent}%");
+            }
+        }
+        if (_lastUpdatedAt is { } dt)
+        {
+            parts.Add($"Updated: {dt.ToLocalTime():HH:mm}");
+        }
+
+        if (parts.Count == 0)
+        {
+            parts.Add(_text.WaitingForData);
+        }
+
+        var dataTransfer = new DataTransfer();
+        dataTransfer.Add(DataTransferItem.CreateText(string.Join(" | ", parts)));
+        await topLevel.Clipboard.SetDataAsync(dataTransfer);
+
+        _status.Text = CopiedText();
+        _status.Foreground = Brush(_palette.Green);
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            SetStatus(_lastUpdatedAt, _lastError);
+        };
+        timer.Start();
+    }
+
     private string CloseTooltip() =>
-        _trayEnabled ? _text.HideToTrayAction : _text.CloseAction;
+        _trayEnabled ? $"{_text.HideToTrayAction} (Esc)" : $"{_text.CloseAction} (Esc)";
 
     private string ResetPositionTooltip() => _text.Language switch
     {
         UiLanguage.TraditionalChinese => "重設為設定的位置",
         UiLanguage.SimplifiedChinese => "重置为设置的位置",
         _ => "Reset to configured position"
+    };
+
+    private string MoreActionsTooltip() => _text.Language switch
+    {
+        UiLanguage.TraditionalChinese => "更多選項",
+        UiLanguage.SimplifiedChinese => "更多选项",
+        _ => "More options"
+    };
+
+    private string CopySummaryText() => _text.Language switch
+    {
+        UiLanguage.TraditionalChinese => "複製用量摘要",
+        UiLanguage.SimplifiedChinese => "复制用量摘要",
+        _ => "Copy usage summary"
+    };
+
+    private string CopiedText() => _text.Language switch
+    {
+        UiLanguage.TraditionalChinese => "已複製到剪貼簿！",
+        UiLanguage.SimplifiedChinese => "已复制到剪贴板！",
+        _ => "Copied to clipboard!"
     };
 
     private static Button HeaderButton(Control content, string tooltip)
@@ -896,6 +1047,7 @@ public sealed class UsageOverlayWindow : Window
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand),
             UseLayoutRounding = true
         };
         ToolTip.SetTip(button, tooltip);
@@ -915,6 +1067,7 @@ public sealed class UsageOverlayWindow : Window
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand),
             UseLayoutRounding = true
         };
         ToolTip.SetTip(button, tooltip);
@@ -1010,7 +1163,7 @@ public sealed class UsageOverlayWindow : Window
         return icon;
     }
 
-    private static UsageCardControls CreateCard(LimitBadge badgeKind)
+    private UsageCardControls CreateCard(LimitBadge badgeKind, string providerKey)
     {
         var container = new Border
         {
@@ -1018,8 +1171,8 @@ public sealed class UsageOverlayWindow : Window
             Background = Brush("#FF353835"),
             BorderBrush = Brush("#FF4A4E4A"),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(10, 10),
+            CornerRadius = new CornerRadius(13),
+            Padding = new Thickness(12, 10),
             ClipToBounds = true
         };
         var railText = new TextBlock
@@ -1027,16 +1180,16 @@ public sealed class UsageOverlayWindow : Window
             Text = BadgeText(badgeKind),
             FontSize = 9.5,
             FontWeight = FontWeight.Bold,
-            LetterSpacing = 0.45,
+            LetterSpacing = 0.5,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
         var rail = new Border
         {
-            MinWidth = 43,
-            CornerRadius = new CornerRadius(8),
+            MinWidth = 44,
+            CornerRadius = new CornerRadius(6),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(7, 2),
+            Padding = new Thickness(6, 2),
             VerticalAlignment = VerticalAlignment.Center,
             Child = railText
         };
@@ -1051,7 +1204,7 @@ public sealed class UsageOverlayWindow : Window
         var remaining = new TextBlock
         {
             Foreground = Brush("#9CA09C"),
-            FontSize = 16,
+            FontSize = 16.5,
             FontWeight = FontWeight.Bold,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
@@ -1064,28 +1217,29 @@ public sealed class UsageOverlayWindow : Window
             FontSize = 11.5,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(9, 0, 6, 0)
+            Margin = new Thickness(10, 0, 8, 0)
         };
         Grid.SetColumn(reset, 1);
+        informationRow.Children.Add(rail);
         informationRow.Children.Add(reset);
         informationRow.Children.Add(remaining);
-        informationRow.Children.Add(rail);
         Grid.SetColumn(rail, 0);
+
         var fill = new Border
         {
             Width = 0,
-            Height = 7,
+            Height = 6,
             HorizontalAlignment = HorizontalAlignment.Left,
-            CornerRadius = new CornerRadius(3.5)
+            CornerRadius = new CornerRadius(3)
         };
         var bar = new Border
         {
-            Height = 7,
-            Background = Brush("#FF4A4D49"),
-            CornerRadius = new CornerRadius(3.5),
+            Height = 6,
+            Background = Brush("#FF1E211E"),
+            CornerRadius = new CornerRadius(3),
             ClipToBounds = true,
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(0, 7, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Child = fill
         };
 
@@ -1093,6 +1247,7 @@ public sealed class UsageOverlayWindow : Window
         content.Children.Add(informationRow);
         content.Children.Add(bar);
         container.Child = content;
+
         var card = new UsageCardControls(
             container,
             rail,
@@ -1101,7 +1256,20 @@ public sealed class UsageOverlayWindow : Window
             remaining,
             reset,
             bar,
-            fill);
+            fill,
+            providerKey);
+
+        container.PointerEntered += (_, _) =>
+        {
+            card.IsHovered = true;
+            ApplyCardTheme(card);
+        };
+        container.PointerExited += (_, _) =>
+        {
+            card.IsHovered = false;
+            ApplyCardTheme(card);
+        };
+
         bar.SizeChanged += (_, _) => UpdateProgressWidth(card);
         return card;
     }
@@ -1117,7 +1285,7 @@ public sealed class UsageOverlayWindow : Window
         card.Container.Height = targetHeight;
         if (state is null)
         {
-            card.Container.Padding = new Thickness(10, 10);
+            card.Container.Padding = new Thickness(12, 10);
             card.BadgeText.Text = dataAvailable
                 ? BadgeText(card.BadgeKind)
                 : "…";
@@ -1128,7 +1296,7 @@ public sealed class UsageOverlayWindow : Window
             return;
         }
 
-        card.Container.Padding = new Thickness(10, 8);
+        card.Container.Padding = new Thickness(12, 8);
         card.ProgressTrack.IsVisible = true;
         card.BadgeText.Text = BadgeText(card.BadgeKind);
         card.Remaining.Text = FormatPercent(state.RemainingPercent);
@@ -1145,7 +1313,7 @@ public sealed class UsageOverlayWindow : Window
         AntigravityQuotaWindowState window)
     {
         card.Container.Height = AntigravityWindowCardHeight;
-        card.Container.Padding = new Thickness(10, 8);
+        card.Container.Padding = new Thickness(12, 8);
         card.ProgressTrack.IsVisible = true;
         card.Remaining.Text = FormatPercent(window.RemainingPercent);
         card.Reset.Text = window.ResetAt is { } resetAt
@@ -1163,12 +1331,58 @@ public sealed class UsageOverlayWindow : Window
 
     private void ApplyBar(UsageCardControls card, int remainingPercent, UsageSignal signal)
     {
-        var color = SignalBrush(signal);
         card.RemainingPercent = Math.Clamp(remainingPercent, 0, 100);
-        card.Remaining.Foreground = color;
-        card.ProgressFill.Background = color;
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
+        card.Remaining.Foreground = SignalBrush(signal);
+        card.ProgressFill.Background = CreateSignalGradient(signal, isLight);
         UpdateProgressWidth(card);
+        ApplyCardTheme(card);
     }
+
+    private static IBrush CreateSignalGradient(UsageSignal signal, bool isLight)
+    {
+        var (start, end) = signal switch
+        {
+            UsageSignal.Green => isLight
+                ? (Color.Parse("#10B981"), Color.Parse("#059669"))
+                : (Color.Parse("#34D399"), Color.Parse("#10B981")),
+            UsageSignal.Yellow => isLight
+                ? (Color.Parse("#F59E0B"), Color.Parse("#D97706"))
+                : (Color.Parse("#FCD34D"), Color.Parse("#F59E0B")),
+            UsageSignal.Orange => isLight
+                ? (Color.Parse("#F97316"), Color.Parse("#C2410C"))
+                : (Color.Parse("#FB923C"), Color.Parse("#EA580C")),
+            UsageSignal.Red => isLight
+                ? (Color.Parse("#EF4444"), Color.Parse("#B91C1C"))
+                : (Color.Parse("#F87171"), Color.Parse("#DC2626")),
+            _ => isLight
+                ? (Color.Parse("#9CA3AF"), Color.Parse("#6B7280"))
+                : (Color.Parse("#6B7280"), Color.Parse("#4B5563"))
+        };
+
+        return new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(start, 0),
+                new GradientStop(end, 1)
+            }
+        };
+    }
+
+    private static LinearGradientBrush CreateVerticalGradient(string startColor, string endColor) =>
+        new()
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.Parse(startColor), 0),
+                new GradientStop(Color.Parse(endColor), 1)
+            }
+        };
 
     private static string FormatPercent(int percent) => $"{Math.Clamp(percent, 0, 100)}%";
 
@@ -1242,6 +1456,7 @@ public sealed class UsageOverlayWindow : Window
         _headerTitle.Foreground = Brush(_palette.HeaderForeground);
         _headerSurface.Background = Brush(isLight ? "#FFF5F7F5" : "#FF202321");
         _headerSurface.BorderBrush = Brush(isLight ? "#FFE0E5DF" : "#FF3B403C");
+        _headerSeparator.Background = Brush(isLight ? "#FFDCE2DC" : "#FF3B403C");
         foreach (var button in HeaderButtons())
         {
             button.Background = Brush(isLight ? "#FFFFFFFF" : "#FF2C302D");
@@ -1308,22 +1523,71 @@ public sealed class UsageOverlayWindow : Window
     private void ApplyCardTheme(UsageCardControls card)
     {
         var isLight = ActualThemeVariant == ThemeVariant.Light;
-        card.Container.Background = Brush(_palette.CardBackground);
-        card.Container.BorderBrush = Brush(_palette.CardBorder);
-        card.Container.BoxShadow = isLight
-            ? new BoxShadows(new BoxShadow
+        var isCritical = card.RemainingPercent > 0 && card.RemainingPercent <= 20;
+
+        if (isLight)
+        {
+            var (bgStart, bgEnd, borderNormal, borderHover) = card.ProviderKey switch
             {
-                Blur = 8,
-                OffsetY = 2,
-                Color = Color.Parse("#12000000")
-            })
-            : default;
+                "Claude" => ("#FFFFFAF7", "#FFFBF3ED", "#FFEADCD5", "#FFDEC6BA"),
+                "Codex" => ("#FFF7FCF9", "#FFEFF8F3", "#FFD3E8DC", "#FFAFD5C1"),
+                "Gemini" => ("#FFF8F9FE", "#FFF0F3FD", "#FFD8DEF6", "#FFBAC4EF"),
+                _ => ("#FFFFFFFF", "#FFF8F9F8", "#FFD4D9D3", "#FFB5BCB4")
+            };
+
+            card.Container.Background = CreateVerticalGradient(bgStart, bgEnd);
+            card.Container.BorderBrush = Brush(isCritical
+                ? "#FFEF4444"
+                : card.IsHovered ? borderHover : borderNormal);
+
+            card.Container.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Blur = card.IsHovered ? 12 : 8,
+                OffsetY = card.IsHovered ? 3 : 2,
+                Color = isCritical
+                    ? Color.Parse("#20EF4444")
+                    : Color.Parse("#12000000")
+            });
+            card.ProgressTrack.Background = Brush("#FFE8ECE8");
+        }
+        else
+        {
+            var (bgStart, bgEnd, borderNormal, borderHover) = card.ProviderKey switch
+            {
+                "Claude" => ("#FF332A26", "#FF28211E", "#FF52382F", "#FF7C5243"),
+                "Codex" => ("#FF223329", "#FF1B2821", "#FF2E5040", "#FF43755E"),
+                "Gemini" => ("#FF242938", "#FF1D212E", "#FF364463", "#FF4F6494"),
+                _ => ("#FF353835", "#FF2A2D2A", "#FF4A4E4A", "#FF636863")
+            };
+
+            card.Container.Background = CreateVerticalGradient(bgStart, bgEnd);
+            card.Container.BorderBrush = Brush(isCritical
+                ? "#FFFF6666"
+                : card.IsHovered ? borderHover : borderNormal);
+
+            card.Container.BoxShadow = isCritical
+                ? new BoxShadows(new BoxShadow
+                {
+                    Blur = 10,
+                    OffsetY = 2,
+                    Color = Color.Parse("#40FF6666")
+                })
+                : card.IsHovered
+                    ? new BoxShadows(new BoxShadow
+                    {
+                        Blur = 10,
+                        OffsetY = 2,
+                        Color = Color.Parse("#25000000")
+                    })
+                    : default;
+            card.ProgressTrack.Background = Brush("#FF1E211E");
+        }
+
         var badgeColors = BadgeColors(card.BadgeKind, isLight);
         card.Badge.Background = Brush(badgeColors.Background);
         card.Badge.BorderBrush = Brush(badgeColors.Border);
         card.BadgeText.Foreground = Brush(badgeColors.Foreground);
         card.Reset.Foreground = Brush(_palette.SecondaryText);
-        card.ProgressTrack.Background = Brush(_palette.EmptyCell);
     }
 
     private static BadgePalette BadgeColors(LimitBadge badgeKind, bool isLight) =>
@@ -1337,13 +1601,12 @@ public sealed class UsageOverlayWindow : Window
 
     private IEnumerable<Button> HeaderButtons()
     {
-        yield return _shortcutsButton;
+        yield return _refreshButton;
         yield return _historyButton;
-        yield return _resetEfficiencyButton;
+        yield return _settingsButton;
+        yield return _moreButton;
         yield return _resetPositionButton;
         yield return _pinButton;
-        yield return _settingsButton;
-        yield return _refreshButton;
         yield return _minimizeButton;
         yield return _closeButton;
     }
@@ -1375,8 +1638,10 @@ public sealed class UsageOverlayWindow : Window
         TextBlock Remaining,
         TextBlock Reset,
         Border ProgressTrack,
-        Border ProgressFill)
+        Border ProgressFill,
+        string ProviderKey)
     {
         public int RemainingPercent { get; set; }
+        public bool IsHovered { get; set; }
     }
 }
