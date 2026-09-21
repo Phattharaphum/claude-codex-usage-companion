@@ -22,7 +22,7 @@ public sealed class UsageHistoryWindow : Window
     private readonly CompanionSettings _settings;
     private readonly UiText _text;
     private readonly UsageHistoryReader _reader;
-    private readonly WrapPanel _summaryCards = new() { Orientation = Orientation.Horizontal };
+    private readonly Grid _summaryGrid = new() { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*"), ColumnSpacing = 10 };
     private readonly WrapPanel _providerFilters = new() { Orientation = Orientation.Horizontal };
     private readonly TextBlock _subtitle = new();
     private readonly TextBlock _periodLabel = new();
@@ -585,13 +585,6 @@ public sealed class UsageHistoryWindow : Window
         };
 
         var overviewHeading = SectionHeading(text.UsageHistorySummaryTitle, text.UsageHistorySummarySubtitle);
-        var summaryScroll = new ScrollViewer
-        {
-            MinHeight = 100,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = _summaryCards
-        };
 
         var chartControls = new StackPanel
         {
@@ -648,7 +641,7 @@ public sealed class UsageHistoryWindow : Window
                 _headerCard,
                 _filterCard,
                 overviewHeading,
-                summaryScroll,
+                _summaryGrid,
                 _chartSection,
                 _message,
                 _timelineCard
@@ -820,34 +813,66 @@ public sealed class UsageHistoryWindow : Window
 
     private void UpdateSummary(IReadOnlyList<UsageHistoryEntry> entries)
     {
-        _summaryCards.Children.Clear();
+        _summaryGrid.Children.Clear();
         var summary = UsageHistoryAnalytics.Summarize(entries);
         var resets = UsageHistoryAnalytics.FindResetEvents(entries).Count;
-        _summaryCards.Children.Add(SummaryCard(
+
+        // Card 1: Samples
+        var samplesCard = CreateKpiCard(
             _text.UsageHistorySamples,
             summary.RecordCount.ToString(CultureInfo.CurrentCulture),
             _text.FormatUsageHistoryProviders(summary.ProviderCount),
-            _isLightTheme ? "#0F8A5F" : "#4AD894"));
-        _summaryCards.Children.Add(SummaryCard(
+            _isLightTheme ? "#0F8A5F" : "#4AD894",
+            "M4 9h4v11H4zm6-5h4v16h-4zm6 8h4v8h-4z",
+            statusColor: _isLightTheme ? "#0F8A5F" : "#4AD894");
+        Grid.SetColumn(samplesCard, 0);
+        _summaryGrid.Children.Add(samplesCard);
+
+        // Card 2: Observed Time
+        var observedCard = CreateKpiCard(
             _text.UsageHistoryObservedTime,
             FormatDuration(summary.ObservedDuration),
             _text.UsageHistoryDataCoverage,
-            _isLightTheme ? "#4E6FAE" : "#83A9F2"));
-        _summaryCards.Children.Add(SummaryCard(
+            _isLightTheme ? "#4E6FAE" : "#83A9F2",
+            "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm.5-13H11v6l5.2 3.1.8-1.3-4.5-2.7z",
+            statusColor: _isLightTheme ? "#4E6FAE" : "#83A9F2");
+        Grid.SetColumn(observedCard, 1);
+        _summaryGrid.Children.Add(observedCard);
+
+        // Card 3: 5-Hour Consumed
+        var (fiveHourStatusText, fiveHourStatusColor) = FormatFiveHourBurnRateStatus(summary.FiveHour.ConsumptionPerHour);
+        var fiveHourCard = CreateKpiCard(
             _text.UsageHistoryFiveHourConsumed,
             FormatPercent(summary.FiveHour.ConsumedPercent),
-            _text.FormatUsageHistoryBurnRate(summary.FiveHour.ConsumptionPerHour),
-            _isLightTheme ? "#D46A45" : "#F08A66"));
-        _summaryCards.Children.Add(SummaryCard(
+            fiveHourStatusText,
+            _isLightTheme ? "#D46A45" : "#F08A66",
+            "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z",
+            statusColor: fiveHourStatusColor);
+        Grid.SetColumn(fiveHourCard, 2);
+        _summaryGrid.Children.Add(fiveHourCard);
+
+        // Card 4: Weekly Consumed
+        var (weeklyStatusText, weeklyStatusColor) = FormatWeeklyBurnRateStatus(summary.Weekly.ConsumptionPerHour);
+        var weeklyCard = CreateKpiCard(
             _text.UsageHistoryWeeklyConsumed,
             FormatPercent(summary.Weekly.ConsumedPercent),
-            _text.FormatUsageHistoryBurnRate(summary.Weekly.ConsumptionPerHour),
-            _isLightTheme ? "#8A5CD7" : "#C38AF0"));
-        _summaryCards.Children.Add(SummaryCard(
+            weeklyStatusText,
+            _isLightTheme ? "#8A5CD7" : "#C38AF0",
+            "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
+            statusColor: weeklyStatusColor);
+        Grid.SetColumn(weeklyCard, 3);
+        _summaryGrid.Children.Add(weeklyCard);
+
+        // Card 5: Resets Detected
+        var resetsCard = CreateKpiCard(
             _text.UsageHistoryResetsDetected,
             resets.ToString(CultureInfo.CurrentCulture),
             _text.UsageHistoryResetMarkersHint,
-            _isLightTheme ? "#D97706" : "#FFAD55"));
+            _isLightTheme ? "#D97706" : "#FFAD55",
+            "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
+            statusColor: _isLightTheme ? "#D97706" : "#FFAD55");
+        Grid.SetColumn(resetsCard, 4);
+        _summaryGrid.Children.Add(resetsCard);
     }
 
     private void UpdateTimeline(
@@ -1162,75 +1187,202 @@ public sealed class UsageHistoryWindow : Window
         return grid;
     }
 
-    private Border SummaryCard(string label, string value, string detail, string accent)
+    private Border CreateKpiCard(
+        string label,
+        string value,
+        string detail,
+        string accent,
+        string iconGeometry,
+        string statusColor)
     {
         var card = new Border
         {
-            Width = 198,
-            MinHeight = 92,
+            MinHeight = 104,
             Background = Brush(_palette.Surface),
             BorderBrush = Brush(_palette.Border),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(14, 12),
-            Margin = new Thickness(0, 0, 9, 6)
+            Padding = new Thickness(14, 12)
         };
+
         if (_isLightTheme)
         {
             card.BoxShadow = new BoxShadows(new BoxShadow
             {
-                Blur = 10,
+                Blur = 8,
                 OffsetY = 2,
-                Color = Color.Parse("#10000000")
+                Color = Color.Parse("#0D000000")
             });
         }
-        card.Child = new StackPanel
+
+        // Header Row: Left = Label, Right = Icon Badge
+        var labelText = new TextBlock
         {
-            Spacing = 3,
-            Children =
+            Text = label.ToUpperInvariant(),
+            FontSize = 9.5,
+            FontWeight = FontWeight.Bold,
+            LetterSpacing = 0.4,
+            Foreground = Brush(_palette.Secondary),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var iconPath = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(iconGeometry),
+            Width = 12,
+            Height = 12,
+            Stretch = Stretch.Uniform,
+            Fill = Brush(accent),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var iconBadge = new Border
+        {
+            Width = 26,
+            Height = 26,
+            CornerRadius = new CornerRadius(8),
+            Background = Tint(accent, _isLightTheme ? (byte)32 : (byte)45),
+            BorderBrush = Tint(accent, _isLightTheme ? (byte)90 : (byte)120),
+            BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Child = iconPath
+        };
+
+        var headerGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Children = { labelText, iconBadge }
+        };
+        Grid.SetColumn(iconBadge, 1);
+
+        // Value Row
+        var valueText = new TextBlock
+        {
+            Text = value,
+            FontSize = 22,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush(_palette.Primary),
+            Margin = new Thickness(0, 4, 0, 5),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+
+        // Status / Detail Pill Badge
+        var statusDot = new Border
+        {
+            Width = 6,
+            Height = 6,
+            CornerRadius = new CornerRadius(3),
+            Background = Brush(statusColor),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var detailText = new TextBlock
+        {
+            Text = detail,
+            FontSize = 10,
+            FontWeight = FontWeight.Medium,
+            Foreground = Brush(statusColor),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var statusPill = new Border
+        {
+            Height = 22,
+            Padding = new Thickness(7, 0),
+            CornerRadius = new CornerRadius(6),
+            Background = Tint(statusColor, _isLightTheme ? (byte)22 : (byte)35),
+            BorderBrush = Tint(statusColor, _isLightTheme ? (byte)60 : (byte)80),
+            BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = new StackPanel
             {
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 7,
-                    Children =
-                    {
-                        new Border
-                        {
-                            Width = 8,
-                            Height = 8,
-                            CornerRadius = new CornerRadius(4),
-                            Background = Brush(accent),
-                            VerticalAlignment = VerticalAlignment.Center
-                        },
-                        new TextBlock
-                        {
-                            Text = label.ToUpperInvariant(),
-                            FontSize = 9.5,
-                            FontWeight = FontWeight.Bold,
-                            LetterSpacing = 0.35,
-                            Foreground = Brush(_palette.Secondary),
-                            TextTrimming = TextTrimming.CharacterEllipsis
-                        }
-                    }
-                },
-                new TextBlock
-                {
-                    Text = value,
-                    FontSize = 22,
-                    FontWeight = FontWeight.Bold,
-                    Foreground = Brush(_palette.Primary)
-                },
-                new TextBlock
-                {
-                    Text = detail,
-                    FontSize = 10,
-                    Foreground = Brush(_palette.Secondary),
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                }
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { statusDot, detailText }
             }
         };
+
+        card.Child = new StackPanel
+        {
+            Spacing = 2,
+            Children = { headerGrid, valueText, statusPill }
+        };
+
+        // Hover micro-interaction
+        card.PointerEntered += (_, _) =>
+        {
+            card.Background = Brush(_isLightTheme ? "#FFFFFFFF" : _palette.Soft);
+            card.BorderBrush = Tint(accent, _isLightTheme ? (byte)140 : (byte)180);
+            if (_isLightTheme)
+            {
+                card.BoxShadow = new BoxShadows(new BoxShadow
+                {
+                    Blur = 14,
+                    OffsetY = 4,
+                    Color = Color.Parse("#18000000")
+                });
+            }
+        };
+
+        card.PointerExited += (_, _) =>
+        {
+            card.Background = Brush(_palette.Surface);
+            card.BorderBrush = Brush(_palette.Border);
+            if (_isLightTheme)
+            {
+                card.BoxShadow = new BoxShadows(new BoxShadow
+                {
+                    Blur = 8,
+                    OffsetY = 2,
+                    Color = Color.Parse("#0D000000")
+                });
+            }
+            else
+            {
+                card.BoxShadow = default;
+            }
+        };
+
         return card;
+    }
+
+    private (string Text, string Color) FormatFiveHourBurnRateStatus(double rate)
+    {
+        if (rate <= 0)
+        {
+            return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", _isLightTheme ? "#64748B" : "#94A3B8");
+        }
+        if (rate < 2.0)
+        {
+            return ($"{rate:0.#}%/h • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
+        }
+        if (rate < 8.0)
+        {
+            return ($"{rate:0.#}%/h • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
+        }
+        return ($"{rate:0.#}%/h • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
+    }
+
+    private (string Text, string Color) FormatWeeklyBurnRateStatus(double rate)
+    {
+        if (rate <= 0)
+        {
+            return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", _isLightTheme ? "#64748B" : "#94A3B8");
+        }
+        if (rate < 0.6)
+        {
+            return ($"{rate:0.##}%/h • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
+        }
+        if (rate < 1.8)
+        {
+            return ($"{rate:0.##}%/h • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
+        }
+        return ($"{rate:0.##}%/h • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
     }
 
     private void ApplyVisualTheme()

@@ -370,6 +370,34 @@ public sealed record UiText(
         _ => $"Average {rate:0.##}% / hour"
     };
 
+    public string UsageHistoryBurnRateIdle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "閒置",
+        UiLanguage.SimplifiedChinese => "闲置",
+        _ => "Idle"
+    };
+
+    public string UsageHistoryBurnRateLight => Language switch
+    {
+        UiLanguage.TraditionalChinese => "偏低",
+        UiLanguage.SimplifiedChinese => "较低",
+        _ => "Light"
+    };
+
+    public string UsageHistoryBurnRateModerate => Language switch
+    {
+        UiLanguage.TraditionalChinese => "中等",
+        UiLanguage.SimplifiedChinese => "中等",
+        _ => "Moderate"
+    };
+
+    public string UsageHistoryBurnRateHigh => Language switch
+    {
+        UiLanguage.TraditionalChinese => "偏高",
+        UiLanguage.SimplifiedChinese => "较高",
+        _ => "High"
+    };
+
     public string FormatUsageHistoryVisibleRecords(int visible, int successful) => Language switch
     {
         UiLanguage.TraditionalChinese => $"顯示 {visible} 筆 · {successful} 筆有效樣本",

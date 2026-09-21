@@ -714,5 +714,9 @@ public sealed class UiTextTests
         Assert.False(string.IsNullOrWhiteSpace(text.QuickPresetsLabel));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryToday));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryAllProviders));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryBurnRateIdle));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryBurnRateLight));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryBurnRateModerate));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageHistoryBurnRateHigh));
     }
 }
