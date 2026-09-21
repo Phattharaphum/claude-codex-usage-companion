@@ -691,6 +691,76 @@ public sealed record UiText(
         _ => "Logging"
     };
 
+    public string AboutSettingsGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "關於",
+        UiLanguage.SimplifiedChinese => "关于",
+        _ => "About"
+    };
+
+    public string SearchSettingsPlaceholder => Language switch
+    {
+        UiLanguage.TraditionalChinese => "搜尋設定...",
+        UiLanguage.SimplifiedChinese => "搜索设置...",
+        _ => "Search settings..."
+    };
+
+    public string UnsavedChangesNotice => Language switch
+    {
+        UiLanguage.TraditionalChinese => "有未儲存的變更",
+        UiLanguage.SimplifiedChinese => "有未保存的更改",
+        _ => "Unsaved changes"
+    };
+
+    public string WindowSettingsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "設定視窗行為、系統匣與開機啟動偏好",
+        UiLanguage.SimplifiedChinese => "配置窗口行为、系统托盘和启动偏好",
+        _ => "Configure window behavior, system tray, and startup preferences"
+    };
+
+    public string UsageSettingsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "啟用 AI 提供者並自訂顯示的用量上限",
+        UiLanguage.SimplifiedChinese => "启用 AI 提供商并自定义显示的用量上限",
+        _ => "Enable AI providers and customize displayed rate limits"
+    };
+
+    public string AppearanceSettingsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "自訂語言、佈景主題與桌面覆蓋視窗位置",
+        UiLanguage.SimplifiedChinese => "自定义语言、主题与桌面覆盖窗口位置",
+        _ => "Customize language, theme, and desktop overlay placement"
+    };
+
+    public string NotificationSettingsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "設定額度警示與重置通知",
+        UiLanguage.SimplifiedChinese => "设置配额预警和重置通知",
+        _ => "Configure quota warnings and reset notifications"
+    };
+
+    public string DateTimeSettingsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "自訂隨伴視窗中的日期與時間格式",
+        UiLanguage.SimplifiedChinese => "自定义伴侣窗口中的日期与时间格式",
+        _ => "Customize date and time formatting across the companion"
+    };
+
+    public string LoggingSettingsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "設定本機 CSV 或 JSONL 用量歷程記錄",
+        UiLanguage.SimplifiedChinese => "设置本地 CSV 或 JSONL 用量历史记录",
+        _ => "Configure local CSV or JSONL usage history logging"
+    };
+
+    public string AboutSettingsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "應用程式詳細資訊與版本資訊",
+        UiLanguage.SimplifiedChinese => "应用程序详细信息与版本信息",
+        _ => "Application details and version information"
+    };
+
     public string PinOnTopAction => Language switch
     {
         UiLanguage.TraditionalChinese => "將視窗釘選在最上層",

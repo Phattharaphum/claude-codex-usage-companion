@@ -272,6 +272,24 @@ public sealed class CompanionSettingsTests
         Assert.Equal("zh-tw", disabled.Language);
     }
 
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, false)]
+    public void ApplyUsageProviderEnablementUpdatesAllProvidersCorrectly(
+        bool claude,
+        bool codex,
+        bool antigravity)
+    {
+        var initial = new CompanionSettings();
+        var updated = SettingsWindow.ApplyUsageProviderEnablement(initial, claude, codex, antigravity);
+
+        Assert.Equal(claude, updated.EnableClaudeUsage);
+        Assert.Equal(codex, updated.EnableCodexUsage);
+        Assert.Equal(antigravity, updated.EnableAntigravityUsage);
+    }
+
     [Fact]
     public void SavePersistsNormalizedInteractiveSettings()
     {

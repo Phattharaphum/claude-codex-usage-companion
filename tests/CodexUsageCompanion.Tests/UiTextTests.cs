@@ -658,4 +658,22 @@ public sealed class UiTextTests
         var text = UiText.For(language);
         Assert.Equal(expected, text.CompactModeAction);
     }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "About", "Search settings...", "Unsaved changes")]
+    [InlineData(UiLanguage.TraditionalChinese, "關於", "搜尋設定...", "有未儲存的變更")]
+    [InlineData(UiLanguage.SimplifiedChinese, "关于", "搜索设置...", "有未保存的更改")]
+    public void SettingsOverhaulStringsReturnExpectedText(
+        UiLanguage language,
+        string expectedAbout,
+        string expectedSearch,
+        string expectedUnsaved)
+    {
+        var text = UiText.For(language);
+        Assert.Equal(expectedAbout, text.AboutSettingsGroup);
+        Assert.Equal(expectedSearch, text.SearchSettingsPlaceholder);
+        Assert.Equal(expectedUnsaved, text.UnsavedChangesNotice);
+        Assert.False(string.IsNullOrWhiteSpace(text.WindowSettingsDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageSettingsDescription));
+    }
 }
