@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using CodexUsageCompanion.Diagnostics;
 using CodexUsageCompanion.Localization;
 
@@ -169,6 +170,67 @@ public sealed class UsageAnalysisWindow : Window
                 Data = Geometry.Parse("M3 17L8.5 11.5L12.5 15.5L21 7V11H23V3H15V5H19.6L12.5 12.1L8.5 8.1L1.6 15Z")
             }
         };
+        var activeProvidersPanel = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        var distinctProviders = _entries
+            .Where(entry => string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(entry => entry.Provider, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => ProviderOrder(group.Key))
+            .ToList();
+
+        foreach (var group in distinctProviders)
+        {
+            var provider = group.Key;
+            var count = group.Count();
+            var accent = ProviderColor(provider);
+            var chip = new Border
+            {
+                Background = Tint(accent, _isLightTheme ? (byte)24 : (byte)38),
+                BorderBrush = Tint(accent, _isLightTheme ? (byte)95 : (byte)135),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(8, 3),
+                Margin = new Thickness(0, 0, 6, 4),
+                Child = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 5,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children =
+                    {
+                        new Avalonia.Controls.Shapes.Path
+                        {
+                            Data = Geometry.Parse(ProviderIconGeometry(provider)),
+                            Fill = Brush(accent),
+                            Width = 10,
+                            Height = 10,
+                            Stretch = Stretch.Uniform,
+                            VerticalAlignment = VerticalAlignment.Center
+                        },
+                        new TextBlock
+                        {
+                            Text = DisplayProvider(provider),
+                            FontSize = 10.5,
+                            FontWeight = FontWeight.SemiBold,
+                            Foreground = Brush(accent),
+                            VerticalAlignment = VerticalAlignment.Center
+                        },
+                        new TextBlock
+                        {
+                            Text = $"({count})",
+                            FontSize = 9.5,
+                            Foreground = Brush(_palette.Secondary),
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                }
+            };
+            activeProvidersPanel.Children.Add(chip);
+        }
+
         var heading = new StackPanel
         {
             Spacing = 2,
@@ -184,6 +246,11 @@ public sealed class UsageAnalysisWindow : Window
                 new TextBlock { Text = period, FontSize = 11.5, Foreground = Brush(_palette.Secondary) }
             }
         };
+        if (distinctProviders.Count > 0)
+        {
+            heading.Children.Add(activeProvidersPanel);
+        }
+
         var headingArea = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -191,33 +258,84 @@ public sealed class UsageAnalysisWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Children = { titleBadge, heading }
         };
+
         var overviewPill = new Border
         {
             Background = Brush(_palette.AccentSoft),
             BorderBrush = Brush(_palette.AccentBorder),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(13),
-            Padding = new Thickness(12, 7),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(11, 6),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock
             {
                 Text = L(
-                    $"{_summary.ProviderCount} providers  ·  {_resetEvents.Count} resets",
-                    $"{_summary.ProviderCount} 個來源  ·  {_resetEvents.Count} 次重置",
-                    $"{_summary.ProviderCount} 个来源  ·  {_resetEvents.Count} 次重置"),
+                    $"{_summary.RecordCount} samples  ·  {_resetEvents.Count} resets",
+                    $"{_summary.RecordCount} 筆樣本  ·  {_resetEvents.Count} 次重置",
+                    $"{_summary.RecordCount} 条样本  ·  {_resetEvents.Count} 次重置"),
                 FontSize = 10.5,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = Brush(_palette.Accent),
                 VerticalAlignment = VerticalAlignment.Center
             }
         };
+
+        var copyButton = new Button
+        {
+            Height = 31,
+            Padding = new Thickness(11, 0),
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(1),
+            Background = Brush(_palette.Surface),
+            BorderBrush = Brush(_palette.BorderStrong),
+            Foreground = Brush(_palette.Primary),
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 11,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    new Avalonia.Controls.Shapes.Path
+                    {
+                        Data = Geometry.Parse("M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"),
+                        Fill = Brush(_palette.Primary),
+                        Width = 11,
+                        Height = 11,
+                        Stretch = Stretch.Uniform,
+                        VerticalAlignment = VerticalAlignment.Center
+                    },
+                    new TextBlock
+                    {
+                        Text = _text.UsageAnalysisCopyReport,
+                        FontSize = 10.5,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                }
+            }
+        };
+        ToolTip.SetTip(copyButton, _text.UsageAnalysisCopyReport);
+        copyButton.Click += async (_, _) => await CopyReportToClipboardAsync(copyButton);
+
+        var heroActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { overviewPill, copyButton }
+        };
+
         var heroGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
             ColumnSpacing = 14,
-            Children = { headingArea, overviewPill }
+            Children = { headingArea, heroActions }
         };
-        Grid.SetColumn(overviewPill, 1);
+        Grid.SetColumn(heroActions, 1);
         var hero = Card(heroGrid, 16, new Thickness(17, 14));
         hero.Background = new LinearGradientBrush
         {
@@ -343,57 +461,432 @@ public sealed class UsageAnalysisWindow : Window
     {
         var icon = new Border
         {
-            Width = 34,
-            Height = 34,
+            Width = 36,
+            Height = 36,
             CornerRadius = new CornerRadius(11),
             Background = Brush(_palette.Accent),
-            VerticalAlignment = VerticalAlignment.Top,
-            Child = new PathIcon
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new Avalonia.Controls.Shapes.Path
             {
                 Width = 17,
                 Height = 17,
-                Foreground = Brushes.White,
+                Fill = Brushes.White,
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
                 Data = Geometry.Parse("M12 2L13.7 7.3L19 9L13.7 10.7L12 16L10.3 10.7L5 9L10.3 7.3ZM19 15L20 18L23 19L20 20L19 23L18 20L15 19L18 18Z")
             }
         };
-        var text = new StackPanel
+        var headingText = new StackPanel
         {
-            Spacing = 4,
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
                 new TextBlock
                 {
                     Text = L("What this period suggests", "此期間分析", "此期间分析"),
-                    FontSize = 13.5,
+                    FontSize = 14,
                     FontWeight = FontWeight.Bold,
                     Foreground = Brush(_palette.InsightTitle)
                 },
                 new TextBlock
                 {
-                    Text = BuildInterpretation(_summary, _resetEvents),
-                    TextWrapping = TextWrapping.Wrap,
-                    LineHeight = 19,
-                    FontSize = 11.5,
-                    Foreground = Brush(_palette.InsightText)
+                    Text = _text.UsageAnalysisKeyTakeaways,
+                    FontSize = 10.5,
+                    Foreground = Brush(_palette.Secondary)
                 }
             }
         };
-        var grid = new Grid
+        var topRow = new StackPanel
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            ColumnSpacing = 12,
-            Children = { icon, text }
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { icon, headingText }
         };
-        Grid.SetColumn(text, 1);
+
+        if (_summary.RecordCount == 0)
+        {
+            return new Border
+            {
+                Background = Brush(_palette.InsightSoft),
+                BorderBrush = Brush(_palette.InsightBorder),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(16, 14),
+                Child = new StackPanel
+                {
+                    Spacing = 8,
+                    Children =
+                    {
+                        topRow,
+                        new TextBlock
+                        {
+                            Text = _text.UsageHistoryNoPeriodData,
+                            FontSize = 11.5,
+                            Foreground = Brush(_palette.Secondary),
+                            TextWrapping = TextWrapping.Wrap
+                        }
+                    }
+                }
+            };
+        }
+
+        // Callout 1: Burn Rate & Pace
+        var (paceLabel, paceColor, paceDesc) = GetBurnRateDetails(_summary.FiveHour.ConsumptionPerHour);
+        var callout1 = CreateInsightCallout(
+            "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z",
+            paceColor,
+            _text.UsageAnalysisBurnRatePace,
+            paceLabel,
+            Tint(paceColor, _isLightTheme ? (byte)24 : (byte)38),
+            paceColor,
+            $"{_summary.FiveHour.ConsumptionPerHour:0.##}% / h",
+            paceDesc);
+
+        // Callout 2: Quota Balance
+        var ratio = _summary.Weekly.ConsumedPercent <= 0
+            ? "—"
+            : $"{_summary.FiveHour.ConsumedPercent / _summary.Weekly.ConsumedPercent:0.##}×";
+        var (ratioDesc, ratioAccent) = GetQuotaBalanceDetails(_summary.FiveHour.ConsumedPercent, _summary.Weekly.ConsumedPercent, ratio);
+        var callout2 = CreateInsightCallout(
+            "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
+            ratioAccent,
+            _text.UsageAnalysisQuotaBalance,
+            ratio,
+            Tint(ratioAccent, _isLightTheme ? (byte)24 : (byte)38),
+            ratioAccent,
+            ratio == "—" ? "—" : $"{ratio} " + L("ratio", "比率", "比率"),
+            ratioDesc);
+
+        // Callout 3: Replenishment & Resets
+        var resetAccent = _resetEvents.Count > 0 ? (_isLightTheme ? "#D97706" : "#FBBF24") : _palette.Secondary;
+        var resetDesc = _resetEvents.Count == 0
+            ? L("No quota resets observed within this observation timeframe.", "此觀察期間內未偵測到額度重置事件。", "此观察期间内未检测到额度重置事件。")
+            : L($"{_resetEvents.Count} reset event(s) detected across {_summary.ProviderCount} provider(s).", $"在 {_summary.ProviderCount} 個來源中偵測到 {_resetEvents.Count} 次重置。", $"在 {_summary.ProviderCount} 个来源中检测到 {_resetEvents.Count} 次重置。");
+        var callout3 = CreateInsightCallout(
+            "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
+            resetAccent,
+            _text.UsageAnalysisResetRecovery,
+            $"{_resetEvents.Count} " + L("resets", "次重置", "次重置"),
+            Tint(resetAccent, _isLightTheme ? (byte)24 : (byte)38),
+            resetAccent,
+            $"{_resetEvents.Count} " + L("events", "次事件", "次事件"),
+            resetDesc);
+
+        var calloutsGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*,*"),
+            ColumnSpacing = 10,
+            Children = { callout1, callout2, callout3 }
+        };
+        Grid.SetColumn(callout2, 1);
+        Grid.SetColumn(callout3, 2);
+
         return new Border
         {
             Background = Brush(_palette.InsightSoft),
             BorderBrush = Brush(_palette.InsightBorder),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(15, 13),
-            Child = grid
+            Padding = new Thickness(16, 14),
+            Child = new StackPanel
+            {
+                Spacing = 12,
+                Children = { topRow, calloutsGrid }
+            }
         };
+    }
+
+    private Border CreateInsightCallout(
+        string iconGeometry,
+        string accentColor,
+        string categoryTitle,
+        string badgeText,
+        IBrush badgeBg,
+        string badgeFg,
+        string mainValue,
+        string description)
+    {
+        var icon = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(iconGeometry),
+            Fill = Brush(accentColor),
+            Width = 13,
+            Height = 13,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var iconContainer = new Border
+        {
+            Width = 24,
+            Height = 24,
+            CornerRadius = new CornerRadius(7),
+            Background = Tint(accentColor, _isLightTheme ? (byte)26 : (byte)42),
+            BorderBrush = Tint(accentColor, _isLightTheme ? (byte)90 : (byte)130),
+            BorderThickness = new Thickness(1),
+            Child = icon
+        };
+        var catText = new TextBlock
+        {
+            Text = categoryTitle,
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brush(_palette.Primary),
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        var badge = new Border
+        {
+            Background = badgeBg,
+            BorderBrush = Tint(badgeFg, _isLightTheme ? (byte)80 : (byte)120),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(7, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = badgeText,
+                FontSize = 9.5,
+                FontWeight = FontWeight.Bold,
+                Foreground = Brush(badgeFg),
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        var header = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnSpacing = 7
+        };
+        var leftStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { iconContainer, catText }
+        };
+        Grid.SetColumn(leftStack, 0);
+        Grid.SetColumn(badge, 2);
+        header.Children.Add(leftStack);
+        header.Children.Add(badge);
+
+        var valueText = new TextBlock
+        {
+            Text = mainValue,
+            FontSize = 14,
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush(accentColor),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+
+        var descText = new TextBlock
+        {
+            Text = description,
+            FontSize = 10.5,
+            LineHeight = 15,
+            Foreground = Brush(_palette.InsightText),
+            TextWrapping = TextWrapping.Wrap
+        };
+
+        var cardContent = new StackPanel
+        {
+            Spacing = 6,
+            Children =
+            {
+                header,
+                valueText,
+                descText
+            }
+        };
+
+        var calloutBorder = new Border
+        {
+            Background = Brush(_palette.Surface),
+            BorderBrush = Brush(_palette.Border),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(11),
+            Padding = new Thickness(12, 10),
+            Child = cardContent
+        };
+        if (_isLightTheme)
+        {
+            calloutBorder.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Blur = 6,
+                OffsetY = 1,
+                Color = Color.Parse("#08000000")
+            });
+        }
+        return calloutBorder;
+    }
+
+    private (string Label, string Color, string Description) GetBurnRateDetails(double rate)
+    {
+        if (rate <= 0)
+        {
+            return (
+                _text.UsageHistoryBurnRateIdle,
+                _isLightTheme ? "#64748B" : "#94A3B8",
+                L("No measurable 5-hour quota decrease in this observation span.", "在此觀察期間未測得 5 小時額度下降。", "在此观察期间未测得 5 小时额度下降。"));
+        }
+        if (rate < 2.0)
+        {
+            return (
+                _text.UsageHistoryBurnRateLight,
+                _isLightTheme ? "#0F8A5F" : "#4AD894",
+                L("Light burn rate; quota is conserved and sustainable for prolonged sessions.", "用量消耗偏低；額度節省且適合長時間持續開發。", "用量消耗较低；额度节省且适合长时间持续开发。"));
+        }
+        if (rate < 8.0)
+        {
+            return (
+                _text.UsageHistoryBurnRateModerate,
+                _isLightTheme ? "#D97706" : "#FBBF24",
+                L("Moderate steady pace; active development with balanced quota usage.", "穩健中等的消耗速度；處於活躍開發且額度使用均衡。", "稳健中等的消耗速度；处于活跃开发且额度使用均衡。"));
+        }
+        return (
+            _text.UsageHistoryBurnRateHigh,
+            _isLightTheme ? "#DC2626" : "#F87171",
+            L("High quota consumption velocity; consider pacing heavy prompt executions.", "額度消耗速度偏高；建議留意高負載呼叫以防過早耗盡。", "额度消耗速度较高；建议留意高负载调用以防过早耗尽。"));
+    }
+
+    private (string Description, string Color) GetQuotaBalanceDetails(double fiveHourConsumed, double weeklyConsumed, string ratio)
+    {
+        var accent = _palette.Blue;
+        if (weeklyConsumed <= 0)
+        {
+            return (
+                L("Weekly quota usage did not change during this window.", "此期間每週用量無明顯變化。", "此期间每周用量无明显变化。"),
+                accent);
+        }
+        var desc = L(
+            $"{ratio} of 5-hour quota observed per unit of weekly quota.",
+            $"每使用 1 單位每週額度，觀察到 {ratio} 單位 5 小時額度。",
+            $"每使用 1 单位每周额度，观察到 {ratio} 单位 5 小时额度。");
+        return (desc, accent);
+    }
+
+    private async Task CopyReportToClipboardAsync(Button button)
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel?.Clipboard is null)
+        {
+            return;
+        }
+
+        var report = BuildMarkdownReport();
+        var dataTransfer = new DataTransfer();
+        dataTransfer.Add(DataTransferItem.CreateText(report));
+        await topLevel.Clipboard.SetDataAsync(dataTransfer);
+
+        var originalContent = button.Content;
+        button.Background = Brush(_palette.AccentSoft);
+        button.BorderBrush = Brush(_palette.AccentBorder);
+        button.Foreground = Brush(_palette.Accent);
+        button.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new Avalonia.Controls.Shapes.Path
+                {
+                    Data = Geometry.Parse("M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"),
+                    Fill = Brush(_palette.Accent),
+                    Width = 11,
+                    Height = 11,
+                    Stretch = Stretch.Uniform,
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                new TextBlock
+                {
+                    Text = _text.UsageAnalysisReportCopied,
+                    FontSize = 10.5,
+                    FontWeight = FontWeight.Bold,
+                    Foreground = Brush(_palette.Accent),
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            }
+        };
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            button.Content = originalContent;
+            button.Background = Brush(_palette.Surface);
+            button.BorderBrush = Brush(_palette.BorderStrong);
+            button.Foreground = Brush(_palette.Primary);
+        };
+        timer.Start();
+    }
+
+    private string BuildMarkdownReport()
+    {
+        var period = _start.ToLocalTime().Date == _end.ToLocalTime().Date
+            ? $"{_start.ToLocalTime():dddd, MMM d, yyyy} · {_start.ToLocalTime():HH:mm}–{_end.ToLocalTime():HH:mm}"
+            : $"{_start.ToLocalTime():MMM d, yyyy HH:mm} — {_end.ToLocalTime():MMM d, yyyy HH:mm}";
+
+        var ratio = _summary.Weekly.ConsumedPercent <= 0
+            ? "—"
+            : $"{_summary.FiveHour.ConsumedPercent / _summary.Weekly.ConsumedPercent:0.##}×";
+
+        var providers = string.Join(", ", _entries
+            .Where(e => string.Equals(e.Status, "success", StringComparison.OrdinalIgnoreCase))
+            .Select(e => DisplayProvider(e.Provider))
+            .Distinct(StringComparer.OrdinalIgnoreCase));
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"# Usage Analysis Report");
+        sb.AppendLine($"**Period:** {period}");
+        sb.AppendLine($"**Observed Span:** {FormatDuration(_summary.ObservedDuration)} ({_summary.RecordCount:#,##0} valid samples)");
+        if (!string.IsNullOrWhiteSpace(providers))
+        {
+            sb.AppendLine($"**Active Providers:** {providers}");
+        }
+        sb.AppendLine();
+        sb.AppendLine($"## Key Metrics");
+        sb.AppendLine($"- **5-Hour Consumed:** {FormatPercent(_summary.FiveHour.ConsumedPercent)} ({_summary.FiveHour.ConsumptionPerHour:0.##}%/h)");
+        sb.AppendLine($"- **Weekly Consumed:** {FormatPercent(_summary.Weekly.ConsumedPercent)} ({_summary.Weekly.ConsumptionPerHour:0.##}%/h)");
+        sb.AppendLine($"- **5hr : Week Ratio:** {ratio}");
+        sb.AppendLine($"- **Detected Resets:** {_resetEvents.Count}");
+        sb.AppendLine();
+        sb.AppendLine($"## Analytical Insights");
+        sb.AppendLine($"- **Burn Rate & Pace:** {GetBurnRatePaceText()} ({_summary.FiveHour.ConsumptionPerHour:0.##}%/h)");
+        sb.AppendLine($"- **Quota Balance:** {GetQuotaBalanceText()}");
+        sb.AppendLine($"- **Replenishment Activity:** {_resetEvents.Count} reset event(s) detected across {_summary.ProviderCount} provider(s).");
+        sb.AppendLine();
+        sb.AppendLine($"## Quota Runway Projections");
+        var projected5h = _summary.FiveHour.LastRemainingPercent is int rem5 && _summary.FiveHour.ConsumptionPerHour > 0
+            ? FormatDuration(TimeSpan.FromHours(rem5 / _summary.FiveHour.ConsumptionPerHour))
+            : "—";
+        var projectedWk = _summary.Weekly.LastRemainingPercent is int remW && _summary.Weekly.ConsumptionPerHour > 0
+            ? FormatDuration(TimeSpan.FromHours(remW / _summary.Weekly.ConsumptionPerHour))
+            : "—";
+        sb.AppendLine($"- **5-Hour Window:** Average remaining: {_summary.FiveHour.AverageRemainingPercent:0.#}% · Projected runway: {projected5h}");
+        sb.AppendLine($"- **Weekly Window:** Average remaining: {_summary.Weekly.AverageRemainingPercent:0.#}% · Projected runway: {projectedWk}");
+
+        return sb.ToString();
+    }
+
+    private string GetBurnRatePaceText()
+    {
+        var rate = _summary.FiveHour.ConsumptionPerHour;
+        if (rate <= 0) return _text.UsageHistoryBurnRateIdle;
+        if (rate < 2.0) return _text.UsageHistoryBurnRateLight;
+        if (rate < 8.0) return _text.UsageHistoryBurnRateModerate;
+        return _text.UsageHistoryBurnRateHigh;
+    }
+
+    private string GetQuotaBalanceText()
+    {
+        if (_summary.Weekly.ConsumedPercent <= 0)
+        {
+            return "—";
+        }
+        var ratio = _summary.FiveHour.ConsumedPercent / _summary.Weekly.ConsumedPercent;
+        return $"{ratio:0.##} units 5-hour per weekly unit";
     }
 
     private string BuildInterpretation(UsageSelectionSummary summary, IReadOnlyList<UsageResetEvent> resets)
@@ -514,12 +1007,15 @@ public sealed class UsageAnalysisWindow : Window
             Background = Tint(accent, _isLightTheme ? (byte)24 : (byte)38),
             BorderBrush = Tint(accent, _isLightTheme ? (byte)90 : (byte)125),
             BorderThickness = new Thickness(1),
-            Child = new PathIcon
+            Child = new Avalonia.Controls.Shapes.Path
             {
-                Width = 16,
-                Height = 16,
-                Foreground = Brush(accent),
-                Data = Geometry.Parse("M12 2A10 10 0 1 0 12 22A10 10 0 1 0 12 2ZM12 6A6 6 0 1 1 12 18A6 6 0 1 1 12 6Z")
+                Width = 15,
+                Height = 15,
+                Fill = Brush(accent),
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Data = Geometry.Parse(ProviderIconGeometry(provider))
             }
         };
         var identity = new StackPanel
@@ -938,6 +1434,15 @@ public sealed class UsageAnalysisWindow : Window
         "antigravity-gemini" => 2,
         "antigravity-claudeandchatgpt" => 3,
         _ => 4
+    };
+
+    private static string ProviderIconGeometry(string provider) => provider.ToLowerInvariant() switch
+    {
+        "claude" => "M12 2L13.8 8.7L20.5 7L16.2 12L21.8 15.2L15.3 16.5L16.8 23L12 18.5L7.2 23L8.7 16.5L2.2 15.2L7.8 12L3.5 7L10.2 8.7L12 2Z",
+        "codex" => "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM12 4C16.42 4 20 7.58 20 12C20 13.91 19.33 15.66 18.21 17.03L6.97 5.79C8.34 4.67 10.09 4 12 4ZM4 12C4 10.09 4.67 8.34 5.79 6.97L17.03 18.21C15.66 19.33 13.91 20 12 20C7.58 20 4 16.42 4 12Z",
+        "antigravity-gemini" => "M12 2L13.7 7.3L19 9L13.7 10.7L12 16L10.3 10.7L5 9L10.3 7.3ZM19 15L20 18L23 19L20 20L19 23L18 20L15 19L18 18Z",
+        "antigravity-claudeandchatgpt" => "M12 2L14.5 8.5L21 9.5L16 14L17.5 20.5L12 17L6.5 20.5L8 14L3 9.5L9.5 8.5L12 2Z",
+        _ => "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"
     };
 
     private string ProviderColor(string provider) => provider.ToLowerInvariant() switch
