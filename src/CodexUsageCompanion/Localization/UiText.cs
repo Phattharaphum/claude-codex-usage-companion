@@ -547,6 +547,20 @@ public sealed record UiText(
         _ => "Local CSV history"
     };
 
+    public string UsageHistoryRecentActivity => Language switch
+    {
+        UiLanguage.TraditionalChinese => "最近記錄",
+        UiLanguage.SimplifiedChinese => "最近记录",
+        _ => "Recent Activity"
+    };
+
+    public string UsageHistoryOpenFullTimeline => Language switch
+    {
+        UiLanguage.TraditionalChinese => "開啟完整時間軸",
+        UiLanguage.SimplifiedChinese => "打开完整时间轴",
+        _ => "Open Full Timeline"
+    };
+
     public string FormatUsageHistoryCount(int count, int visibleLimit) => Language switch
     {
         UiLanguage.TraditionalChinese =>

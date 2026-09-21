@@ -35,6 +35,12 @@ public sealed class UsageHistoryWindow : Window
     private readonly ComboBox _windowSelector;
     private readonly Border _rangeSegmentedSurface;
     private readonly Dictionary<int, Button> _rangeSegmentedButtons = [];
+    private readonly Border _quotaSegmentedSurface;
+    private readonly Dictionary<int, Button> _quotaSegmentedButtons = [];
+    private readonly Border _inlineTableHeaderSurface;
+    private readonly StackPanel _inlineActivityRows = new() { Spacing = 5 };
+    private readonly Border _inlineEmptyState;
+    private readonly TextBlock _inlineEmptyStateText;
     private readonly Border _periodCalendarBadge;
     private readonly Avalonia.Controls.Shapes.Path _periodCalendarPath;
     private readonly Button _todayButton;
@@ -290,11 +296,58 @@ public sealed class UsageHistoryWindow : Window
                 text.UsageHistoryFiveHourWindow
             },
             SelectedIndex = 0,
-            MinWidth = 118,
-            Height = 34,
-            CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(10, 0)
+            IsVisible = false
         };
+
+        _quotaSegmentedSurface = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(3)
+        };
+        var quotaPillsPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 3
+        };
+        _quotaSegmentedSurface.Child = quotaPillsPanel;
+
+        var quotaOptions = new (int Index, string Label, string Tooltip)[]
+        {
+            (0, text.UsageHistoryWeeklyWindow, text.UsageHistoryWeeklyWindow),
+            (1, text.UsageHistoryFiveHourWindow, text.UsageHistoryFiveHourWindow)
+        };
+
+        foreach (var (index, label, tooltip) in quotaOptions)
+        {
+            var pill = new Button
+            {
+                Content = label,
+                Height = 28,
+                MinWidth = 66,
+                Padding = new Thickness(10, 0),
+                CornerRadius = new CornerRadius(7),
+                BorderThickness = new Thickness(1),
+                FontSize = 11.5,
+                FontWeight = FontWeight.SemiBold,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center
+            };
+            ToolTip.SetTip(pill, tooltip);
+            var pillIndex = index;
+            pill.Click += (_, _) =>
+            {
+                if (_windowSelector.SelectedIndex != pillIndex)
+                {
+                    _windowSelector.SelectedIndex = pillIndex;
+                }
+            };
+            pill.PointerEntered += (_, _) => ApplyQuotaPillTheme(pill, pillIndex, hovered: true);
+            pill.PointerExited += (_, _) => ApplyQuotaPillTheme(pill, pillIndex, hovered: false);
+            _quotaSegmentedButtons[pillIndex] = pill;
+            quotaPillsPanel.Children.Add(pill);
+        }
+
         _fullPeriodThumb = new Border
         {
             Width = 14,
@@ -337,9 +390,9 @@ public sealed class UsageHistoryWindow : Window
         _nextButton = NavigationButton(CreateChevronIcon(pointsRight: true), text.UsageHistoryNextPeriod);
         _timelineToggleButton = new Button
         {
-            Content = "↗  " + text.UsageHistoryShowTimeline,
-            MinWidth = 126,
-            Height = 36,
+            Content = "↗  " + text.UsageHistoryOpenFullTimeline,
+            MinWidth = 142,
+            Height = 34,
             Padding = new Thickness(13, 0),
             CornerRadius = new CornerRadius(10),
             FontWeight = FontWeight.SemiBold,
@@ -353,8 +406,8 @@ public sealed class UsageHistoryWindow : Window
             ResetLabel = text.UsageHistoryReset,
             NoDataText = text.UsageHistoryNoChartData,
             ProviderLabelFormatter = ChartProviderLabel,
-            Height = 238,
-            MinHeight = 220
+            Height = 300,
+            MinHeight = 280
         };
         _emptyStateText = new TextBlock
         {
@@ -379,7 +432,11 @@ public sealed class UsageHistoryWindow : Window
             UpdateRangePillsStyle();
             ApplySelection();
         };
-        _windowSelector.SelectionChanged += (_, _) => ApplySelection();
+        _windowSelector.SelectionChanged += (_, _) =>
+        {
+            UpdateQuotaPillsStyle();
+            ApplySelection();
+        };
         _fullPeriodToggle.Click += (_, _) =>
         {
             _showFullPeriod = !_showFullPeriod;
@@ -591,7 +648,7 @@ public sealed class UsageHistoryWindow : Window
             Orientation = Orientation.Horizontal,
             Spacing = 14,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { FilterGroup(text.UsageHistoryQuotaWindow, _windowSelector), _fullPeriodToggle }
+            Children = { FilterGroup(text.UsageHistoryQuotaWindow, _quotaSegmentedSurface), _fullPeriodToggle }
         };
         var chartHeading = SectionHeading(text.UsageHistoryChartTitle, text.UsageHistoryChartSubtitle, chartControls);
         _chartFrame = new Border
@@ -624,13 +681,54 @@ public sealed class UsageHistoryWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Children = { _timelineCaption, _timelineToggleButton }
         };
-        var timelineHeading = SectionHeading(text.UsageHistoryRecords, string.Empty, timelineActions);
+        var timelineHeading = SectionHeading(text.UsageHistoryRecentActivity, string.Empty, timelineActions);
+
+        _inlineTableHeaderSurface = new Border
+        {
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(14, 9),
+            Margin = new Thickness(0, 6, 0, 2),
+            Child = CreateInlineTableHeader()
+        };
+
+        _inlineEmptyStateText = new TextBlock
+        {
+            Text = text.UsageHistoryNoPeriodData,
+            FontSize = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
+        };
+        _inlineEmptyState = new Border
+        {
+            CornerRadius = new CornerRadius(11),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(20, 24),
+            Margin = new Thickness(0, 6, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Child = _inlineEmptyStateText,
+            IsVisible = false
+        };
+
+        var timelineContent = new StackPanel
+        {
+            Spacing = 6,
+            Children =
+            {
+                timelineHeading,
+                _inlineTableHeaderSurface,
+                _inlineActivityRows,
+                _inlineEmptyState
+            }
+        };
+
         _timelineCard = new Border
         {
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(16, 12),
-            Child = timelineHeading
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(16, 14),
+            Child = timelineContent
         };
         var layout = new StackPanel
         {
@@ -808,6 +906,7 @@ public sealed class UsageHistoryWindow : Window
         _todayButton.IsEnabled = _rangeSelector.SelectedIndex != 3 && end < StartOfToday();
         ApplyTodayButtonTheme();
         UpdateRangePillsStyle();
+        UpdateQuotaPillsStyle();
         ApplyAllProvidersButtonTheme();
     }
 
@@ -887,6 +986,7 @@ public sealed class UsageHistoryWindow : Window
             .ToArray();
         _timelineCaption.Text = _text.FormatUsageHistoryVisibleRecords(_timelineRecords.Count, _selection.Count);
         _timelineWindow?.UpdateRecords(_timelineRecords, start, end);
+        RebuildInlineActivityRows();
     }
 
     private void MovePeriod(int direction)
@@ -1479,6 +1579,39 @@ public sealed class UsageHistoryWindow : Window
             _rangeSegmentedSurface.BoxShadow = default;
         }
 
+        _quotaSegmentedSurface.Background = Brush(_palette.Soft);
+        _quotaSegmentedSurface.BorderBrush = Brush(_palette.Border);
+        if (_isLightTheme)
+        {
+            _quotaSegmentedSurface.BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Blur = 4,
+                OffsetY = 1,
+                Color = Color.Parse("#08000000")
+            });
+        }
+        else
+        {
+            _quotaSegmentedSurface.BoxShadow = default;
+        }
+
+        _inlineTableHeaderSurface.Background = Brush(_palette.Soft);
+        _inlineTableHeaderSurface.BorderBrush = Brush(_palette.Border);
+        if (_inlineTableHeaderSurface.Child is Grid header)
+        {
+            foreach (var child in header.Children)
+            {
+                if (child is TextBlock tb)
+                {
+                    tb.Foreground = Brush(_palette.Secondary);
+                }
+            }
+        }
+
+        _inlineEmptyState.Background = Brush(_palette.Soft);
+        _inlineEmptyState.BorderBrush = Brush(_palette.Border);
+        _inlineEmptyStateText.Foreground = Brush(_palette.Secondary);
+
         _chartFrame.Background = Brush(_palette.Surface);
         _chartFrame.BorderBrush = Brush(_palette.Border);
         _chart.SetTheme(_isLightTheme);
@@ -1502,6 +1635,7 @@ public sealed class UsageHistoryWindow : Window
         }
 
         UpdateRangePillsStyle();
+        UpdateQuotaPillsStyle();
         ApplyTodayButtonTheme();
         ApplyAllProvidersButtonTheme();
         ApplySelectorTheme(_windowSelector);
@@ -1511,6 +1645,7 @@ public sealed class UsageHistoryWindow : Window
             ApplyProviderButtonTheme(provider);
         }
         UpdateSummary(_selection);
+        RebuildInlineActivityRows();
     }
 
     private void ApplySurfaceTheme(Border surface, string background)
@@ -1570,6 +1705,33 @@ public sealed class UsageHistoryWindow : Window
     private void ApplyRangePillTheme(Button pill, int index, bool hovered)
     {
         var isSelected = _rangeSelector.SelectedIndex == index;
+        if (isSelected)
+        {
+            pill.Background = Brush(_palette.Surface);
+            pill.Foreground = Brush(_palette.Accent);
+            pill.BorderBrush = Brush(_palette.AccentBorder);
+            pill.FontWeight = FontWeight.Bold;
+        }
+        else
+        {
+            pill.Background = Brush(hovered ? _palette.AccentSoft : "#00000000");
+            pill.Foreground = Brush(hovered ? _palette.Accent : _palette.Secondary);
+            pill.BorderBrush = Brush(hovered ? _palette.AccentBorder : "#00000000");
+            pill.FontWeight = FontWeight.Medium;
+        }
+    }
+
+    private void UpdateQuotaPillsStyle()
+    {
+        foreach (var (index, pill) in _quotaSegmentedButtons)
+        {
+            ApplyQuotaPillTheme(pill, index, hovered: false);
+        }
+    }
+
+    private void ApplyQuotaPillTheme(Button pill, int index, bool hovered)
+    {
+        var isSelected = _windowSelector.SelectedIndex == index;
         if (isSelected)
         {
             pill.Background = Brush(_palette.Surface);
@@ -1781,6 +1943,290 @@ public sealed class UsageHistoryWindow : Window
         AccentSoft
     }
 
+    private static ColumnDefinitions InlineTableColumns() => new("180,180,*,*");
+
+    private Control CreateInlineTableHeader()
+    {
+        var grid = new Grid { ColumnDefinitions = InlineTableColumns() };
+        AddInlineHeaderCell(grid, _text.UsageHistoryTimestamp, 0);
+        AddInlineHeaderCell(grid, _text.UsageHistoryProvider, 1);
+        AddInlineHeaderCell(grid, _text.UsageHistoryFiveHour, 2);
+        AddInlineHeaderCell(grid, _text.UsageHistoryWeek, 3);
+        return grid;
+    }
+
+    private void AddInlineHeaderCell(Grid grid, string text, int column)
+    {
+        var block = new TextBlock
+        {
+            Text = text.ToUpperInvariant(),
+            FontSize = 9.5,
+            FontWeight = FontWeight.Bold,
+            LetterSpacing = 0.5,
+            Foreground = Brush(_palette.Secondary),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(block, column);
+        grid.Children.Add(block);
+    }
+
+    private void RebuildInlineActivityRows()
+    {
+        _inlineActivityRows.Children.Clear();
+
+        if (_timelineRecords.Count == 0)
+        {
+            _inlineTableHeaderSurface.IsVisible = false;
+            _inlineActivityRows.IsVisible = false;
+            _inlineEmptyState.IsVisible = true;
+            return;
+        }
+
+        _inlineTableHeaderSurface.IsVisible = true;
+        _inlineActivityRows.IsVisible = true;
+        _inlineEmptyState.IsVisible = false;
+
+        var recent = _timelineRecords
+            .OrderByDescending(entry => entry.UpdatedAt)
+            .Take(7)
+            .ToList();
+
+        for (var index = 0; index < recent.Count; index++)
+        {
+            _inlineActivityRows.Children.Add(CreateInlineActivityRow(recent[index], index));
+        }
+    }
+
+    private Control CreateInlineActivityRow(UsageHistoryEntry entry, int index)
+    {
+        var success = string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase);
+        var rowBg = success
+            ? index % 2 == 0 ? _palette.Row : _palette.RowAlternate
+            : (_isLightTheme ? "#FFF5F5" : "#2D1D1D");
+        var rowBorder = success
+            ? _palette.Border
+            : (_isLightTheme ? "#F87171" : "#EF4444");
+        var rowHoverBg = success
+            ? _palette.RowHover
+            : (_isLightTheme ? "#FFEAEA" : "#382323");
+
+        var row = new Border
+        {
+            Background = Brush(rowBg),
+            BorderBrush = Brush(rowBorder),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(14, 8)
+        };
+        row.PointerEntered += (_, _) => row.Background = Brush(rowHoverBg);
+        row.PointerExited += (_, _) => row.Background = Brush(rowBg);
+
+        var grid = new Grid { ColumnDefinitions = InlineTableColumns() };
+        grid.Children.Add(CreateInlineTimestampCell(entry.UpdatedAt));
+
+        var provider = CreateInlineProviderPill(entry);
+        Grid.SetColumn(provider, 1);
+        grid.Children.Add(provider);
+
+        if (!success && !string.IsNullOrWhiteSpace(entry.Error))
+        {
+            var error = CreateInlineErrorCell(entry.Error);
+            Grid.SetColumn(error, 2);
+            Grid.SetColumnSpan(error, 2);
+            grid.Children.Add(error);
+        }
+        else
+        {
+            var fiveHour = CreateInlineQuotaCell(entry.FiveHourRemainingPercent, entry.FiveHourResetAt);
+            var week = CreateInlineQuotaCell(entry.WeeklyRemainingPercent, entry.WeeklyResetAt);
+            Grid.SetColumn(fiveHour, 2);
+            Grid.SetColumn(week, 3);
+            grid.Children.Add(fiveHour);
+            grid.Children.Add(week);
+        }
+
+        row.Child = grid;
+        return row;
+    }
+
+    private Control CreateInlineTimestampCell(DateTimeOffset updatedAt)
+    {
+        var local = updatedAt.ToLocalTime();
+        return new StackPanel
+        {
+            Spacing = 1,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = local.ToString("MMM d, yyyy", CultureInfo.CurrentCulture),
+                    FontSize = 11.5,
+                    FontWeight = FontWeight.SemiBold,
+                    Foreground = Brush(_palette.Primary)
+                },
+                new TextBlock
+                {
+                    Text = local.ToString("HH:mm:ss", CultureInfo.CurrentCulture),
+                    FontSize = 10,
+                    Foreground = Brush(_palette.Secondary)
+                }
+            }
+        };
+    }
+
+    private Control CreateInlineProviderPill(UsageHistoryEntry entry)
+    {
+        var accent = ProviderAccent(entry.Provider);
+        var iconPath = new Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse(ProviderIconGeometry(entry.Provider)),
+            Fill = Brush(accent),
+            Width = 11,
+            Height = 11,
+            Stretch = Stretch.Uniform,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var isSuccess = string.Equals(entry.Status, "success", StringComparison.OrdinalIgnoreCase);
+        var label = new TextBlock
+        {
+            Text = isSuccess
+                ? DisplayProvider(entry.Provider)
+                : $"{DisplayProvider(entry.Provider)} · {_text.UsageHistoryError}",
+            FontSize = 10.5,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brush(accent),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var stack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { iconPath, label }
+        };
+        return new Border
+        {
+            Background = Tint(accent, _isLightTheme ? (byte)22 : (byte)36),
+            BorderBrush = Tint(accent, _isLightTheme ? (byte)90 : (byte)130),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(9, 4),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = stack
+        };
+    }
+
+    private Control CreateInlineQuotaCell(int? remainingPercent, DateTimeOffset? resetAt)
+    {
+        var signal = SignalColor(remainingPercent);
+        var statusDot = new Avalonia.Controls.Shapes.Ellipse
+        {
+            Width = 6,
+            Height = 6,
+            Fill = Brush(signal),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var percent = new TextBlock
+        {
+            Text = remainingPercent is null ? "—" : $"{Math.Clamp(remainingPercent.Value, 0, 100)}%",
+            FontWeight = FontWeight.Bold,
+            Foreground = Brush(signal),
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var percentStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 5,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { statusDot, percent }
+        };
+        var reset = new TextBlock
+        {
+            Text = resetAt is null
+                ? _text.ResetUnavailable
+                : _text.FormatUsageHistoryReset(resetAt.Value.ToLocalTime()),
+            FontSize = 9.5,
+            Foreground = Brush(_palette.Secondary),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var heading = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Margin = new Thickness(0, 0, 12, 0)
+        };
+        Grid.SetColumn(reset, 1);
+        heading.Children.Add(percentStack);
+        heading.Children.Add(reset);
+
+        return new StackPanel
+        {
+            Spacing = 4,
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { heading, CreateInlineProgress(remainingPercent, signal) }
+        };
+    }
+
+    private Control CreateInlineProgress(int? remainingPercent, string signal)
+    {
+        var fill = new Border
+        {
+            Height = 4,
+            CornerRadius = new CornerRadius(2),
+            Background = Brush(signal),
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        var track = new Border
+        {
+            Height = 4,
+            CornerRadius = new CornerRadius(2),
+            Background = Tint(_palette.Secondary, _isLightTheme ? (byte)30 : (byte)45),
+            ClipToBounds = true,
+            Child = fill
+        };
+        track.SizeChanged += (_, _) =>
+        {
+            var value = Math.Clamp(remainingPercent ?? 0, 0, 100);
+            fill.Width = Math.Max(0, track.Bounds.Width * (value / 100.0));
+        };
+        return track;
+    }
+
+    private Control CreateInlineErrorCell(string error)
+    {
+        return new Border
+        {
+            Background = Tint(_palette.Error, _isLightTheme ? (byte)18 : (byte)35),
+            BorderBrush = Tint(_palette.Error, _isLightTheme ? (byte)80 : (byte)120),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 5),
+            Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = error,
+                Foreground = Brush(_palette.Error),
+                FontSize = 11,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+    }
+
+    private string SignalColor(int? remainingPercent) => (remainingPercent ?? 0) switch
+    {
+        < 20 => _palette.Red,
+        < 50 => _palette.Orange,
+        < 80 => _palette.Yellow,
+        _ => _palette.Green
+    };
+
     private sealed record HistoryPalette(
         string Root,
         string Surface,
@@ -1799,7 +2245,14 @@ public sealed class UsageHistoryWindow : Window
         string Error,
         string WarningSoft,
         string WarningBorder,
-        string WarningText)
+        string WarningText,
+        string Row,
+        string RowAlternate,
+        string RowHover,
+        string Green,
+        string Yellow,
+        string Orange,
+        string Red)
     {
         public static HistoryPalette Light { get; } = new(
             "#FFF2F5F3",
@@ -1819,7 +2272,14 @@ public sealed class UsageHistoryWindow : Window
             "#FFB13A32",
             "#FFFFF5DF",
             "#FFF0D08C",
-            "#FF7A5314");
+            "#FF7A5314",
+            "#FFFFFFFF",
+            "#FFFAFBFA",
+            "#FFF1F7F4",
+            "#FF0F8A5F",
+            "#FFA98700",
+            "#FFD97706",
+            "#FFD84A42");
 
         public static HistoryPalette Dark { get; } = new(
             "#FF151816",
@@ -1839,6 +2299,13 @@ public sealed class UsageHistoryWindow : Window
             "#FFFF8A80",
             "#FF3A3020",
             "#FF75582A",
-            "#FFFFD18A");
+            "#FFFFD18A",
+            "#FF202421",
+            "#FF232824",
+            "#FF29352F",
+            "#FF4AD894",
+            "#FFF2CF5B",
+            "#FFFF9847",
+            "#FFFF6666");
     }
 }
