@@ -676,4 +676,38 @@ public sealed class UiTextTests
         Assert.False(string.IsNullOrWhiteSpace(text.WindowSettingsDescription));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageSettingsDescription));
     }
+
+    [Theory]
+    [InlineData(UiLanguage.English)]
+    [InlineData(UiLanguage.TraditionalChinese)]
+    [InlineData(UiLanguage.SimplifiedChinese)]
+    public void SettingDescriptionsReturnNonEmptyStringsAcrossAllLanguages(UiLanguage language)
+    {
+        var text = UiText.For(language);
+        Assert.False(string.IsNullOrWhiteSpace(text.SystemTrayDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.TrayIconStyleDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.ShowTaskbarIconDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.StartOnBootDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.MinimizeOnStartDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.AlwaysOnTopDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.ClaudeProviderDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.ClaudeSessionLimitDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.ClaudeWeeklyLimitDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.CodexProviderDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.CodexFiveHourLimitDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.CodexWeeklyLimitDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.AntigravityProviderDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.RefreshIntervalDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.LanguageOptionDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.ThemeOptionDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.PositionOptionDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.LowUsageAlertDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.LowUsageThresholdDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.NotifyOnResetDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.ResetDateTimeFormatDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.LastUpdatedDateTimeFormatDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageLoggingDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageLogFilePathDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.UsageLogFormatDescription));
+    }
 }

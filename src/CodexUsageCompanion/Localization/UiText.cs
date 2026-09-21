@@ -761,6 +761,181 @@ public sealed record UiText(
         _ => "Application details and version information"
     };
 
+    public string SystemTrayDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "將隨伴視窗縮小至系統匣通知區域",
+        UiLanguage.SimplifiedChinese => "将伴侣窗口最小化到系统托盘通知区域",
+        _ => "Minimize companion to the system tray notification area"
+    };
+
+    public string TrayIconStyleDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "選擇在系統匣中顯示動態額度百分比或預設圖示",
+        UiLanguage.SimplifiedChinese => "选择在系统托盘中显示动态配额百分比或默认图标",
+        _ => "Choose dynamic quota percentage or default icon in the system tray"
+    };
+
+    public string ShowTaskbarIconDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "在工作列或 Dock 中顯示應用程式圖示",
+        UiLanguage.SimplifiedChinese => "在任务栏或 Dock 中显示应用程序图标",
+        _ => "Show app icon in the taskbar or dock"
+    };
+
+    public string StartOnBootDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "在開機登入系統時自動啟動隨伴視窗",
+        UiLanguage.SimplifiedChinese => "在开机登录系统时自动启动伴侣窗口",
+        _ => "Automatically launch companion on system startup"
+    };
+
+    public string MinimizeOnStartDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "開機啟動時自動縮小至系統匣，不彈出視窗",
+        UiLanguage.SimplifiedChinese => "开机启动时自动隐藏到系统托盘，不弹出窗口",
+        _ => "Hide main window to tray immediately on system launch"
+    };
+
+    public string AlwaysOnTopDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "保持桌面隨伴視窗浮動於其他視窗最上層",
+        UiLanguage.SimplifiedChinese => "保持桌面伴侣窗口浮动在其他窗口最上层",
+        _ => "Keep companion overlay floating above other desktop windows"
+    };
+
+    public string ClaudeProviderDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "追蹤 Anthropic Claude 會話與每週用量額度",
+        UiLanguage.SimplifiedChinese => "跟踪 Anthropic Claude 会话与每周用量配额",
+        _ => "Track Anthropic Claude session and weekly usage limits"
+    };
+
+    public string ClaudeSessionLimitDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示 5 小時目前會話額度進度條與重置倒數",
+        UiLanguage.SimplifiedChinese => "显示 5 小时当前会话配额进度条与重置倒数",
+        _ => "Show 5-hour current session quota meter and reset countdown"
+    };
+
+    public string ClaudeWeeklyLimitDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示 7 天滑動週期用量額度進度條",
+        UiLanguage.SimplifiedChinese => "显示 7 天滑动周期用量配额进度条",
+        _ => "Show 7-day rolling window quota meter"
+    };
+
+    public string CodexProviderDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "追蹤 OpenAI Codex 速率限制與請求額度",
+        UiLanguage.SimplifiedChinese => "跟踪 OpenAI Codex 速率限制与请求配额",
+        _ => "Track OpenAI Codex rate limits and request allowances"
+    };
+
+    public string CodexFiveHourLimitDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示 5 小時主要速率限制額度進度條",
+        UiLanguage.SimplifiedChinese => "显示 5 小时主要速率限制配额进度条",
+        _ => "Show 5-hour primary rate limit quota meter"
+    };
+
+    public string CodexWeeklyLimitDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "顯示每週滑動速率限制額度進度條",
+        UiLanguage.SimplifiedChinese => "显示每周滑动速率限制配额进度条",
+        _ => "Show weekly rolling rate limit quota meter"
+    };
+
+    public string AntigravityProviderDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "追蹤 Google DeepMind Antigravity 額度與配額容量",
+        UiLanguage.SimplifiedChinese => "跟踪 Google DeepMind Antigravity 配额与配额容量",
+        _ => "Track Google DeepMind Antigravity quota and tier capacity"
+    };
+
+    public string RefreshIntervalDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "從 API 輪詢抓取最新用量資料的間隔頻率",
+        UiLanguage.SimplifiedChinese => "从 API 轮询获取最新用量数据的间隔频率",
+        _ => "Polling frequency for fetching fresh usage stats from APIs"
+    };
+
+    public string LanguageOptionDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "選擇使用者介面顯示語言",
+        UiLanguage.SimplifiedChinese => "选择用户界面显示语言",
+        _ => "Select user interface display language"
+    };
+
+    public string ThemeOptionDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "選擇深色、淺色或跟隨系統外觀設定",
+        UiLanguage.SimplifiedChinese => "选择深色、浅色或跟随系统外观设置",
+        _ => "Choose Dark, Light, or follow system theme appearance"
+    };
+
+    public string PositionOptionDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "桌面覆蓋視窗貼齊的螢幕角落或邊緣位置",
+        UiLanguage.SimplifiedChinese => "桌面覆盖窗口吸附的屏幕角落或边缘位置",
+        _ => "Screen corner or edge docking position for the overlay"
+    };
+
+    public string LowUsageAlertDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "當剩餘額度低於警戒門檻時發送桌面通知提醒",
+        UiLanguage.SimplifiedChinese => "当剩余配额低于预警阈值时发送桌面通知提醒",
+        _ => "Trigger alert notification when remaining quota falls below threshold"
+    };
+
+    public string LowUsageThresholdDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "觸發低額度警告的剩餘配額百分比",
+        UiLanguage.SimplifiedChinese => "触发低配额警告的剩余配额百分比",
+        _ => "Percentage of remaining quota that triggers warning"
+    };
+
+    public string NotifyOnResetDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "當額度完全重置並恢復滿額時發送通知",
+        UiLanguage.SimplifiedChinese => "当配额完全重置并恢复满额时发送通知",
+        _ => "Send notification when rate limits are reset and fully refreshed"
+    };
+
+    public string ResetDateTimeFormatDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "速率限制重置時間的日期時間格式",
+        UiLanguage.SimplifiedChinese => "速率限制重置时间的日期时间格式",
+        _ => "Timestamp format for rate limit reset time"
+    };
+
+    public string LastUpdatedDateTimeFormatDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "上次成功更新用量資料的時間格式",
+        UiLanguage.SimplifiedChinese => "上次成功更新用量数据的时间格式",
+        _ => "Timestamp format for last successful data refresh"
+    };
+
+    public string UsageLoggingDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "將帶時間戳記的用量數據記錄至硬碟供分析與圖表使用",
+        UiLanguage.SimplifiedChinese => "将带时间戳的用量数据记录到硬盘以供分析与图表使用",
+        _ => "Record timestamped quota samples to disk for analytics"
+    };
+
+    public string UsageLogFilePathDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "存放用量歷程記錄檔案的目的地路徑",
+        UiLanguage.SimplifiedChinese => "存放用量历史记录文件的目标路径",
+        _ => "Destination file path for storing usage log entries"
+    };
+
+    public string UsageLogFormatDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "歷程記錄檔案的儲存格式（CSV 或 JSONL）",
+        UiLanguage.SimplifiedChinese => "历史记录文件的存储格式（CSV 或 JSONL）",
+        _ => "Data file format for logging (CSV or JSONL)"
+    };
+
     public string PinOnTopAction => Language switch
     {
         UiLanguage.TraditionalChinese => "將視窗釘選在最上層",
