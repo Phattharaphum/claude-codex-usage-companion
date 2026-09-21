@@ -619,7 +619,7 @@ public sealed class UiTextTests
             new[] { text.MainWindowShortcutsGroup, text.SettingsWindowShortcutsGroup },
             groups.Select(group => group.Title));
         Assert.Equal(
-            new[] { "F1", "S", "Ctrl+R", "Esc" },
+            new[] { "F1", "S", "Ctrl+R", "Ctrl+M", "Esc" },
             groups[0].Shortcuts.Select(shortcut => shortcut.Keys));
         Assert.Equal(
             new[] { "Ctrl+S", "Esc" },
@@ -627,5 +627,35 @@ public sealed class UiTextTests
         Assert.All(
             groups.SelectMany(group => group.Shortcuts),
             shortcut => Assert.False(string.IsNullOrWhiteSpace(shortcut.Description)));
+    }
+
+    [Theory]
+    [InlineData(UiLanguage.English, 120, "2h 0m")]
+    [InlineData(UiLanguage.English, 2880, "2d 0h")]
+    [InlineData(UiLanguage.English, 45, "45m")]
+    [InlineData(UiLanguage.TraditionalChinese, 135, "2小時 15分")]
+    [InlineData(UiLanguage.SimplifiedChinese, 135, "2小时 15分")]
+    public void FormatShortCountdownFormatsExpectedDurations(
+        UiLanguage language,
+        int minutesRemaining,
+        string expected)
+    {
+        var text = UiText.For(language);
+        var now = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var reset = now.AddMinutes(minutesRemaining);
+
+        var result = text.FormatShortCountdown(reset, now);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "Compact mode")]
+    [InlineData(UiLanguage.TraditionalChinese, "精簡模式")]
+    [InlineData(UiLanguage.SimplifiedChinese, "精简模式")]
+    public void CompactModeActionReturnsExpectedText(UiLanguage language, string expected)
+    {
+        var text = UiText.For(language);
+        Assert.Equal(expected, text.CompactModeAction);
     }
 }

@@ -39,15 +39,38 @@ public sealed class UsageOverlayWindow : Window
         "M142.27 316.619l73.655-41.326 1.238-3.589-1.238-1.996-3.589-.001-12.31-.759-42.084-1.138-36.498-1.516-35.361-1.896-8.897-1.895-8.34-10.995.859-5.484 7.482-5.03 10.717.935 23.683 1.617 35.537 2.452 25.782 1.517 38.193 3.968h6.064l.86-2.451-2.073-1.517-1.618-1.517-36.776-24.922-39.81-26.338-20.852-15.166-11.273-7.683-5.687-7.204-2.451-15.721 10.237-11.273 13.75.935 3.513.936 13.928 10.716 29.749 23.027 38.848 28.612 5.687 4.727 2.275-1.617.278-1.138-2.553-4.271-21.13-38.193-22.546-38.848-10.035-16.101-2.654-9.655c-.935-3.968-1.617-7.304-1.617-11.374l11.652-15.823 6.445-2.073 15.545 2.073 6.547 5.687 9.655 22.092 15.646 34.78 24.265 47.291 7.103 14.028 3.791 12.992 1.416 3.968 2.449-.001v-2.275l1.997-26.641 3.69-32.707 3.589-42.084 1.239-11.854 5.863-14.206 11.652-7.683 9.099 4.348 7.482 10.716-1.036 6.926-4.449 28.915-8.72 45.294-5.687 30.331h3.313l3.792-3.791 15.342-20.372 25.782-32.227 11.374-12.789 13.27-14.129 8.517-6.724 16.1-.001 11.854 17.617-5.307 18.199-16.581 21.029-13.75 17.819-19.716 26.54-12.309 21.231 1.138 1.694 2.932-.278 44.536-9.479 24.062-4.347 28.714-4.928 12.992 6.066 1.416 6.167-5.106 12.613-30.71 7.583-36.018 7.204-53.636 12.689-.657.48.758.935 24.164 2.275 10.337.556h25.301l47.114 3.514 12.309 8.139 7.381 9.959-1.238 7.583-18.957 9.655-25.579-6.066-59.702-14.205-20.474-5.106-2.83-.001v1.694l17.061 16.682 31.266 28.233 39.152 36.397 1.997 8.999-5.03 7.102-5.307-.758-34.401-25.883-13.27-11.651-30.053-25.302-1.996-.001v2.654l6.926 10.136 36.574 54.975 1.895 16.859-2.653 5.485-9.479 3.311-10.414-1.895-21.408-30.054-22.092-33.844-17.819-30.331-2.173 1.238-10.515 113.261-4.929 5.788-11.374 4.348-9.478-7.204-5.03-11.652 5.03-23.027 6.066-30.052 4.928-23.886 4.449-29.674 2.654-9.858-.177-.657-2.173.278-22.37 30.71-34.021 45.977-26.919 28.815-6.445 2.553-11.173-5.789 1.037-10.337 6.243-9.2 37.257-47.392 22.47-29.371 14.508-16.961-.101-2.451h-.859l-98.954 64.251-17.618 2.275-7.583-7.103.936-11.652 3.589-3.791 29.749-20.474-.101.102.024.101z";
     private const string CodexIconPath =
         "M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z";
+    private const string ChevronDownPath =
+        "M7.41 8.59L12 13.17L16.59 8.59L18 10L12 16L6 10L7.41 8.59Z";
+    private const string ChevronRightPath =
+        "M8.59 16.59L13.17 12L8.59 7.41L10 6L16 12L10 18L8.59 16.59Z";
     private readonly UsageCardControls _codexFiveHourCard;
     private readonly UsageCardControls _codexWeeklyCard;
     private readonly UsageCardControls _claudeFiveHourCard;
     private readonly UsageCardControls _claudeWeeklyCard;
     private readonly StackPanel _claudeSection;
+    private readonly StackPanel _claudeCardsContainer;
+    private readonly Border _claudeHeaderSurface;
+    private readonly Border _claudeSummaryPill;
+    private readonly TextBlock _claudeSummaryText;
+    private readonly PathIcon _claudeChevron;
     private readonly StackPanel _codexSection;
+    private readonly StackPanel _codexCardsContainer;
+    private readonly Border _codexHeaderSurface;
+    private readonly Border _codexSummaryPill;
+    private readonly TextBlock _codexSummaryText;
+    private readonly PathIcon _codexChevron;
     private readonly StackPanel _antigravitySection;
+    private readonly StackPanel _antigravityContentContainer;
+    private readonly Border _antigravityHeaderSurface;
+    private readonly Border _antigravitySummaryPill;
+    private readonly TextBlock _antigravitySummaryText;
+    private readonly PathIcon _antigravityChevron;
     private readonly TextBlock _claudeHeading;
     private readonly TextBlock _codexHeading;
+    private readonly TextBlock _antigravityHeading;
+    private bool _claudeCollapsed;
+    private bool _codexCollapsed;
+    private bool _antigravityCollapsed;
     private readonly List<UsageCardControls> _antigravityCards = [];
     private readonly List<TextBlock> _antigravityHeadings = [];
     private readonly List<TextBlock> _antigravityMessages = [];
@@ -167,21 +190,53 @@ public sealed class UsageOverlayWindow : Window
         _codexWeeklyCard = CreateCard(LimitBadge.Week, "Codex");
         _claudeFiveHourCard = CreateCard(LimitBadge.FiveHour, "Claude");
         _claudeWeeklyCard = CreateCard(LimitBadge.Week, "Claude");
-        _claudeSection = CreateProviderSection(
+
+        _claudeCardsContainer = new StackPanel { Spacing = CardSpacing };
+        _claudeCardsContainer.Children.Add(_claudeFiveHourCard.Container);
+        _claudeCardsContainer.Children.Add(_claudeWeeklyCard.Container);
+        _claudeHeaderSurface = CreateCollapsibleHeader(
             "Claude",
             CreateClaudeIcon,
             "#22D77655",
-            out _claudeHeading);
-        _claudeSection.Children.Add(_claudeFiveHourCard.Container);
-        _claudeSection.Children.Add(_claudeWeeklyCard.Container);
-        _codexSection = CreateProviderSection(
+            ToggleClaudeCollapsed,
+            out _claudeHeading,
+            out _claudeSummaryPill,
+            out _claudeSummaryText,
+            out _claudeChevron);
+        _claudeSection = new StackPanel { Spacing = CardSpacing };
+        _claudeSection.Children.Add(_claudeHeaderSurface);
+        _claudeSection.Children.Add(_claudeCardsContainer);
+
+        _codexCardsContainer = new StackPanel { Spacing = CardSpacing };
+        _codexCardsContainer.Children.Add(_codexFiveHourCard.Container);
+        _codexCardsContainer.Children.Add(_codexWeeklyCard.Container);
+        _codexHeaderSurface = CreateCollapsibleHeader(
             "Codex",
             CreateCodexIcon,
             "#2010A37F",
-            out _codexHeading);
-        _codexSection.Children.Add(_codexFiveHourCard.Container);
-        _codexSection.Children.Add(_codexWeeklyCard.Container);
+            ToggleCodexCollapsed,
+            out _codexHeading,
+            out _codexSummaryPill,
+            out _codexSummaryText,
+            out _codexChevron);
+        _codexSection = new StackPanel { Spacing = CardSpacing };
+        _codexSection.Children.Add(_codexHeaderSurface);
+        _codexSection.Children.Add(_codexCardsContainer);
+
+        _antigravityContentContainer = new StackPanel { Spacing = CardSpacing };
+        _antigravityHeaderSurface = CreateCollapsibleHeader(
+            _text.AntigravityTitle,
+            CreateAntigravityIcon,
+            "#204285F4",
+            ToggleAntigravityCollapsed,
+            out _antigravityHeading,
+            out _antigravitySummaryPill,
+            out _antigravitySummaryText,
+            out _antigravityChevron);
         _antigravitySection = new StackPanel { Spacing = CardSpacing };
+        _antigravitySection.Children.Add(_antigravityHeaderSurface);
+        _antigravitySection.Children.Add(_antigravityContentContainer);
+
         ApplyCardVisibility();
 
         stack.Children.Add(header);
@@ -248,6 +303,14 @@ public sealed class UsageOverlayWindow : Window
             return;
         }
 
+        if (eventArgs.Key == Key.M &&
+            (eventArgs.KeyModifiers & KeyModifiers.Control) != 0)
+        {
+            eventArgs.Handled = true;
+            ToggleCompactMode();
+            return;
+        }
+
         if (eventArgs.Key != Key.R ||
             (eventArgs.KeyModifiers & KeyModifiers.Control) == 0)
         {
@@ -272,6 +335,7 @@ public sealed class UsageOverlayWindow : Window
                 state?.Weekly,
                 dataAvailable: state is not null);
             ApplyCardVisibility();
+            UpdateCodexSummary();
             ApplyComputedHeight();
             return;
         }
@@ -286,6 +350,7 @@ public sealed class UsageOverlayWindow : Window
             state?.Weekly,
             dataAvailable: state is not null);
         ApplyCardVisibility();
+        UpdateClaudeSummary();
         ApplyComputedHeight();
     }
 
@@ -441,10 +506,15 @@ public sealed class UsageOverlayWindow : Window
         _codexWeeklyCard.Container.IsVisible = showCodexWeekly;
         _claudeFiveHourCard.Container.IsVisible = showClaudeFiveHour;
         _claudeWeeklyCard.Container.IsVisible = showClaudeWeekly;
-        _claudeSection.IsVisible =
-            _claudeFiveHourCard.Container.IsVisible || _claudeWeeklyCard.Container.IsVisible;
-        _codexSection.IsVisible =
-            _codexFiveHourCard.Container.IsVisible || _codexWeeklyCard.Container.IsVisible;
+
+        var hasClaudeCards = showClaudeFiveHour || showClaudeWeekly;
+        var hasCodexCards = showCodexFiveHour || showCodexWeekly;
+
+        _claudeSection.IsVisible = hasClaudeCards;
+        _claudeCardsContainer.IsVisible = !_claudeCollapsed && hasClaudeCards;
+
+        _codexSection.IsVisible = hasCodexCards;
+        _codexCardsContainer.IsVisible = !_codexCollapsed && hasCodexCards;
     }
 
     private static (bool FiveHour, bool Weekly) VisibleProviderCards(
@@ -485,7 +555,9 @@ public sealed class UsageOverlayWindow : Window
         }
         if (claudeCardHeights.Count > 0)
         {
-            sectionHeights.Add(ComputeProviderSectionHeight(claudeCardHeights));
+            sectionHeights.Add(_claudeCollapsed
+                ? ProviderSectionTitleHeight
+                : ComputeProviderSectionHeight(claudeCardHeights));
         }
 
         var (showCodexFiveHour, showCodexWeekly) = VisibleProviderCards(
@@ -504,7 +576,9 @@ public sealed class UsageOverlayWindow : Window
         }
         if (codexCardHeights.Count > 0)
         {
-            sectionHeights.Add(ComputeProviderSectionHeight(codexCardHeights));
+            sectionHeights.Add(_codexCollapsed
+                ? ProviderSectionTitleHeight
+                : ComputeProviderSectionHeight(codexCardHeights));
         }
         var antigravityHeight = ComputeAntigravitySectionHeight();
         if (antigravityHeight > 0)
@@ -527,9 +601,18 @@ public sealed class UsageOverlayWindow : Window
             _antigravityEnabled,
             _lastAntigravityState,
             _lastAntigravityError);
+        if (presentation.Kind == AntigravityPresentationKind.Hidden)
+        {
+            return 0;
+        }
+
+        if (_antigravityCollapsed)
+        {
+            return AntigravitySectionTitleHeight;
+        }
+
         return presentation.Kind switch
         {
-            AntigravityPresentationKind.Hidden => 0,
             AntigravityPresentationKind.QuotaPools => AntigravitySectionTitleHeight +
                 presentation.Pools.Sum(pool =>
                     CardSpacing + AntigravityGroupTitleHeight +
@@ -549,7 +632,7 @@ public sealed class UsageOverlayWindow : Window
             _antigravityEnabled,
             _lastAntigravityState,
             _lastAntigravityError);
-        _antigravitySection.Children.Clear();
+        _antigravityContentContainer.Children.Clear();
         _antigravityCards.Clear();
         _antigravityHeadings.Clear();
         _antigravityMessages.Clear();
@@ -557,9 +640,10 @@ public sealed class UsageOverlayWindow : Window
         _antigravityMessageCards.Clear();
         _antigravityGroupHeaders.Clear();
         _antigravitySection.IsVisible = presentation.Kind != AntigravityPresentationKind.Hidden;
+        _antigravityContentContainer.IsVisible = !_antigravityCollapsed && _antigravitySection.IsVisible;
         if (_antigravitySection.IsVisible)
         {
-            AddAntigravityHeading(_text.AntigravityTitle, sectionTitle: true);
+            _antigravityHeading.Text = _text.AntigravityTitle;
             if (presentation.Kind == AntigravityPresentationKind.QuotaPools)
             {
                 foreach (var pool in presentation.Pools)
@@ -586,6 +670,8 @@ public sealed class UsageOverlayWindow : Window
                 };
                 AddAntigravityMessage(message, presentation.Kind == AntigravityPresentationKind.Error);
             }
+
+            UpdateAntigravitySummary();
         }
 
         ApplyAntigravityTheme();
@@ -598,13 +684,16 @@ public sealed class UsageOverlayWindow : Window
         }
     }
 
-    private static StackPanel CreateProviderSection(
+    private Border CreateCollapsibleHeader(
         string providerName,
         Func<Control> createIcon,
         string iconBackground,
-        out TextBlock heading)
+        Action onToggle,
+        out TextBlock heading,
+        out Border summaryPill,
+        out TextBlock summaryText,
+        out PathIcon chevron)
     {
-        var section = new StackPanel { Spacing = CardSpacing };
         var icon = createIcon();
         icon.Width = 14;
         icon.Height = 14;
@@ -624,17 +713,301 @@ public sealed class UsageOverlayWindow : Window
             FontWeight = FontWeight.Bold,
             VerticalAlignment = VerticalAlignment.Center
         };
-        var headingRow = new StackPanel
+        var leftStack = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
-            Height = ProviderSectionTitleHeight,
-            Margin = new Thickness(1, 2, 0, 0)
+            VerticalAlignment = VerticalAlignment.Center
         };
-        headingRow.Children.Add(iconBadge);
-        headingRow.Children.Add(heading);
-        section.Children.Add(headingRow);
-        return section;
+        leftStack.Children.Add(iconBadge);
+        leftStack.Children.Add(heading);
+
+        summaryText = new TextBlock
+        {
+            Text = "--",
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        summaryPill = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(7, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            IsVisible = false,
+            Child = summaryText
+        };
+
+        chevron = new PathIcon
+        {
+            Width = 10,
+            Height = 10,
+            Data = Geometry.Parse(ChevronDownPath),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 2, 0)
+        };
+
+        var rightStack = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        rightStack.Children.Add(summaryPill);
+        rightStack.Children.Add(chevron);
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        Grid.SetColumn(leftStack, 0);
+        Grid.SetColumn(rightStack, 1);
+        grid.Children.Add(leftStack);
+        grid.Children.Add(rightStack);
+
+        var headerSurface = new Border
+        {
+            Height = ProviderSectionTitleHeight,
+            Background = Brushes.Transparent,
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(2, 0),
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Child = grid
+        };
+
+        headerSurface.PointerEntered += (_, _) =>
+        {
+            var isLight = ActualThemeVariant == ThemeVariant.Light;
+            headerSurface.Background = Brush(isLight ? "#10000000" : "#18FFFFFF");
+        };
+        headerSurface.PointerExited += (_, _) =>
+        {
+            headerSurface.Background = Brushes.Transparent;
+        };
+        headerSurface.PointerPressed += (_, eventArgs) =>
+        {
+            if (eventArgs.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                eventArgs.Handled = true;
+                onToggle();
+            }
+        };
+
+        ToolTip.SetTip(headerSurface, CollapseSectionTooltip(false));
+        return headerSurface;
+    }
+
+    private string CollapseSectionTooltip(bool collapsed) => _text.Language switch
+    {
+        UiLanguage.TraditionalChinese => collapsed ? "按一下展開" : "按一下收合",
+        UiLanguage.SimplifiedChinese => collapsed ? "点击展开" : "点击折叠",
+        _ => collapsed ? "Click to expand" : "Click to collapse"
+    };
+
+    private void ToggleClaudeCollapsed()
+    {
+        _claudeCollapsed = !_claudeCollapsed;
+        UpdateClaudeSectionState();
+        ApplyComputedHeight();
+    }
+
+    private void ToggleCodexCollapsed()
+    {
+        _codexCollapsed = !_codexCollapsed;
+        UpdateCodexSectionState();
+        ApplyComputedHeight();
+    }
+
+    private void ToggleAntigravityCollapsed()
+    {
+        _antigravityCollapsed = !_antigravityCollapsed;
+        UpdateAntigravitySectionState();
+        ApplyComputedHeight();
+    }
+
+    public void ToggleCompactMode()
+    {
+        var hasClaude = _claudeSection.IsVisible;
+        var hasCodex = _codexSection.IsVisible;
+        var hasAntigravity = _antigravitySection.IsVisible;
+
+        var anyExpanded = (hasClaude && !_claudeCollapsed) ||
+                          (hasCodex && !_codexCollapsed) ||
+                          (hasAntigravity && !_antigravityCollapsed);
+
+        var targetCollapsed = anyExpanded;
+        if (hasClaude) _claudeCollapsed = targetCollapsed;
+        if (hasCodex) _codexCollapsed = targetCollapsed;
+        if (hasAntigravity) _antigravityCollapsed = targetCollapsed;
+
+        UpdateClaudeSectionState();
+        UpdateCodexSectionState();
+        UpdateAntigravitySectionState();
+        ApplyComputedHeight();
+    }
+
+    private void UpdateClaudeSectionState()
+    {
+        var (showFiveHour, showWeekly) = VisibleProviderCards(
+            _claudeEnabled,
+            _showClaudeSession,
+            _showClaudeWeekly,
+            _lastClaudeState);
+        var hasCards = showFiveHour || showWeekly;
+        _claudeCardsContainer.IsVisible = !_claudeCollapsed && hasCards;
+        _claudeChevron.Data = Geometry.Parse(_claudeCollapsed ? ChevronRightPath : ChevronDownPath);
+        _claudeSummaryPill.IsVisible = _claudeCollapsed;
+        ToolTip.SetTip(_claudeHeaderSurface, CollapseSectionTooltip(_claudeCollapsed));
+        if (_claudeCollapsed)
+        {
+            UpdateClaudeSummary();
+        }
+    }
+
+    private void UpdateCodexSectionState()
+    {
+        var (showFiveHour, showWeekly) = VisibleProviderCards(
+            _codexEnabled,
+            _showCodexFiveHour,
+            _showCodexWeekly,
+            _lastCodexState);
+        var hasCards = showFiveHour || showWeekly;
+        _codexCardsContainer.IsVisible = !_codexCollapsed && hasCards;
+        _codexChevron.Data = Geometry.Parse(_codexCollapsed ? ChevronRightPath : ChevronDownPath);
+        _codexSummaryPill.IsVisible = _codexCollapsed;
+        ToolTip.SetTip(_codexHeaderSurface, CollapseSectionTooltip(_codexCollapsed));
+        if (_codexCollapsed)
+        {
+            UpdateCodexSummary();
+        }
+    }
+
+    private void UpdateAntigravitySectionState()
+    {
+        _antigravityContentContainer.IsVisible = !_antigravityCollapsed && _antigravitySection.IsVisible;
+        _antigravityChevron.Data = Geometry.Parse(_antigravityCollapsed ? ChevronRightPath : ChevronDownPath);
+        _antigravitySummaryPill.IsVisible = _antigravityCollapsed;
+        ToolTip.SetTip(_antigravityHeaderSurface, CollapseSectionTooltip(_antigravityCollapsed));
+        if (_antigravityCollapsed)
+        {
+            UpdateAntigravitySummary();
+        }
+    }
+
+    private void UpdateClaudeSummary()
+    {
+        UpdateProviderSummary(
+            _lastClaudeState,
+            _showClaudeSession,
+            _showClaudeWeekly,
+            _claudeSummaryPill,
+            _claudeSummaryText);
+    }
+
+    private void UpdateCodexSummary()
+    {
+        UpdateProviderSummary(
+            _lastCodexState,
+            _showCodexFiveHour,
+            _showCodexWeekly,
+            _codexSummaryPill,
+            _codexSummaryText);
+    }
+
+    private void UpdateProviderSummary(
+        RateLimitState? state,
+        bool showFiveHour,
+        bool showWeekly,
+        Border pill,
+        TextBlock text)
+    {
+        var windows = new List<RateLimitWindowState>();
+        if (showFiveHour && state?.FiveHour is { } f)
+        {
+            windows.Add(f);
+        }
+        if (showWeekly && state?.Weekly is { } w)
+        {
+            windows.Add(w);
+        }
+
+        if (windows.Count == 0)
+        {
+            text.Text = "--";
+            ApplyPillTheme(pill, text, UsageSignal.Gray);
+            return;
+        }
+
+        var worst = windows.OrderBy(w => w.RemainingPercent).First();
+        var signal = UsagePresentation.GetSignal(worst.RemainingPercent);
+        if (worst.ResetsAt is long unixSeconds)
+        {
+            var localReset = DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime();
+            var countdown = _text.FormatShortCountdown(localReset, DateTimeOffset.Now);
+            text.Text = $"{worst.RemainingPercent}% • {countdown}";
+        }
+        else
+        {
+            text.Text = $"{worst.RemainingPercent}%";
+        }
+
+        ApplyPillTheme(pill, text, signal);
+    }
+
+    private void UpdateAntigravitySummary()
+    {
+        var presentation = UsagePresentation.BuildAntigravityPresentation(
+            _antigravityEnabled,
+            _lastAntigravityState,
+            _lastAntigravityError);
+
+        if (presentation.Kind == AntigravityPresentationKind.QuotaPools)
+        {
+            var windows = presentation.Pools.SelectMany(p => p.Windows).ToList();
+            if (windows.Count > 0)
+            {
+                var worst = windows.OrderBy(w => w.RemainingPercent).First();
+                var signal = UsagePresentation.GetSignal(worst.RemainingPercent);
+                if (worst.ResetAt is { } resetAt)
+                {
+                    var countdown = _text.FormatShortCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now);
+                    _antigravitySummaryText.Text = $"{worst.RemainingPercent}% • {countdown}";
+                }
+                else
+                {
+                    _antigravitySummaryText.Text = $"{worst.RemainingPercent}%";
+                }
+                ApplyPillTheme(_antigravitySummaryPill, _antigravitySummaryText, signal);
+                return;
+            }
+        }
+        else if (presentation.Kind == AntigravityPresentationKind.Error)
+        {
+            _antigravitySummaryText.Text = "Error";
+            ApplyPillTheme(_antigravitySummaryPill, _antigravitySummaryText, UsageSignal.Red);
+            return;
+        }
+        else if (_lastAntigravityState?.Models.Count > 0)
+        {
+            var worstModel = _lastAntigravityState.Models.OrderBy(m => m.RemainingPercent).First();
+            var signal = UsagePresentation.GetSignal(worstModel.RemainingPercent);
+            _antigravitySummaryText.Text = $"{worstModel.RemainingPercent}%";
+            ApplyPillTheme(_antigravitySummaryPill, _antigravitySummaryText, signal);
+            return;
+        }
+
+        _antigravitySummaryText.Text = "--";
+        ApplyPillTheme(_antigravitySummaryPill, _antigravitySummaryText, UsageSignal.Gray);
+    }
+
+    private void ApplyPillTheme(Border pill, TextBlock text, UsageSignal signal)
+    {
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
+        text.Foreground = SignalBrush(signal);
+        pill.Background = Brush(isLight ? "#FFE8ECE8" : "#FF252825");
+        pill.BorderBrush = Brush(isLight ? "#FFD0D8D0" : "#FF3D423D");
     }
 
     private void AddAntigravityHeading(string text, bool sectionTitle)
@@ -642,49 +1015,22 @@ public sealed class UsageOverlayWindow : Window
         var heading = new TextBlock
         {
             Text = text,
-            FontSize = sectionTitle ? 13.5 : 10.5,
-            FontWeight = sectionTitle ? FontWeight.Bold : FontWeight.SemiBold,
+            FontSize = 10.5,
+            FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
         _antigravityHeadings.Add(heading);
-        if (!sectionTitle)
+        var groupHeader = new Border
         {
-            var groupHeader = new Border
-            {
-                Height = AntigravityGroupTitleHeight,
-                CornerRadius = new CornerRadius(10),
-                Padding = new Thickness(8, 1),
-                Margin = new Thickness(4, 0, 0, 0),
-                Child = heading
-            };
-            _antigravityGroupHeaders.Add(groupHeader);
-            _antigravitySection.Children.Add(groupHeader);
-            return;
-        }
-
-        var icon = CreateAntigravityIcon();
-        icon.Width = 14;
-        icon.Height = 14;
-        icon.VerticalAlignment = VerticalAlignment.Center;
-        var iconBadge = new Border
-        {
-            Width = 22,
-            Height = 22,
-            CornerRadius = new CornerRadius(7),
-            Background = Brush("#204285F4"),
-            Child = icon
+            Height = AntigravityGroupTitleHeight,
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(8, 1),
+            Margin = new Thickness(4, 0, 0, 0),
+            Child = heading
         };
-        var headingRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Height = AntigravitySectionTitleHeight,
-            Margin = new Thickness(1, 2, 0, 0)
-        };
-        headingRow.Children.Add(iconBadge);
-        headingRow.Children.Add(heading);
-        _antigravitySection.Children.Add(headingRow);
+        _antigravityGroupHeaders.Add(groupHeader);
+        _antigravityContentContainer.Children.Add(groupHeader);
     }
 
     private void AddAntigravityWindow(AntigravityQuotaWindowState window)
@@ -696,7 +1042,7 @@ public sealed class UsageOverlayWindow : Window
         card.Container.Margin = new Thickness(4, 0, 0, 0);
         UpdateAntigravityCard(card, window);
         _antigravityCards.Add(card);
-        _antigravitySection.Children.Add(card.Container);
+        _antigravityContentContainer.Children.Add(card.Container);
     }
 
     private static string CompactPoolName(string name) =>
@@ -727,7 +1073,7 @@ public sealed class UsageOverlayWindow : Window
             _antigravityErrorMessages.Add(text);
         }
         _antigravityMessageCards.Add(card);
-        _antigravitySection.Children.Add(card);
+        _antigravityContentContainer.Children.Add(card);
     }
 
     private void ApplyComputedHeight()
@@ -903,6 +1249,13 @@ public sealed class UsageOverlayWindow : Window
     {
         var flyout = new MenuFlyout();
 
+        var compactModeItem = new MenuItem
+        {
+            Header = $"{_text.CompactModeAction} (Ctrl+M)",
+            Icon = CreateHeaderIcon("M3 18H21V16H3V18ZM3 13H21V11H3V13ZM3 6V8H21V6H3Z")
+        };
+        compactModeItem.Click += (_, _) => ToggleCompactMode();
+
         var resetEfficiencyItem = new MenuItem
         {
             Header = _text.ResetEfficiencyAction,
@@ -938,6 +1291,7 @@ public sealed class UsageOverlayWindow : Window
             }
         };
 
+        flyout.Items.Add(compactModeItem);
         flyout.Items.Add(resetEfficiencyItem);
         flyout.Items.Add(shortcutsItem);
         flyout.Items.Add(copySummaryItem);
@@ -1301,9 +1655,9 @@ public sealed class UsageOverlayWindow : Window
         card.BadgeText.Text = BadgeText(card.BadgeKind);
         card.Remaining.Text = FormatPercent(state.RemainingPercent);
         card.Reset.Text = state.ResetsAt is long unixSeconds
-            ? _text.FormatResetWithCountdown(
+            ? $"⏱ {_text.FormatResetWithCountdown(
                 DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime(),
-                DateTimeOffset.Now)
+                DateTimeOffset.Now)}"
             : _text.ResetUnavailable;
         ApplyBar(card, state.RemainingPercent, UsagePresentation.GetSignal(state.RemainingPercent));
     }
@@ -1317,7 +1671,7 @@ public sealed class UsageOverlayWindow : Window
         card.ProgressTrack.IsVisible = true;
         card.Remaining.Text = FormatPercent(window.RemainingPercent);
         card.Reset.Text = window.ResetAt is { } resetAt
-            ? _text.FormatResetWithCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now)
+            ? $"⏱ {_text.FormatResetWithCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now)}"
             : _text.ResetUnavailable;
         ApplyBar(card, window.RemainingPercent, UsagePresentation.GetSignal(window.RemainingPercent));
     }
@@ -1471,6 +1825,13 @@ public sealed class UsageOverlayWindow : Window
         UpdatePinButton();
         _claudeHeading.Foreground = Brush(_palette.CardTitle);
         _codexHeading.Foreground = Brush(_palette.CardTitle);
+        _antigravityHeading.Foreground = Brush(_palette.CardTitle);
+        _claudeChevron.Foreground = Brush(_palette.SecondaryText);
+        _codexChevron.Foreground = Brush(_palette.SecondaryText);
+        _antigravityChevron.Foreground = Brush(_palette.SecondaryText);
+        UpdateClaudeSummary();
+        UpdateCodexSummary();
+        UpdateAntigravitySummary();
         ApplyCardTheme(_codexFiveHourCard);
         ApplyCardTheme(_codexWeeklyCard);
         ApplyCardTheme(_claudeFiveHourCard);

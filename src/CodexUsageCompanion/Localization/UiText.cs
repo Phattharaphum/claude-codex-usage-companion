@@ -768,6 +768,13 @@ public sealed record UiText(
         _ => "Close Settings"
     };
 
+    public string CompactModeAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "精簡模式",
+        UiLanguage.SimplifiedChinese => "精简模式",
+        _ => "Compact mode"
+    };
+
     public IReadOnlyList<ShortcutGroup> ShortcutGroups => new[]
     {
         new ShortcutGroup(
@@ -777,6 +784,7 @@ public sealed record UiText(
                 new ShortcutHint("F1", ShowShortcutsShortcut),
                 new ShortcutHint("S", OpenSettingsShortcut),
                 new ShortcutHint("Ctrl+R", RefreshAction),
+                new ShortcutHint("Ctrl+M", CompactModeAction),
                 new ShortcutHint("Esc", CloseWindowShortcut)
             }),
         new ShortcutGroup(
@@ -1011,6 +1019,40 @@ public sealed record UiText(
         };
 
         return $"{FormatResetDateTime(localReset)} · {countdown}";
+    }
+
+    public string FormatShortCountdown(DateTimeOffset localReset, DateTimeOffset now)
+    {
+        var minutesRemaining = Math.Max(
+            0,
+            (int)Math.Ceiling((localReset - now).TotalMinutes));
+        var days = minutesRemaining / (24 * 60);
+        var hours = (minutesRemaining % (24 * 60)) / 60;
+        var minutes = minutesRemaining % 60;
+        if (days > 0)
+        {
+            return Language switch
+            {
+                UiLanguage.TraditionalChinese => $"{days}天 {hours}時",
+                UiLanguage.SimplifiedChinese => $"{days}天 {hours}时",
+                _ => $"{days}d {hours}h"
+            };
+        }
+        if (hours > 0)
+        {
+            return Language switch
+            {
+                UiLanguage.TraditionalChinese => $"{hours}小時 {minutes}分",
+                UiLanguage.SimplifiedChinese => $"{hours}小时 {minutes}分",
+                _ => $"{hours}h {minutes}m"
+            };
+        }
+        return Language switch
+        {
+            UiLanguage.TraditionalChinese => $"{minutes}分",
+            UiLanguage.SimplifiedChinese => $"{minutes}分",
+            _ => $"{minutes}m"
+        };
     }
 
     public string FormatUpdatedTime(DateTimeOffset updatedAt)
