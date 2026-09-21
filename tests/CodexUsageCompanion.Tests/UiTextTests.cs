@@ -709,5 +709,8 @@ public sealed class UiTextTests
         Assert.False(string.IsNullOrWhiteSpace(text.UsageLoggingDescription));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageLogFilePathDescription));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageLogFormatDescription));
+        Assert.False(string.IsNullOrWhiteSpace(text.BrowseFileAction));
+        Assert.False(string.IsNullOrWhiteSpace(text.ScreenPositionVisual));
+        Assert.False(string.IsNullOrWhiteSpace(text.QuickPresetsLabel));
     }
 }

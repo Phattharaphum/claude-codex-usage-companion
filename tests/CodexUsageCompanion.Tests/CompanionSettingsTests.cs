@@ -290,6 +290,22 @@ public sealed class CompanionSettingsTests
         Assert.Equal(antigravity, updated.EnableAntigravityUsage);
     }
 
+    [Theory]
+    [InlineData("left-top", WindowPosition.LeftTop)]
+    [InlineData("middle-top", WindowPosition.MiddleTop)]
+    [InlineData("right-top", WindowPosition.RightTop)]
+    [InlineData("left-center", WindowPosition.LeftCenter)]
+    [InlineData("middle-center", WindowPosition.MiddleCenter)]
+    [InlineData("right-center", WindowPosition.RightCenter)]
+    [InlineData("left-bottom", WindowPosition.LeftBottom)]
+    [InlineData("middle-bottom", WindowPosition.MiddleBottom)]
+    [InlineData("right-bottom", WindowPosition.RightBottom)]
+    public void WindowPositionGridValuesMatchSupportedConstants(string input, string expected)
+    {
+        Assert.Equal(expected, WindowPosition.Normalize(input));
+        Assert.Contains(expected, WindowPosition.Values);
+    }
+
     [Fact]
     public void SavePersistsNormalizedInteractiveSettings()
     {

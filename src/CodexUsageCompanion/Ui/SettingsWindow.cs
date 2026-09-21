@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using CodexUsageCompanion.Configuration;
 using CodexUsageCompanion.Localization;
@@ -69,6 +70,10 @@ public sealed class SettingsWindow : Window
     private readonly ComboBox _language;
     private readonly ComboBox _theme;
     private readonly ComboBox _position;
+    private readonly Dictionary<string, Button> _positionGridButtons = new();
+    private Border _screenBorder = null!;
+    private Border _screenStandStem = null!;
+    private Border _screenStandBase = null!;
 
     // Notification controls
     private readonly ToggleSwitch _lowUsageAlert;
@@ -81,6 +86,9 @@ public sealed class SettingsWindow : Window
     private readonly ComboBox _lastUpdatedDateTimeFormat;
     private readonly TextBlock _resetDateTimeFormatStatus;
     private readonly TextBlock _lastUpdatedDateTimeFormatStatus;
+    private Border _resetFormatBadge = null!;
+    private Border _lastUpdatedFormatBadge = null!;
+    private readonly List<Button> _presetChips = new();
 
     // Logging controls
     private readonly ToggleSwitch _usageLogging;
@@ -225,6 +233,7 @@ public sealed class SettingsWindow : Window
         {
             if (_position.SelectedItem is string position)
             {
+                UpdatePositionGridSelection(position);
                 PositionPreviewRequested?.Invoke(position);
             }
         };
@@ -275,14 +284,14 @@ public sealed class SettingsWindow : Window
         _resetDateTimeFormatStatus = new TextBlock
         {
             FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 2)
+            FontWeight = FontWeight.Medium,
+            TextWrapping = TextWrapping.Wrap
         };
         _lastUpdatedDateTimeFormatStatus = new TextBlock
         {
             FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 2)
+            FontWeight = FontWeight.Medium,
+            TextWrapping = TextWrapping.Wrap
         };
 
         // Logging controls
@@ -290,8 +299,8 @@ public sealed class SettingsWindow : Window
         _usageLogFilePath = new TextBox
         {
             Text = UsageLogOptions.NormalizeFilePath(settings.UsageLogFilePath, settings.UsageLogFormat),
-            MinWidth = 240,
-            HorizontalAlignment = HorizontalAlignment.Right
+            MinWidth = 200,
+            HorizontalAlignment = HorizontalAlignment.Stretch
         };
         _usageLogFormat = new ComboBox
         {
@@ -412,7 +421,7 @@ public sealed class SettingsWindow : Window
             IsVisible = false
         };
 
-        // Build Category Panels with Option B Setting Rows
+        // Build Category Panels with Option B Setting Rows & Option C Widgets
         BuildCategoryPanels();
 
         // Content ScrollViewer
@@ -523,6 +532,7 @@ public sealed class SettingsWindow : Window
         _initialSettings = CaptureSettings();
 
         SelectCategory(SettingsCategory.General);
+        UpdatePositionGridSelection(WindowPosition.Normalize(settings.Position));
         ApplyThemePalette();
 
         ActualThemeVariantChanged += (_, _) => ApplyThemePalette();
@@ -619,17 +629,19 @@ public sealed class SettingsWindow : Window
             Children = { claudeCard, codexCard, antigravityCard, pollingCard }
         };
 
-        // 3. Appearance Panel
+        // 3. Appearance Panel (Option C: Interactive 3x3 Screen Position Grid Widget)
         var appearanceCard1 = CreateCardGroup(
             _text.AppearanceSettingsGroup,
             "Personalize visual presentation, active language, and color theme.",
             CreateSettingRow(_text.LanguageOption, _text.LanguageOptionDescription, _language),
             CreateSettingRow(_text.ThemeOption, _text.ThemeOptionDescription, _theme, showDivider: false));
 
+        var positionGridWidget = CreatePositionGridWidget();
         var appearanceCard2 = CreateCardGroup(
             _text.PositionOption,
             _text.PositionOptionDescription,
-            CreateSettingRow(_text.PositionOption, "Select where the companion overlay docks on your desktop.", _position, showDivider: false));
+            CreateSettingRow(_text.PositionOption, "Select or click a position below to dock the companion overlay.", _position, showDivider: true),
+            positionGridWidget);
 
         var appearancePanel = new StackPanel
         {
@@ -656,28 +668,50 @@ public sealed class SettingsWindow : Window
             Children = { notificationsCard }
         };
 
-        // 5. Date & Time Panel
+        // 5. Date & Time Panel (Option C: Badges & Quick Preset Chips)
         var resetFormatRow = CreateSettingRow(
             _text.ResetDateTimeFormatOption,
             _text.ResetDateTimeFormatDescription,
             _resetDateTimeFormat);
+
+        _resetFormatBadge = CreateFormatBadge(_resetDateTimeFormatStatus);
+        var resetPresets = CreatePresetChipsPanel(
+            _resetDateTimeFormat,
+            [
+                DateTimeFormatOptions.MonthDay,
+                DateTimeFormatOptions.MonthDayTime,
+                DateTimeFormatOptions.YearMonthDay,
+                DateTimeFormatOptions.YearMonthDayTime
+            ]);
 
         var lastUpdatedFormatRow = CreateSettingRow(
             _text.LastUpdatedDateTimeFormatOption,
             _text.LastUpdatedDateTimeFormatDescription,
             _lastUpdatedDateTimeFormat);
 
+        _lastUpdatedFormatBadge = CreateFormatBadge(_lastUpdatedDateTimeFormatStatus);
+        var lastUpdatedPresets = CreatePresetChipsPanel(
+            _lastUpdatedDateTimeFormat,
+            [
+                DateTimeFormatOptions.HourMinute,
+                DateTimeFormatOptions.HourMinuteSecond,
+                DateTimeFormatOptions.MonthDayTime,
+                DateTimeFormatOptions.YearMonthDayTime
+            ]);
+
         var dateTimeCard1 = CreateCardGroup(
             "Rate Limit Reset Format",
             "Formatting string for when session or weekly rate limits expire.",
             resetFormatRow,
-            _resetDateTimeFormatStatus);
+            resetPresets,
+            _resetFormatBadge);
 
         var dateTimeCard2 = CreateCardGroup(
             "Last Refresh Format",
             "Formatting string for when usage statistics were last retrieved.",
             lastUpdatedFormatRow,
-            _lastUpdatedDateTimeFormatStatus);
+            lastUpdatedPresets,
+            _lastUpdatedFormatBadge);
 
         var dateTimePanel = new StackPanel
         {
@@ -685,11 +719,34 @@ public sealed class SettingsWindow : Window
             Children = { dateTimeCard1, dateTimeCard2 }
         };
 
-        // 6. Logging Panel
+        // 6. Logging Panel (Option C: File Browse Button)
+        var browseButton = new Button
+        {
+            Content = _text.BrowseFileAction,
+            Height = 32,
+            Padding = new Thickness(12, 0),
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(6)
+        };
+        browseButton.Click += async (_, _) => await BrowseLogFilePathAsync();
+
+        var pathBoxGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            MinWidth = 280,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        pathBoxGrid.Children.Add(_usageLogFilePath);
+        Grid.SetColumn(browseButton, 1);
+        pathBoxGrid.Children.Add(browseButton);
+
         _usageLogFilePathRow = CreateSettingRow(
             _text.UsageLogFilePathOption,
             _text.UsageLogFilePathDescription,
-            _usageLogFilePath);
+            pathBoxGrid);
 
         _usageLogFormatRow = CreateSettingRow(
             _text.UsageLogFormatOption,
@@ -758,7 +815,7 @@ public sealed class SettingsWindow : Window
             SettingsCategory.General,
             _text.WindowSettingsGroup,
             _text.WindowSettingsDescription,
-            "M2 4C2 2.9 2.9 2 4 2H20C21.1 2 22 2.9 22 4V20C21.1 22 20 22 20 22H4C2.9 22 2 21.1 2 20V4ZM4 6H20V4H4V6ZM4 8V20H20V8H4ZM6 10H10V12H6V10ZM6 14H14V16H6V14Z",
+            "M2 4C2 2.9 2.9 2 4 2H20C21.1 2 22 2.9 22 4V20C21.1 2 20 22 20 22H4C2.9 22 2 21.1 2 20V4ZM4 6H20V4H4V6ZM4 8V20H20V8H4ZM6 10H10V12H6V10ZM6 14H14V16H6V14Z",
             ["tray", "taskbar", "boot", "startup", "minimize", "top", "always on top", "window", "system"],
             generalPanel));
 
@@ -809,6 +866,254 @@ public sealed class SettingsWindow : Window
             "M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V11H13V17ZM13 9H11V7H13V9Z",
             ["version", "author", "about", "license", "info", "github", "release"],
             aboutPanel));
+    }
+
+    private Control CreatePositionGridWidget()
+    {
+        var monitorGrid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("*,*,*"),
+            ColumnDefinitions = new ColumnDefinitions("*,*,*")
+        };
+
+        var positions = new[,]
+        {
+            { WindowPosition.LeftTop, WindowPosition.MiddleTop, WindowPosition.RightTop },
+            { WindowPosition.LeftCenter, WindowPosition.MiddleCenter, WindowPosition.RightCenter },
+            { WindowPosition.LeftBottom, WindowPosition.MiddleBottom, WindowPosition.RightBottom }
+        };
+
+        for (var row = 0; row < 3; row++)
+        {
+            for (var col = 0; col < 3; col++)
+            {
+                var pos = positions[row, col];
+                var tile = new Button
+                {
+                    Margin = new Thickness(2),
+                    CornerRadius = new CornerRadius(4),
+                    BorderThickness = new Thickness(1),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Stretch,
+                    HorizontalContentAlignment = HorizontalAlignment.Center,
+                    VerticalContentAlignment = VerticalAlignment.Center,
+                    Cursor = new Cursor(StandardCursorType.Hand),
+                    Tag = pos
+                };
+
+                ToolTip.SetTip(tile, pos);
+                tile.Click += (_, _) =>
+                {
+                    _position.SelectedItem = pos;
+                    UpdatePositionGridSelection(pos);
+                    PositionPreviewRequested?.Invoke(pos);
+                    UpdateDirtyState();
+                };
+
+                _positionGridButtons[pos] = tile;
+                Grid.SetRow(tile, row);
+                Grid.SetColumn(tile, col);
+                monitorGrid.Children.Add(tile);
+            }
+        }
+
+        _screenBorder = new Border
+        {
+            Width = 190,
+            Height = 114,
+            CornerRadius = new CornerRadius(8),
+            BorderThickness = new Thickness(2),
+            Padding = new Thickness(4),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Child = monitorGrid
+        };
+
+        _screenStandStem = new Border
+        {
+            Width = 24,
+            Height = 8,
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+
+        _screenStandBase = new Border
+        {
+            Width = 64,
+            Height = 4,
+            CornerRadius = new CornerRadius(2),
+            HorizontalAlignment = HorizontalAlignment.Center
+        };
+
+        var widgetContainer = new StackPanel
+        {
+            Margin = new Thickness(0, 10, 0, 4),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Children = { _screenBorder, _screenStandStem, _screenStandBase }
+        };
+
+        var label = new TextBlock
+        {
+            Text = _text.ScreenPositionVisual,
+            FontSize = 11.5,
+            FontWeight = FontWeight.Medium,
+            Opacity = 0.75,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 6)
+        };
+        _textSecondaryElements.Add(label);
+
+        return new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 8, 0, 2),
+            Children = { label, widgetContainer }
+        };
+    }
+
+    private void UpdatePositionGridSelection(string selectedPosition)
+    {
+        var normalized = WindowPosition.Normalize(selectedPosition);
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
+        var accentBrush = SolidColorBrush.Parse(isLight ? "#0284C7" : "#38BDF8");
+        var activeText = Brushes.White;
+
+        foreach (var (pos, btn) in _positionGridButtons)
+        {
+            var isSelected = string.Equals(pos, normalized, StringComparison.Ordinal);
+            if (isSelected)
+            {
+                btn.Background = accentBrush;
+                btn.BorderBrush = accentBrush;
+                btn.Content = new Border
+                {
+                    Width = 10,
+                    Height = 7,
+                    CornerRadius = new CornerRadius(1.5),
+                    Background = activeText
+                };
+            }
+            else
+            {
+                btn.Background = SolidColorBrush.Parse(isLight ? "#F1F5F9" : "#24242A");
+                btn.BorderBrush = SolidColorBrush.Parse(isLight ? "#CBD5E1" : "#3F3F46");
+                btn.Content = new Border
+                {
+                    Width = 8,
+                    Height = 5,
+                    CornerRadius = new CornerRadius(1),
+                    BorderThickness = new Thickness(1),
+                    BorderBrush = SolidColorBrush.Parse(isLight ? "#94A3B8" : "#71717A")
+                };
+            }
+        }
+    }
+
+    private async Task BrowseLogFilePathAsync()
+    {
+        try
+        {
+            if (StorageProvider.CanSave)
+            {
+                var isJsonl = string.Equals(
+                    _usageLogFormat.SelectedItem as string,
+                    UsageLogOptions.JsonLines,
+                    StringComparison.OrdinalIgnoreCase);
+
+                var ext = isJsonl ? "jsonl" : "csv";
+                var filterName = isJsonl ? "JSON Lines (*.jsonl)" : "CSV Files (*.csv)";
+
+                var currentDir = System.IO.Path.GetDirectoryName(_usageLogFilePath.Text);
+                var suggestedDir = !string.IsNullOrEmpty(currentDir) && System.IO.Directory.Exists(currentDir)
+                    ? await StorageProvider.TryGetFolderFromPathAsync(currentDir)
+                    : null;
+
+                var options = new FilePickerSaveOptions
+                {
+                    Title = _text.UsageLogFilePathOption,
+                    DefaultExtension = ext,
+                    SuggestedStartLocation = suggestedDir,
+                    SuggestedFileName = System.IO.Path.GetFileName(_usageLogFilePath.Text) is { Length: > 0 } existing
+                        ? existing
+                        : $"usage-history.{ext}",
+                    FileTypeChoices = new[]
+                    {
+                        new FilePickerFileType(filterName)
+                        {
+                            Patterns = new[] { $"*.{ext}" }
+                        }
+                    }
+                };
+
+                var file = await StorageProvider.SaveFilePickerAsync(options);
+                if (file is not null)
+                {
+                    _usageLogFilePath.Text = file.Path.LocalPath;
+                    UpdateDirtyState();
+                }
+            }
+        }
+        catch
+        {
+            // Fallback gracefully if StorageProvider is unavailable
+        }
+    }
+
+    private static Border CreateFormatBadge(TextBlock statusBlock)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(12, 8),
+            Margin = new Thickness(0, 4, 0, 4),
+            Child = statusBlock
+        };
+    }
+
+    private Control CreatePresetChipsPanel(ComboBox targetComboBox, string[] presets)
+    {
+        var wrapPanel = new WrapPanel
+        {
+            Margin = new Thickness(0, 4, 0, 6),
+            Orientation = Orientation.Horizontal
+        };
+
+        var label = new TextBlock
+        {
+            Text = $"{_text.QuickPresetsLabel}:",
+            FontSize = 11,
+            Opacity = 0.65,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 4)
+        };
+        _textSecondaryElements.Add(label);
+        wrapPanel.Children.Add(label);
+
+        foreach (var preset in presets)
+        {
+            var chip = new Button
+            {
+                Content = preset,
+                FontSize = 11,
+                FontWeight = FontWeight.Medium,
+                Padding = new Thickness(8, 3),
+                Margin = new Thickness(0, 0, 6, 4),
+                CornerRadius = new CornerRadius(12),
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(1),
+                Cursor = new Cursor(StandardCursorType.Hand)
+            };
+            _presetChips.Add(chip);
+            chip.Click += (_, _) =>
+            {
+                targetComboBox.SelectedItem = preset;
+                targetComboBox.Text = preset;
+                UpdateDateTimeFormatValidation();
+                UpdateDirtyState();
+            };
+            wrapPanel.Children.Add(chip);
+        }
+
+        return wrapPanel;
     }
 
     private Border CreateSettingRow(string title, string? subtitle, Control control, bool showDivider = true)
@@ -1231,7 +1536,27 @@ public sealed class SettingsWindow : Window
             el.Foreground = textSecondary;
         }
 
+        if (_screenBorder is not null)
+        {
+            _screenBorder.Background = SolidColorBrush.Parse(isLight ? "#F8FAFC" : "#121214");
+            _screenBorder.BorderBrush = SolidColorBrush.Parse(isLight ? "#94A3B8" : "#4B5563");
+            _screenStandStem.Background = SolidColorBrush.Parse(isLight ? "#CBD5E1" : "#374151");
+            _screenStandBase.Background = SolidColorBrush.Parse(isLight ? "#94A3B8" : "#4B5563");
+        }
+
+        foreach (var chip in _presetChips)
+        {
+            chip.BorderBrush = SolidColorBrush.Parse(isLight ? "#CBD5E1" : "#3F3F46");
+            chip.Foreground = textSecondary;
+        }
+
         UpdateNavSelectionStyles();
+        if (_position.SelectedItem is string pos)
+        {
+            UpdatePositionGridSelection(pos);
+        }
+
+        UpdateDateTimeFormatValidation();
     }
 
     private void HookDirtyTracking()
@@ -1574,10 +1899,12 @@ public sealed class SettingsWindow : Window
         var resetValid = UpdateDateTimeFormatStatus(
             CurrentFormat(_resetDateTimeFormat),
             _resetDateTimeFormatStatus,
+            _resetFormatBadge,
             sample);
         var lastUpdatedValid = UpdateDateTimeFormatStatus(
             CurrentFormat(_lastUpdatedDateTimeFormat),
             _lastUpdatedDateTimeFormatStatus,
+            _lastUpdatedFormatBadge,
             sample);
         _save.IsEnabled = resetValid && lastUpdatedValid;
         _apply.IsEnabled = _save.IsEnabled;
@@ -1587,17 +1914,34 @@ public sealed class SettingsWindow : Window
     private bool UpdateDateTimeFormatStatus(
         string format,
         TextBlock status,
+        Border? badge,
         DateTimeOffset sample)
     {
+        var isLight = ActualThemeVariant == ThemeVariant.Light;
+
         if (_text.TryFormatDateTime(sample, format, out var preview))
         {
-            status.Text = $"{_text.FormatPreview}: {preview}";
-            status.Foreground = Brushes.Gray;
+            status.Text = $"✓ {_text.FormatPreview}: {preview}";
+            status.Foreground = SolidColorBrush.Parse(isLight ? "#059669" : "#34D399");
+
+            if (badge is not null)
+            {
+                badge.Background = SolidColorBrush.Parse(isLight ? "#ECFDF5" : "#064E3B40");
+                badge.BorderBrush = SolidColorBrush.Parse(isLight ? "#A7F3D0" : "#059669");
+            }
+
             return true;
         }
 
-        status.Text = _text.InvalidDateTimeFormat;
-        status.Foreground = Brushes.IndianRed;
+        status.Text = $"⚠ {_text.InvalidDateTimeFormat}";
+        status.Foreground = SolidColorBrush.Parse(isLight ? "#DC2626" : "#F87171");
+
+        if (badge is not null)
+        {
+            badge.Background = SolidColorBrush.Parse(isLight ? "#FEF2F2" : "#7F1D1D40");
+            badge.BorderBrush = SolidColorBrush.Parse(isLight ? "#FECACA" : "#DC2626");
+        }
+
         return false;
     }
 

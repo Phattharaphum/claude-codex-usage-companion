@@ -936,6 +936,27 @@ public sealed record UiText(
         _ => "Data file format for logging (CSV or JSONL)"
     };
 
+    public string BrowseFileAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "瀏覽...",
+        UiLanguage.SimplifiedChinese => "浏览...",
+        _ => "Browse..."
+    };
+
+    public string ScreenPositionVisual => Language switch
+    {
+        UiLanguage.TraditionalChinese => "可視化螢幕位置",
+        UiLanguage.SimplifiedChinese => "可视化屏幕位置",
+        _ => "Visual Screen Position"
+    };
+
+    public string QuickPresetsLabel => Language switch
+    {
+        UiLanguage.TraditionalChinese => "常用預設",
+        UiLanguage.SimplifiedChinese => "常用预设",
+        _ => "Presets"
+    };
+
     public string PinOnTopAction => Language switch
     {
         UiLanguage.TraditionalChinese => "將視窗釘選在最上層",
