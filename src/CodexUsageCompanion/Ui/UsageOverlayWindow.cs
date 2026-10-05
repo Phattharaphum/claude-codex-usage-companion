@@ -1301,9 +1301,9 @@ public sealed class UsageOverlayWindow : Window
         UpdatePinButton();
 
         _minimizeButton = HeaderButton(CreateHeaderIcon("M4 11H20V13H4Z"), _text.MinimizeAction);
-        // A real unmap works on both X11 and native Wayland.  WindowState.Minimized
-        // is only advisory on Wayland and can leave a borderless overlay visible.
-        _minimizeButton.Click += (_, _) => Hide();
+        // Keep the window registered with the desktop so the Dock retains its
+        // running indicator and can restore it after minimizing.
+        _minimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
 
         _closeButton = HeaderButton(CreateHeaderIcon(
             "M6.7 5.3L12 10.6L17.3 5.3L18.7 6.7L13.4 12L18.7 17.3L17.3 18.7L12 13.4L6.7 18.7L5.3 17.3L10.6 12L5.3 6.7Z"), CloseTooltip());
