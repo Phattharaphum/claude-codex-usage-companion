@@ -65,5 +65,9 @@ Thumbs.db
 # Local planning documents
 /docs/plans/
 
+# Generated code graph and Python test cache
+/graphify-out/
+__pycache__/
+
 # Private cross-session context
 /private/
