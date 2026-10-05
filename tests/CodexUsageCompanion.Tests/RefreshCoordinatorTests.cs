@@ -6,6 +6,34 @@ namespace CodexUsageCompanion.Tests;
 public sealed class RefreshCoordinatorTests
 {
     [Fact]
+    public async Task FailedRefreshDoesNotStopQueuedFollowUp()
+    {
+        var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirst = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var recovered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        await using var coordinator = new RefreshCoordinator(async cancellationToken =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                firstStarted.TrySetResult();
+                await releaseFirst.Task.WaitAsync(cancellationToken);
+                throw new InvalidOperationException("Transient refresh failure.");
+            }
+
+            recovered.TrySetResult();
+        });
+
+        coordinator.Request();
+        await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        coordinator.Request();
+        releaseFirst.TrySetResult();
+        await recovered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public async Task RequestsDuringRefreshAreCoalescedIntoOneFollowUp()
     {
         var firstStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

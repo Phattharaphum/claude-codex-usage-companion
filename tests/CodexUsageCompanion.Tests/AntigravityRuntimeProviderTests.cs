@@ -172,6 +172,41 @@ public sealed class AntigravityRuntimeProviderTests
     }
 
     [Fact]
+    public async Task ResponseFromDisabledActivationIsIgnoredAfterReenabling()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reads = 0;
+        var reader = new StubReader(async _ =>
+        {
+            if (Interlocked.Increment(ref reads) == 1)
+            {
+                started.TrySetResult();
+                // Some transports finish a response even after cancellation.
+                await release.Task;
+                return State("stale");
+            }
+
+            return State("current");
+        });
+        await using var provider = Provider(true, () => reader);
+        var states = new List<AntigravityUsageState?>();
+        provider.UsageChanged += (state, _, _) => states.Add(state);
+
+        var previous = provider.RefreshAsync(CancellationToken.None);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        provider.SetEnabled(false);
+        provider.SetEnabled(true);
+        release.TrySetResult();
+        await previous;
+        await provider.RefreshAsync(CancellationToken.None);
+
+        Assert.Equal(2, states.Count);
+        Assert.Null(states[0]);
+        Assert.Equal("current", states[1]!.Models[0].Id);
+    }
+
+    [Fact]
     public async Task DisposalCancelsAndDisposesTheReader()
     {
         var reader = new StubReader(_ => Task.FromResult(State()));

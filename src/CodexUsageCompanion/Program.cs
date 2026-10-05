@@ -49,6 +49,7 @@ public static class Program
             .UsePlatformDetect()
             .With(new X11PlatformOptions
             {
+                WmClass = AppBranding.ApplicationId,
                 EnableSessionManagement = false
             })
             .LogToTrace();

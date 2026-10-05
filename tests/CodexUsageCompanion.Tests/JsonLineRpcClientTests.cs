@@ -7,6 +7,39 @@ namespace CodexUsageCompanion.Tests;
 public sealed class JsonLineRpcClientTests
 {
     [Fact]
+    public async Task DisposalCompletesPendingRequestsAndRejectsFurtherWrites()
+    {
+        using var reader = new WaitingReader();
+        using var writer = new StringWriter();
+        var connection = new JsonLineRpcConnection(reader, writer);
+        var response = connection.SendRequestAsync(1, "{}", CancellationToken.None);
+        await reader.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        await connection.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(2));
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => response.WaitAsync(TimeSpan.FromSeconds(2)));
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => connection.SendRequestAsync(2, "{}", CancellationToken.None));
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => connection.SendNotificationAsync("{}", CancellationToken.None));
+        await connection.DisposeAsync();
+    }
+
+    private sealed class WaitingReader : TextReader
+    {
+        public TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<string?> ReadLineAsync(CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return null;
+        }
+    }
+
+    [Fact]
     public async Task ConnectionThrowsMeaningfulErrorForJsonRpcFailure()
     {
         using var reader = new StringReader("{\"id\":1,\"error\":{\"code\":-32600,\"message\":\"invalid request\"}}");

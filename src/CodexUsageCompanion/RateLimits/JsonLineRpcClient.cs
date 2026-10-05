@@ -42,8 +42,10 @@ public sealed class JsonLineRpcConnection : IAsyncDisposable
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly CancellationTokenSource _cancellation = new();
     private Task? _readerTask;
+    private Task? _disposeTask;
     private Exception? _terminalError;
     private long _highestRequestId;
+    private bool _disposed;
 
     public JsonLineRpcConnection(TextReader reader, TextWriter writer)
     {
@@ -62,6 +64,7 @@ public sealed class JsonLineRpcConnection : IAsyncDisposable
         string? futureResponse = null;
         lock (_sync)
         {
+            ObjectDisposedException.ThrowIf(_disposed, this);
             _highestRequestId = Math.Max(_highestRequestId, id);
             if (_futureResponses.Remove(id, out var existing))
             {
@@ -103,11 +106,21 @@ public sealed class JsonLineRpcConnection : IAsyncDisposable
 
     public async Task SendNotificationAsync(string notification, CancellationToken cancellationToken)
     {
-        await _writeGate.WaitAsync(cancellationToken);
+        CancellationToken connectionCancellationToken;
+        lock (_sync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            connectionCancellationToken = _cancellation.Token;
+        }
+
+        using var writeCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            connectionCancellationToken);
+        await _writeGate.WaitAsync(writeCancellation.Token);
         try
         {
-            await _writer.WriteLineAsync(notification);
-            await _writer.FlushAsync(cancellationToken);
+            await _writer.WriteLineAsync(notification.AsMemory(), writeCancellation.Token);
+            await _writer.FlushAsync(writeCancellation.Token);
         }
         finally
         {
@@ -115,8 +128,26 @@ public sealed class JsonLineRpcConnection : IAsyncDisposable
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
+        lock (_sync)
+        {
+            if (_disposeTask is not null)
+            {
+                return new ValueTask(_disposeTask);
+            }
+
+            _disposed = true;
+            _disposeTask = DisposeCoreAsync();
+            return new ValueTask(_disposeTask);
+        }
+    }
+
+    private async Task DisposeCoreAsync()
+    {
+        // Canceling the reader alone leaves callers waiting on response tasks forever.
+        FailConnection(new ObjectDisposedException(nameof(JsonLineRpcConnection)));
+        _futureResponses.Clear();
         _cancellation.Cancel();
         if (_readerTask is not null)
         {
@@ -129,6 +160,8 @@ public sealed class JsonLineRpcConnection : IAsyncDisposable
             }
         }
 
+        await _writeGate.WaitAsync();
+        _writeGate.Release();
         _writeGate.Dispose();
         _cancellation.Dispose();
     }

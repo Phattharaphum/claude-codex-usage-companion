@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Avalonia.Threading;
@@ -29,8 +28,8 @@ public sealed class App : Application
     private readonly LinuxTrayTooltipBridge _trayTooltipBridge = new();
     private readonly LinuxGnomeTopBarBridge _gnomeTopBarBridge = new();
     private readonly LinuxDesktopNotificationService _notificationService = new();
-    private readonly UsageNotificationTracker _codexNotificationTracker = new();
-    private readonly UsageNotificationTracker _claudeNotificationTracker = new();
+    private UsageNotificationTracker _codexNotificationTracker = new();
+    private UsageNotificationTracker _claudeNotificationTracker = new();
     private readonly UsageUpdateLog _usageUpdateLog = new();
     private CompanionSettings _settings = new();
     private UiText _text = UiText.For(UiLanguage.English);
@@ -48,8 +47,13 @@ public sealed class App : Application
     public override void Initialize()
     {
         Dispatcher.UIThread.UnhandledException += HandleDispatcherUnhandledException;
+        Name = AppBranding.ProductName;
         RequestedThemeVariant = ThemeVariant.Default;
         Styles.Add(new FluentTheme());
+        Styles.Add(new Style(selector => selector.Is<Window>())
+        {
+            Setters = { new Setter(Window.IconProperty, AppBranding.CreateWindowIcon()) }
+        });
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -221,9 +225,9 @@ public sealed class App : Application
             var enabled = !_settings.StartOnBoot;
             try
             {
-                SetAutostart(enabled);
-                _settings = CompanionSettingsStore.Save(
-                    _settings with { StartOnBoot = enabled });
+                _settings = CommitSettings(
+                    _settings with { StartOnBoot = enabled }, _settings,
+                    value => CompanionSettingsStore.Save(value), SetAutostart);
                 startOnBoot.IsChecked = _settings.StartOnBoot;
             }
             catch (Exception exception) when (
@@ -311,9 +315,7 @@ public sealed class App : Application
     {
         if (_settings.TrayIconStyle == TrayIconStyleOptions.Original)
         {
-            using var iconStream = AssetLoader.Open(
-                new Uri("avares://CodexUsageCompanion/Assets/claude-codex-usage-companion.png"));
-            return new WindowIcon(iconStream);
+            return AppBranding.CreateWindowIcon();
         }
 
         var remainingPercent = TrayIconRenderer.ResolveRemainingPercent(
@@ -556,9 +558,26 @@ public sealed class App : Application
 
     private void ApplySettings(CompanionSettings settings)
     {
-        var normalized = CompanionSettingsStore.Save(settings);
-        SetAutostart(normalized.StartOnBoot);
+        var normalized = CommitSettings(settings, _settings,
+            value => CompanionSettingsStore.Save(value), SetAutostart);
         _settings = normalized;
+        if (!_settings.EnableCodexUsage)
+        {
+            _lastCodexUsage = null;
+            _lastCodexUpdatedAt = null;
+            _codexNotificationTracker = new UsageNotificationTracker();
+        }
+        if (!_settings.EnableClaudeUsage)
+        {
+            _lastClaudeUsage = null;
+            _lastClaudeUpdatedAt = null;
+            _claudeNotificationTracker = new UsageNotificationTracker();
+        }
+        if (!_settings.EnableAntigravityUsage)
+        {
+            _lastAntigravityUsage = null;
+            _lastAntigravityUpdatedAt = null;
+        }
         ApplyTheme(_settings.Theme);
         _text = ResolveText(_settings);
         _window!.ApplySettings(_settings, _text);
@@ -609,11 +628,44 @@ public sealed class App : Application
             throw new InvalidOperationException("The application executable path is unavailable.");
         }
 
-        LinuxAutostartManager.SetEnabled(enabled, executablePath);
+        LinuxAutostartManager.SetEnabled(enabled, executablePath,
+            commandLineEntryPoint: Environment.GetCommandLineArgs().FirstOrDefault());
+    }
+
+    internal static CompanionSettings CommitSettings(
+        CompanionSettings requested,
+        CompanionSettings previous,
+        Func<CompanionSettings, CompanionSettings> save,
+        Action<bool> setAutostart)
+    {
+        // Verify the OS integration before changing persisted or active settings.
+        setAutostart(requested.StartOnBoot);
+        try
+        {
+            return save(requested);
+        }
+        catch
+        {
+            try
+            {
+                setAutostart(previous.StartOnBoot);
+            }
+            catch (Exception exception)
+            {
+                CompanionLog.Shared.Write("autostart-rollback", exception);
+            }
+            throw;
+        }
     }
 
     private void HandleUsageUpdated(UsageProvider provider, RateLimitState state, DateTimeOffset updatedAt)
     {
+        if (_shutdownRequested ||
+            (provider == UsageProvider.Claude ? !_settings.EnableClaudeUsage : !_settings.EnableCodexUsage))
+        {
+            return;
+        }
+
         var tracker = provider == UsageProvider.Claude ? _claudeNotificationTracker : _codexNotificationTracker;
         var notifications = tracker.Evaluate(state, updatedAt, _settings);
         if (provider == UsageProvider.Claude)
@@ -655,7 +707,11 @@ public sealed class App : Application
     }
 
     private string FormatTrayTooltip() =>
-        _text.FormatTrayTooltip(_lastCodexUsage, _lastCodexUpdatedAt, _lastClaudeUsage, _lastClaudeUpdatedAt);
+        _text.FormatTrayTooltip(
+            _settings.EnableCodexUsage ? _lastCodexUsage : null,
+            _settings.EnableCodexUsage ? _lastCodexUpdatedAt : null,
+            _settings.EnableClaudeUsage ? _lastClaudeUsage : null,
+            _settings.EnableClaudeUsage ? _lastClaudeUpdatedAt : null);
 
     private void ShowUsageNotification(UsageProvider provider, UsageNotification notification)
     {
@@ -682,6 +738,12 @@ public sealed class App : Application
 
     private void HandleUsageUpdateFailed(UsageProvider provider, string error, DateTimeOffset updatedAt)
     {
+        if (_shutdownRequested ||
+            (provider == UsageProvider.Claude ? !_settings.EnableClaudeUsage : !_settings.EnableCodexUsage))
+        {
+            return;
+        }
+
         if (_settings.EnableUsageLogging)
         {
             TryWriteUsageLog(() => _usageUpdateLog.WriteFailure(
@@ -698,6 +760,11 @@ public sealed class App : Application
         string? error,
         DateTimeOffset updatedAt)
     {
+        if (_shutdownRequested)
+        {
+            return;
+        }
+
         // A null/null notification is emitted when the Antigravity provider is
         // disabled; it is a UI-state change, not a usage refresh to preserve.
         if (_settings.EnableUsageLogging && (state is not null || !string.IsNullOrWhiteSpace(error)))
@@ -712,7 +779,8 @@ public sealed class App : Application
 
         Dispatcher.UIThread.Post(() =>
         {
-            if (_window is null)
+            if (_window is null || _shutdownRequested ||
+                (!_settings.EnableAntigravityUsage && (state is not null || error is not null)))
             {
                 return;
             }
@@ -720,7 +788,9 @@ public sealed class App : Application
             _lastAntigravityUsage = state;
             _lastAntigravityUpdatedAt = updatedAt;
             _window.UpdateAntigravityUsage(state, error);
-            _window.SetStatus(updatedAt, error);
+            _runtime?.UpdateAntigravityStatus(
+                state is not null && string.IsNullOrWhiteSpace(error) ? updatedAt : null,
+                error);
             UpdateGnomeTopBarState();
             UpdateTrayIcon();
         });
@@ -732,10 +802,10 @@ public sealed class App : Application
             _settings.EnableAntigravityUsage,
             _lastAntigravityUsage,
             _lastAntigravityUpdatedAt,
-            _lastClaudeUsage,
-            _lastCodexUsage,
-            _lastClaudeUpdatedAt,
-            _lastCodexUpdatedAt));
+            _settings.EnableClaudeUsage ? _lastClaudeUsage : null,
+            _settings.EnableCodexUsage ? _lastCodexUsage : null,
+            _settings.EnableClaudeUsage ? _lastClaudeUpdatedAt : null,
+            _settings.EnableCodexUsage ? _lastCodexUpdatedAt : null));
     }
 
     private static void TryWriteUsageLog(Action write)

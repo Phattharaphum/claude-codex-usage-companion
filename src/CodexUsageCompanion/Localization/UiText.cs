@@ -1034,6 +1034,13 @@ public sealed record UiText(
         _ => "Polling frequency for fetching fresh usage stats from APIs"
     };
 
+    public string SystemLanguage => Language switch
+    {
+        UiLanguage.TraditionalChinese => "依系統語言",
+        UiLanguage.SimplifiedChinese => "跟随系统语言",
+        _ => "Follow system language"
+    };
+
     public string LanguageOptionDescription => Language switch
     {
         UiLanguage.TraditionalChinese => "選擇使用者介面顯示語言",

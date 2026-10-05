@@ -4,6 +4,7 @@ import {
     formatResetTime,
     formatUpdatedTime,
     normalizeState,
+    StateReader,
 } from './presentation.js';
 
 function assertEquals(actual, expected) {
@@ -78,3 +79,68 @@ assertEquals(formatResetTime(0, 1), 'Reset due now');
 assertEquals(formatUpdatedTime(null, 0), 'Waiting for the first update');
 assertEquals(formatUpdatedTime(1_000, 30_000), 'Updated just now');
 assertEquals(formatUpdatedTime(1_000, 181_000), 'Updated 3m ago');
+
+function pendingRead() {
+    let resolve;
+    let reject;
+    const promise = new Promise((success, failure) => {
+        resolve = success;
+        reject = failure;
+    });
+    return {promise, resolve, reject};
+}
+
+function contents(percent) {
+    return [new TextEncoder().encode(JSON.stringify({
+        schemaVersion: 4,
+        hasCodex: true,
+        codexFiveHourRemaining: percent,
+    }))];
+}
+
+// The slower, older read must never replace a newer snapshot.
+const applied = [];
+const reader = new StateReader(state => applied.push(state));
+const older = pendingRead();
+const newer = pendingRead();
+const olderReload = reader.reload({load_contents_async: () => older.promise});
+const newerReload = reader.reload({load_contents_async: () => newer.promise});
+newer.resolve(contents(27));
+await newerReload;
+older.resolve(contents(86));
+await olderReload;
+assertEquals(applied.length, 1);
+assertEquals(applied[0].codexFiveHourRemaining, 27);
+
+// Disabling during a read must suppress presentation and further file access.
+for (const shouldFail of [false, true]) {
+    const pending = pendingRead();
+    const disposedReader = new StateReader(() => {
+        throw new Error('A disabled reader updated presentation');
+    });
+    const reload = disposedReader.reload({
+        load_contents_async: () => pending.promise,
+        query_exists: () => {
+            throw new Error('A disabled reader queried a disposed file');
+        },
+    });
+    disposedReader.dispose();
+    if (shouldFail)
+        pending.reject(new Error('Read was cancelled'));
+    else
+        pending.resolve(contents(50));
+    await reload;
+}
+
+// A transient read failure preserves state; removing the file marks it offline.
+await reader.reload({
+    load_contents_async: async () => { throw new Error('Atomic replacement'); },
+    query_exists: () => true,
+});
+assertEquals(applied.length, 1);
+await reader.reload({
+    load_contents_async: async () => { throw new Error('File was removed'); },
+    query_exists: () => false,
+});
+assertEquals(applied.length, 2);
+assertEquals(applied[1], null);

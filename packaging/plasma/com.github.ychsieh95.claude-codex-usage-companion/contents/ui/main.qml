@@ -157,7 +157,7 @@ PlasmoidItem {
     }
 
     function colorForPercent(percent) {
-        if (percent < 0 || percent === 0) {
+        if (percent < 0) {
             return "#7f8c8d";
         }
         if (percent < 40) {

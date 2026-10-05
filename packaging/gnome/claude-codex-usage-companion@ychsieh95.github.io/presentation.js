@@ -70,6 +70,42 @@ export function normalizeState(value) {
     };
 }
 
+// File reads can finish out of order or after an extension is disabled.
+export class StateReader {
+    constructor(onStateChanged) {
+        this._onStateChanged = onStateChanged;
+        this._generation = 0;
+    }
+
+    dispose() {
+        this._generation++;
+        this._onStateChanged = null;
+    }
+
+    async reload(file) {
+        if (!file || !this._onStateChanged)
+            return;
+
+        const generation = ++this._generation;
+        let state;
+        try {
+            const [contents] = await file.load_contents_async(null);
+            state = normalizeState(JSON.parse(new TextDecoder().decode(contents)));
+        } catch (_) {
+            if (generation !== this._generation || !this._onStateChanged)
+                return;
+            // Atomic replacement can briefly make a read fail. Keep the
+            // previous state while the producer's state file still exists.
+            if (file.query_exists(null))
+                return;
+            state = null;
+        }
+
+        if (generation === this._generation && this._onStateChanged)
+            this._onStateChanged(state);
+    }
+}
+
 export function connectionState(state) {
     if (!state)
         return 'offline';

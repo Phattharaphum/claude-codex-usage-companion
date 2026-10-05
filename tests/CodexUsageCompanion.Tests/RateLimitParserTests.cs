@@ -6,6 +6,23 @@ namespace CodexUsageCompanion.Tests;
 
 public sealed class RateLimitParserTests
 {
+    [Theory]
+    [InlineData("9223372036854775807")]
+    [InlineData("-9223372036854775808")]
+    [InlineData("999999999999999999999999999999")]
+    [InlineData("253402300800")]
+    [InlineData("-62135596801")]
+    public void InvalidResetTimestampDoesNotDiscardUsageOrReachTheUi(string resetsAt)
+    {
+        var json = "{\"result\":{\"rateLimits\":{\"primary\":{\"usedPercent\":25,\"resetsAt\":" +
+            resetsAt + "}}}}";
+
+        var state = RateLimitParser.ParseResponse(json);
+
+        Assert.Equal(75, state.FiveHour?.RemainingPercent);
+        Assert.Null(state.FiveHour?.ResetsAt);
+    }
+
     [Fact]
     public void ParseResponsePrefersCodexBucketAndClassifiesWindowsByDuration()
     {

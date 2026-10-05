@@ -16,7 +16,7 @@ import {
     formatPercent,
     formatResetTime,
     formatUpdatedTime,
-    normalizeState,
+    StateReader,
 } from './presentation.js';
 
 Gio._promisify(Gio.File.prototype, 'load_contents_async', 'load_contents_finish');
@@ -155,6 +155,10 @@ const BarMeter = GObject.registerClass(class BarMeter extends St.DrawingArea {
 export default class CompanionTopBarExtension extends Extension {
     enable() {
         this._state = null;
+        this._stateReader = new StateReader(state => {
+            this._state = state;
+            this._updatePresentation();
+        });
         this._reloadSourceId = 0;
         this._stylesheet = this.dir.get_child('stylesheet.css');
         this._stylesheetLoaded = typeof this.loadStylesheet === 'function';
@@ -184,6 +188,8 @@ export default class CompanionTopBarExtension extends Extension {
     }
 
     disable() {
+        this._stateReader?.dispose();
+        this._stateReader = null;
         if (this._reloadSourceId) {
             GLib.source_remove(this._reloadSourceId);
             this._reloadSourceId = 0;
@@ -212,7 +218,13 @@ export default class CompanionTopBarExtension extends Extension {
             this._runtimeMonitor = this._runtimeDirectory.monitor_directory(
                 Gio.FileMonitorFlags.WATCH_MOVES,
                 null);
-            this._runtimeMonitor.connect('changed', () => {
+            this._runtimeMonitor.connect('changed', (_monitor, file, otherFile) => {
+                if (!this._stateDirectory)
+                    return;
+                if (file?.equal(this._stateDirectory) || otherFile?.equal(this._stateDirectory)) {
+                    this._stateDirectoryMonitor?.cancel();
+                    this._stateDirectoryMonitor = null;
+                }
                 this._installStateDirectoryMonitor();
                 this._scheduleReload();
             });
@@ -222,7 +234,12 @@ export default class CompanionTopBarExtension extends Extension {
     }
 
     _installStateDirectoryMonitor() {
-        if (this._stateDirectoryMonitor || !this._stateDirectory.query_exists(null))
+        if (!this._stateDirectory?.query_exists(null)) {
+            this._stateDirectoryMonitor?.cancel();
+            this._stateDirectoryMonitor = null;
+            return;
+        }
+        if (this._stateDirectoryMonitor)
             return;
 
         try {
@@ -236,6 +253,8 @@ export default class CompanionTopBarExtension extends Extension {
     }
 
     _scheduleReload(delay = 80) {
+        if (!this._indicator)
+            return;
         if (this._reloadSourceId)
             GLib.source_remove(this._reloadSourceId);
 
@@ -253,18 +272,7 @@ export default class CompanionTopBarExtension extends Extension {
     async _reloadState() {
         if (!this._stateFile || !this._indicator)
             return;
-
-        try {
-            const [contents] = await this._stateFile.load_contents_async(null);
-            this._state = normalizeState(JSON.parse(new TextDecoder().decode(contents)));
-        } catch (_) {
-            // Atomic replacement can briefly make a read fail. Only switch to
-            // offline when the producer's state file is actually absent.
-            if (!this._stateFile.query_exists(null))
-                this._state = null;
-        }
-
-        this._updatePresentation();
+        await this._stateReader?.reload(this._stateFile);
     }
 
     _updatePresentation() {

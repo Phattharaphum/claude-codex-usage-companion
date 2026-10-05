@@ -27,8 +27,7 @@ public sealed class GnomeExtensionPackageTests
         Assert.Contains("monitor_directory", extension);
         Assert.Contains("load_contents_async", extension);
         Assert.Contains("Gio._promisify", extension);
-        Assert.Contains("const [contents] = await", extension);
-        Assert.DoesNotContain("const [, contents] = await", extension);
+        Assert.Contains("StateReader", extension);
         Assert.Contains("_scheduleReload", extension);
         Assert.Contains("_runCompanion('refresh')", extension, StringComparison.Ordinal);
         Assert.Contains("geminiFiveHourRemaining", extension, StringComparison.Ordinal);
@@ -47,6 +46,8 @@ public sealed class GnomeExtensionPackageTests
         var installScript = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "install-gnome-top-bar-extension.sh"));
 
         Assert.Contains("Math.min(...values)", formatter, StringComparison.Ordinal);
+        Assert.Contains("const [contents] = await", formatter);
+        Assert.DoesNotContain("const [, contents] = await", formatter);
         Assert.Contains("hasClaude", formatter, StringComparison.Ordinal);
         Assert.Contains("hasCodex", formatter, StringComparison.Ordinal);
         Assert.Contains("Usage 89%", test, StringComparison.Ordinal);

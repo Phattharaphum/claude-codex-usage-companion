@@ -108,9 +108,9 @@ Rectangle {
 
         if (!isClaude) {
             const details = [];
-            if (state.creditBalance) {
+            if (state.creditBalance !== null && state.creditBalance !== undefined) {
                 details.push(i18n("Credits: %1 · Automatic reload: %2",
-                                  state.creditBalance,
+                                  Number(state.creditBalance).toFixed(2),
                                   state.automaticReloadEnabled ? i18n("Enabled") : i18n("Disabled")));
             }
             if (state.availableResetCredits !== null && state.availableResetCredits !== undefined) {

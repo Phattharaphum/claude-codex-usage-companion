@@ -71,6 +71,20 @@ Claude Code has no official API for this, unlike Codex. The companion reads the 
 
 ## Install the desktop and CLI
 
+To install directly from this checkout for the current user, including the
+black-and-white logo and a double-clickable desktop shortcut, run:
+
+```bash
+bash scripts/install-desktop.sh
+```
+
+This publishes a self-contained release and installs it under
+`${XDG_DATA_HOME:-$HOME/.local/share}/claude-codex-usage-companion`, with CLI
+aliases in `~/.local/bin` and an application-menu entry. No `sudo` is needed.
+Run the same command after updating the source to update the installed app.
+The portable archive includes `install-desktop.sh`; run `bash install-desktop.sh`
+from its extracted directory for the same desktop integration without a build.
+
 Build or download the `.deb`, then:
 
 ```bash

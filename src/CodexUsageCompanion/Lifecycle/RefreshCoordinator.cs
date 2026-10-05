@@ -1,3 +1,5 @@
+using CodexUsageCompanion.Diagnostics;
+
 namespace CodexUsageCompanion.Lifecycle;
 
 public sealed class RefreshCoordinator : IAsyncDisposable
@@ -11,7 +13,7 @@ public sealed class RefreshCoordinator : IAsyncDisposable
 
     public RefreshCoordinator(Func<CancellationToken, Task> refresh)
     {
-        _refresh = refresh;
+        _refresh = refresh ?? throw new ArgumentNullException(nameof(refresh));
         _worker = Task.Run(RunAsync);
     }
 
@@ -57,7 +59,19 @@ public sealed class RefreshCoordinator : IAsyncDisposable
         {
             await _signal.WaitAsync(_cancellation.Token);
             Interlocked.Exchange(ref _pending, 0);
-            await _refresh(_cancellation.Token);
+            try
+            {
+                await _refresh(_cancellation.Token);
+            }
+            catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                // A failed attempt must not permanently stop future manual or timer refreshes.
+                CompanionLog.Shared.Write("refresh-worker", exception);
+            }
         }
     }
 }

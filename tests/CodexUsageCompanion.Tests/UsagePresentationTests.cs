@@ -186,6 +186,47 @@ public sealed class UsagePresentationTests
         Assert.Empty(disabled.Pools);
     }
 
+    [Fact]
+    public void EmptyQuotaPoolsDoNotHideObservedModelFallbackOrItsError()
+    {
+        var state = new AntigravityUsageState(null, null,
+            [new AntigravityModelQuotaState("model", "Observed model", 54, null)],
+            [new AntigravityQuotaPoolState("empty", "No quota windows", null, null, [])]);
+
+        var presentation = UsagePresentation.BuildAntigravityPresentation(true, state, "Refresh failed");
+
+        Assert.Equal(AntigravityPresentationKind.ObservedModelFallback, presentation.Kind);
+        Assert.Empty(presentation.Pools);
+        Assert.Equal("Refresh failed", presentation.Error);
+    }
+
+    [Theory]
+    [InlineData(null, AntigravityPresentationKind.Waiting)]
+    [InlineData("Refresh failed", AntigravityPresentationKind.Error)]
+    public void EmptyQuotaPoolsDisplayWaitingOrError(string? error, AntigravityPresentationKind expected)
+    {
+        var state = State([new AntigravityQuotaPoolState("empty", "No quota windows", null, null, [])]);
+
+        var presentation = UsagePresentation.BuildAntigravityPresentation(true, state, error);
+
+        Assert.Equal(expected, presentation.Kind);
+        Assert.Empty(presentation.Pools);
+    }
+
+    [Fact]
+    public void EmptyQuotaPoolsAreOmittedAlongsideUsablePools()
+    {
+        var state = State([
+            new AntigravityQuotaPoolState("empty", "No quota windows", null, null, []),
+            Pool("Gemini Models", 89, 88)
+        ]);
+
+        var presentation = UsagePresentation.BuildAntigravityPresentation(true, state, null);
+
+        Assert.Equal(AntigravityPresentationKind.QuotaPools, presentation.Kind);
+        Assert.Equal("Gemini Models", Assert.Single(presentation.Pools).Name);
+    }
+
     private static AntigravityUsageState State(IReadOnlyList<AntigravityQuotaPoolState> pools) =>
         new(null, null, [], pools);
 

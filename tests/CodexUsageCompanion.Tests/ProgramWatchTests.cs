@@ -6,6 +6,7 @@ using Xunit;
 
 namespace CodexUsageCompanion.Tests;
 
+[Collection("Console output")]
 public sealed class ProgramWatchTests
 {
     private const string Secret = "test-csrf-secret-do-not-log";

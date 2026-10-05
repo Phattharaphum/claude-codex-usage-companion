@@ -80,8 +80,11 @@ public static class RateLimitParser
             ? durationElement.GetInt32()
             : null;
         long? resetsAt = window.TryGetProperty("resetsAt", out var resetElement) &&
-                         resetElement.ValueKind == JsonValueKind.Number
-            ? resetElement.GetInt64()
+                         resetElement.ValueKind == JsonValueKind.Number &&
+                         resetElement.TryGetInt64(out var resetSeconds) &&
+                         resetSeconds >= DateTimeOffset.MinValue.ToUnixTimeSeconds() &&
+                         resetSeconds <= DateTimeOffset.MaxValue.ToUnixTimeSeconds()
+            ? resetSeconds
             : null;
 
         return new RateLimitWindowState(remainingPercent, duration, resetsAt);

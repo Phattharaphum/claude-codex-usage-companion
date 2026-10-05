@@ -6,6 +6,72 @@ namespace CodexUsageCompanion.Tests;
 
 public sealed class CompanionSettingsTests
 {
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void NormalizeRejectsNonFiniteOpacity(double opacity)
+    {
+        var normalized = CompanionSettingsStore.Normalize(new CompanionSettings { Opacity = opacity });
+
+        Assert.Equal(1d, normalized.Opacity);
+    }
+
+    [Fact]
+    public async Task ConcurrentLoadsSeeCompleteSettingsDuringSaves()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"CodexUsageCompanion.Tests.{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "settings.json");
+        var settings = new CompanionSettings { Language = "zh-cn", Margin = 32 };
+        try
+        {
+            CompanionSettingsStore.Save(settings, path);
+            var writer = Task.Run(() =>
+            {
+                for (var index = 0; index < 100; index++)
+                {
+                    CompanionSettingsStore.Save(settings with { EnableUsageLogging = index % 2 == 0 }, path);
+                }
+            });
+
+            for (var index = 0; index < 300; index++)
+            {
+                var loaded = CompanionSettingsStore.Load(path);
+                Assert.Equal("zh-cn", loaded.Language);
+                Assert.Equal(32, loaded.Margin);
+            }
+
+            await writer;
+            Assert.Empty(Directory.EnumerateFiles(directory, "*.tmp"));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, true);
+            }
+        }
+    }
+
+    [Fact]
+    public void FailedSaveRemovesTemporaryFiles()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"CodexUsageCompanion.Tests.{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "settings.json");
+        Directory.CreateDirectory(path);
+        try
+        {
+            Assert.ThrowsAny<IOException>(() => CompanionSettingsStore.Save(new CompanionSettings(), path));
+
+            Assert.Empty(Directory.EnumerateFiles(directory));
+            Assert.True(Directory.Exists(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
     [Fact]
     public void LoadCreatesDefaultsWhenSettingsFileIsMissing()
     {

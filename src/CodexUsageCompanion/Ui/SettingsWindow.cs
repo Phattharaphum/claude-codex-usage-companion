@@ -189,6 +189,7 @@ public sealed class SettingsWindow : Window
         // Appearance controls
         var languages = new[]
         {
+            new LanguageChoice("auto", text.SystemLanguage),
             new LanguageChoice("en-US", text.EnglishLanguage),
             new LanguageChoice("zh-tw", text.TraditionalChineseLanguage),
             new LanguageChoice("zh-cn", text.SimplifiedChineseLanguage)
@@ -197,8 +198,7 @@ public sealed class SettingsWindow : Window
         {
             "zh-tw" => "zh-tw",
             "zh-cn" => "zh-cn",
-            "auto" when text.Language == UiLanguage.TraditionalChinese => "zh-tw",
-            "auto" when text.Language == UiLanguage.SimplifiedChinese => "zh-cn",
+            "auto" => "auto",
             _ => "en-US"
         };
         _language = new ComboBox
@@ -904,9 +904,15 @@ public sealed class SettingsWindow : Window
                 ToolTip.SetTip(tile, pos);
                 tile.Click += (_, _) =>
                 {
-                    _position.SelectedItem = pos;
+                    if (Equals(_position.SelectedItem, pos))
+                    {
+                        PositionPreviewRequested?.Invoke(pos);
+                    }
+                    else
+                    {
+                        _position.SelectedItem = pos;
+                    }
                     UpdatePositionGridSelection(pos);
-                    PositionPreviewRequested?.Invoke(pos);
                     UpdateDirtyState();
                 };
 
@@ -1123,7 +1129,8 @@ public sealed class SettingsWindow : Window
             Text = title,
             FontWeight = FontWeight.Medium,
             FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
         };
         _textPrimaryElements.Add(titleBlock);
 
@@ -1150,6 +1157,7 @@ public sealed class SettingsWindow : Window
         var grid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 12,
             Margin = new Thickness(0, 6, 0, 6)
         };
         grid.Children.Add(labelPanel);
@@ -1249,7 +1257,8 @@ public sealed class SettingsWindow : Window
             Text = brandName,
             FontWeight = FontWeight.SemiBold,
             FontSize = 14,
-            VerticalAlignment = VerticalAlignment.Center
+            VerticalAlignment = VerticalAlignment.Center,
+            TextWrapping = TextWrapping.Wrap
         };
         _textPrimaryElements.Add(titleBlock);
 
@@ -1259,27 +1268,34 @@ public sealed class SettingsWindow : Window
             Opacity = 0.85,
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(6, 2),
-            Margin = new Thickness(8, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 4, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
             Child = new TextBlock
             {
                 Text = badgeText,
                 FontSize = 10,
                 FontWeight = FontWeight.Medium,
+                TextWrapping = TextWrapping.Wrap,
                 Foreground = Brushes.White
             }
         };
 
+        var providerTitle = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Children = { icon, titleBlock }
+        };
+        Grid.SetColumn(titleBlock, 1);
         var headerLeft = new StackPanel
         {
-            Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { icon, titleBlock, badge }
+            Children = { providerTitle, badge }
         };
 
         var headerGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 12,
             Margin = new Thickness(0, 0, 0, 4)
         };
         headerGrid.Children.Add(headerLeft);
@@ -1450,7 +1466,7 @@ public sealed class SettingsWindow : Window
 
     private void HandleSearchChanged()
     {
-        var query = (_searchBox.Text ?? string.Empty).Trim().ToLowerInvariant();
+        var query = (_searchBox.Text ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(query))
         {
             foreach (var item in _categoryNavItems)
@@ -1462,12 +1478,12 @@ public sealed class SettingsWindow : Window
             return;
         }
 
+        var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         var visibleCount = 0;
         foreach (var item in _categoryNavItems)
         {
-            var match = item.Title.ToLowerInvariant().Contains(query) ||
-                        item.Description.ToLowerInvariant().Contains(query) ||
-                        item.Keywords.Any(k => k.ToLowerInvariant().Contains(query));
+            var searchableText = string.Join(" ", new[] { item.Title, item.Description }.Concat(item.Keywords));
+            var match = terms.All(term => searchableText.Contains(term, StringComparison.OrdinalIgnoreCase));
 
             item.Button.IsVisible = match;
             if (match)

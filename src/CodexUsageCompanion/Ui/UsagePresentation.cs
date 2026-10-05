@@ -53,12 +53,15 @@ public static class UsagePresentation
                     .OfType<AntigravityQuotaWindowState>()
                     .ToArray();
                 return new AntigravityQuotaPoolPresentation(pool.Name, windows);
-            }).ToArray();
-            return new AntigravityPresentationState(
-                AntigravityPresentationKind.QuotaPools,
-                pools,
-                state.Models.Count,
-                error);
+            }).Where(pool => pool.Windows.Count > 0).ToArray();
+            if (pools.Length > 0)
+            {
+                return new AntigravityPresentationState(
+                    AntigravityPresentationKind.QuotaPools,
+                    pools,
+                    state.Models.Count,
+                    error);
+            }
         }
 
         if (state?.Models.Count > 0)

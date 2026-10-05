@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using CodexUsageCompanion.Platform;
 
@@ -34,13 +35,7 @@ public static class CompanionSettingsStore
             if (!File.Exists(settingsPath))
             {
                 var defaults = new CompanionSettings();
-                var directory = Path.GetDirectoryName(settingsPath);
-                if (!string.IsNullOrWhiteSpace(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                File.WriteAllText(settingsPath, JsonSerializer.Serialize(defaults, JsonOptions));
+                WriteAtomically(settingsPath, defaults, overwrite: false);
                 return defaults;
             }
 
@@ -65,14 +60,32 @@ public static class CompanionSettingsStore
     {
         var normalized = Normalize(settings);
         var settingsPath = path ?? GetDefaultPath();
-        var directory = Path.GetDirectoryName(settingsPath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        File.WriteAllText(settingsPath, JsonSerializer.Serialize(normalized, JsonOptions));
+        WriteAtomically(settingsPath, normalized, overwrite: true);
         return normalized;
+    }
+
+    private static void WriteAtomically(string path, CompanionSettings settings, bool overwrite)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var directory = Path.GetDirectoryName(fullPath)!;
+        Directory.CreateDirectory(directory);
+        var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            using (var stream = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(settings, JsonOptions));
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
+
+            // Readers see either complete version; a crash cannot leave truncated JSON.
+            File.Move(temporaryPath, fullPath, overwrite);
+        }
+        finally
+        {
+            File.Delete(temporaryPath);
+        }
     }
 
     public static bool TryMigrateLegacySettings(
@@ -174,7 +187,9 @@ public static class CompanionSettingsStore
                 usageLogFormat),
             UsageLogFormat = usageLogFormat,
             Position = WindowPosition.Normalize(settings.Position),
-            Opacity = Math.Clamp(settings.Opacity, 0.5d, 1d),
+            Opacity = double.IsFinite(settings.Opacity)
+                ? Math.Clamp(settings.Opacity, 0.5d, 1d)
+                : 1d,
             Margin = Math.Clamp(settings.Margin, 0, 64),
             RefreshIntervalSeconds = UpdateIntervalOptions.Normalize(
                 settings.RefreshIntervalSeconds),

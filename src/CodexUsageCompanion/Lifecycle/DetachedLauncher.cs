@@ -25,21 +25,10 @@ public static class DetachedLauncher
         try
         {
             var setsid = FindSetsid();
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = setsid ?? executablePath,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(executablePath) ?? Environment.CurrentDirectory
-            };
-            LinuxSessionManagement.DisableForChildProcess(startInfo);
-            if (setsid is not null)
-            {
-                startInfo.ArgumentList.Add("-f");
-                startInfo.ArgumentList.Add(executablePath);
-            }
-
-            startInfo.ArgumentList.Add("--background");
+            var startInfo = CreateStartInfo(
+                executablePath,
+                Environment.GetCommandLineArgs().FirstOrDefault(),
+                setsid);
             using var process = Process.Start(startInfo);
             return process is not null;
         }
@@ -49,6 +38,26 @@ public static class DetachedLauncher
             CompanionLog.Shared.Write("launcher", exception);
             return false;
         }
+    }
+
+    internal static ProcessStartInfo CreateStartInfo(
+        string executablePath,
+        string? commandLineEntryPoint,
+        string? setsidPath)
+    {
+        var startInfo = LinuxSessionManagement.CreateSanitizedStartInfo(
+            executablePath,
+            commandLineEntryPoint,
+            ["--background"]);
+        startInfo.CreateNoWindow = true;
+        if (setsidPath is not null)
+        {
+            startInfo.FileName = setsidPath;
+            startInfo.ArgumentList.Insert(0, executablePath);
+            startInfo.ArgumentList.Insert(0, "-f");
+        }
+
+        return startInfo;
     }
 
     public static string? FindSetsid(Func<string, bool>? fileExists = null)

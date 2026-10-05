@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using CodexUsageCompanion.Configuration;
@@ -18,7 +19,7 @@ namespace CodexUsageCompanion.Ui;
 public sealed class UsageOverlayWindow : Window
 {
     // Header, root padding, and the breathing room around provider sections.
-    private const double BaseHeight = 77;
+    private const double BaseHeight = 78;
     private const double CardSpacing = 7;
     private const double FiveHourCardHeight = 60;
     private const double WeeklyCardHeight = 60;
@@ -79,6 +80,7 @@ public sealed class UsageOverlayWindow : Window
     private readonly List<Border> _antigravityGroupHeaders = [];
     private UiText _text;
     private readonly Border _root;
+    private readonly ScrollViewer _providerScrollViewer;
     private Border _headerSurface = null!;
     private TextBlock _headerTitle = null!;
     private readonly TextBlock _status;
@@ -98,7 +100,7 @@ public sealed class UsageOverlayWindow : Window
     private double _spinAngle;
     private Button _closeButton = null!;
     private string _position;
-    private readonly int _margin;
+    private int _margin;
     private bool _trayEnabled;
     private bool _showTaskbarIcon;
     private bool _showClaudeSession;
@@ -115,6 +117,7 @@ public sealed class UsageOverlayWindow : Window
     private DateTimeOffset? _lastUpdatedAt;
     private string? _lastError;
     private bool _repositionAfterResize;
+    private bool _hasOpened;
     private OverlayThemePalette _palette = OverlayThemePalette.Dark;
 
     public UsageOverlayWindow(CompanionSettings? settings = null, UiText? text = null)
@@ -162,11 +165,7 @@ public sealed class UsageOverlayWindow : Window
                 Color = Color.Parse("#70000000")
             })
         };
-        var stack = new StackPanel
-        {
-            Spacing = CardSpacing,
-            Margin = new Thickness(0, 0, 0, ContentBottomPadding)
-        };
+        var stack = new StackPanel { Spacing = CardSpacing };
         _status = new TextBlock
         {
             Text = _text.WaitingForData,
@@ -239,13 +238,24 @@ public sealed class UsageOverlayWindow : Window
 
         ApplyCardVisibility();
 
-        stack.Children.Add(header);
         stack.Children.Add(_claudeSection);
         stack.Children.Add(_codexSection);
         stack.Children.Add(_antigravitySection);
-        // The compact layout is deliberately sized to show every quota at
-        // once. A scrolling dashboard hides the values the user opened it for.
-        _root.Child = stack;
+        _providerScrollViewer = new ScrollViewer
+        {
+            Content = stack,
+            Margin = new Thickness(0, CardSpacing, 0, 0),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+        var layout = new DockPanel
+        {
+            LastChildFill = true,
+            Margin = new Thickness(0, 0, 0, ContentBottomPadding),
+            Children = { header, _providerScrollViewer }
+        };
+        DockPanel.SetDock(header, Dock.Top);
+        _root.Child = layout;
         RebuildAntigravitySection(applySize: false);
         Content = _root;
         _countdownTimer = new DispatcherTimer
@@ -261,15 +271,22 @@ public sealed class UsageOverlayWindow : Window
 
         Opened += (_, _) =>
         {
-            PositionOnPrimaryScreen();
+            if (!_hasOpened)
+            {
+                _hasOpened = true;
+                Screens.Changed += HandleScreensChanged;
+                PositionOnPrimaryScreen();
+            }
             ApplyThemePalette();
             _countdownTimer.Start();
         };
         Closed += (_, _) =>
         {
+            Screens.Changed -= HandleScreensChanged;
             _countdownTimer.Stop();
             _spinTimer.Stop();
         };
+        PositionChanged += (_, _) => ApplyComputedHeight();
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
     }
 
@@ -383,6 +400,7 @@ public sealed class UsageOverlayWindow : Window
     {
         _lastUpdatedAt = updatedAt;
         _lastError = error;
+        ToolTip.SetTip(_status, error);
         if (!string.IsNullOrWhiteSpace(error))
         {
             _status.Text = error;
@@ -403,6 +421,9 @@ public sealed class UsageOverlayWindow : Window
         _text = text;
         _trayEnabled = settings.EnableSystemTray;
         _showTaskbarIcon = settings.ShowTaskbarIcon;
+        var marginChanged = _margin != settings.Margin;
+        _margin = settings.Margin;
+        Opacity = settings.Opacity;
         ShowInTaskbar = _showTaskbarIcon;
         ApplyAlwaysOnTop(settings.AlwaysOnTop);
         _showClaudeSession = settings.ShowClaudeSession;
@@ -415,7 +436,7 @@ public sealed class UsageOverlayWindow : Window
         _headerTitle.Text = text.CombinedUsageHeaderTitle;
         ApplyCardVisibility();
         var requestedPosition = WindowPosition.Normalize(settings.Position);
-        if (!string.Equals(requestedPosition, _position, StringComparison.Ordinal))
+        if (marginChanged || !string.Equals(requestedPosition, _position, StringComparison.Ordinal))
         {
             ApplySizeAndPosition(requestedPosition);
         }
@@ -437,7 +458,7 @@ public sealed class UsageOverlayWindow : Window
         ApplyThemePalette();
         UpdateUsage(UsageProvider.Codex, _lastCodexState);
         UpdateUsage(UsageProvider.Claude, _lastClaudeState);
-        RebuildAntigravitySection(applySize: false);
+        RebuildAntigravitySection(applySize: true);
         SetStatus(_lastUpdatedAt, _lastError);
     }
 
@@ -585,7 +606,14 @@ public sealed class UsageOverlayWindow : Window
         {
             sectionHeights.Add(antigravityHeight);
         }
-        return BaseHeight + ContentBottomPadding + sectionHeights.Sum() +
+        // Font metrics differ between platforms and can change with the user's
+        // system font. Use the measured header once layout is available.
+        var headerHeight = _headerSurface?.DesiredSize.Height ?? 0;
+        var chromeHeight = headerHeight > 0
+            ? Math.Ceiling(headerHeight + _root.Padding.Top + _root.Padding.Bottom +
+                _root.BorderThickness.Top + _root.BorderThickness.Bottom)
+            : BaseHeight;
+        return chromeHeight + ContentBottomPadding + sectionHeights.Sum() +
                (CardSpacing * sectionHeights.Count);
     }
 
@@ -622,7 +650,10 @@ public sealed class UsageOverlayWindow : Window
                     : AntigravityErrorCardHeight + CardSpacing),
             AntigravityPresentationKind.Error =>
                 AntigravitySectionTitleHeight + AntigravityErrorCardHeight + CardSpacing,
-            _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + CardSpacing
+            _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + CardSpacing +
+                (string.IsNullOrWhiteSpace(presentation.Error)
+                    ? 0
+                    : AntigravityErrorCardHeight + CardSpacing)
         };
     }
 
@@ -669,6 +700,11 @@ public sealed class UsageOverlayWindow : Window
                     _ => _text.WaitingForData
                 };
                 AddAntigravityMessage(message, presentation.Kind == AntigravityPresentationKind.Error);
+                if (presentation.Kind != AntigravityPresentationKind.Error &&
+                    !string.IsNullOrWhiteSpace(presentation.Error))
+                {
+                    AddAntigravityMessage(presentation.Error, error: true);
+                }
             }
 
             UpdateAntigravitySummary();
@@ -1057,6 +1093,8 @@ public sealed class UsageOverlayWindow : Window
             Text = message,
             FontSize = 11.5,
             TextWrapping = TextWrapping.Wrap,
+            MaxLines = error ? 2 : 3,
+            TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
         var card = new Border
@@ -1073,16 +1111,36 @@ public sealed class UsageOverlayWindow : Window
             _antigravityErrorMessages.Add(text);
         }
         _antigravityMessageCards.Add(card);
+        ToolTip.SetTip(card, message);
         _antigravityContentContainer.Children.Add(card);
     }
 
-    private void ApplyComputedHeight()
+    private void ApplyComputedHeight(Screen? screen = null)
     {
-        var targetHeight = ComputeHeight();
+        screen ??= Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        var size = screen is null
+            ? new Size(440, ComputeHeight())
+            : OverlayLayout.FitWindow(ComputeHeight(), screen.WorkingArea.Size, screen.Scaling, _margin);
+        _providerScrollViewer.IsVisible =
+            _claudeSection.IsVisible || _codexSection.IsVisible || _antigravitySection.IsVisible;
+        var targetHeight = size.Height;
+        var widthChanged = Math.Abs(Width - size.Width) >= 0.1;
+        if (widthChanged)
+        {
+            MinWidth = Math.Min(MinWidth, size.Width);
+            MaxWidth = Math.Max(MaxWidth, size.Width);
+            Width = size.Width;
+            MinWidth = size.Width;
+            MaxWidth = size.Width;
+        }
         if (Math.Abs(Height - targetHeight) < 0.1 &&
             Math.Abs(MinHeight - targetHeight) < 0.1 &&
             Math.Abs(MaxHeight - targetHeight) < 0.1)
         {
+            if (widthChanged)
+            {
+                ConstrainToScreen(screen);
+            }
             return;
         }
 
@@ -1091,6 +1149,24 @@ public sealed class UsageOverlayWindow : Window
         Height = targetHeight;
         MinHeight = targetHeight;
         MaxHeight = targetHeight;
+        ConstrainToScreen(screen);
+    }
+
+    private void HandleScreensChanged(object? sender, EventArgs eventArgs)
+    {
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        ApplyComputedHeight(screen);
+        ConstrainToScreen(screen);
+    }
+
+    private void ConstrainToScreen(Screen? screen)
+    {
+        if (screen is not null)
+        {
+            Position = OverlayLayout.ConstrainPosition(Position, screen.WorkingArea,
+                new PixelSize((int)Math.Ceiling(Width * screen.Scaling),
+                    (int)Math.Ceiling(Height * screen.Scaling)));
+        }
     }
 
     private void ApplySizeAndPosition(string position)
@@ -1162,8 +1238,17 @@ public sealed class UsageOverlayWindow : Window
         };
         titleArea.Children.Add(_headerTitle);
         titleArea.Children.Add(statusRow);
-        titleArea.PointerPressed += HandleHeaderPointerPressed;
-        grid.Children.Add(titleArea);
+        var titleGroup = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 7,
+            Cursor = new Cursor(StandardCursorType.Hand)
+        };
+        titleGroup.Children.Add(AppBranding.CreateLogoImage());
+        Grid.SetColumn(titleArea, 1);
+        titleGroup.Children.Add(titleArea);
+        titleGroup.PointerPressed += HandleHeaderPointerPressed;
+        grid.Children.Add(titleGroup);
 
         var toolbar = new StackPanel
         {
@@ -1242,6 +1327,7 @@ public sealed class UsageOverlayWindow : Window
             Padding = new Thickness(10, 7),
             Child = grid
         };
+        _headerSurface.SizeChanged += (_, _) => ApplyComputedHeight();
         return _headerSurface;
     }
 
@@ -1765,6 +1851,7 @@ public sealed class UsageOverlayWindow : Window
         }
 
         var area = screen.WorkingArea;
+        ApplyComputedHeight(screen);
         var width = (int)Math.Ceiling(Width * screen.Scaling);
         var height = (int)Math.Ceiling(Height * screen.Scaling);
         var margin = (int)Math.Ceiling(_margin * screen.Scaling);
@@ -1788,7 +1875,7 @@ public sealed class UsageOverlayWindow : Window
             WindowPosition.RightCenter => area.Y + ((area.Height - height) / 2),
             _ => area.Bottom - height - margin
         };
-        Position = new PixelPoint(x, y);
+        Position = OverlayLayout.ConstrainPosition(new PixelPoint(x, y), area, new PixelSize(width, height));
     }
 
     private void ApplyThemePalette()

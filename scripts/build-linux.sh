@@ -79,6 +79,7 @@ mkdir -p \
   "$STAGING/usr/lib/claude-codex-usage-companion" \
   "$STAGING/usr/share/applications" \
   "$STAGING/usr/share/icons/hicolor/scalable/apps" \
+  "$STAGING/usr/share/icons/hicolor/256x256/apps" \
   "$STAGING/usr/share/plasma/plasmoids/$PLASMOID_ID"
 
 install -m 755 "$PUBLISH/CodexUsageCompanion" \
@@ -90,6 +91,8 @@ install -m 644 "$ROOT/packaging/linux/claude-codex-usage-companion.desktop" \
   "$STAGING/usr/share/applications/claude-codex-usage-companion.desktop"
 install -m 644 "$ROOT/packaging/linux/claude-codex-usage-companion.svg" \
   "$STAGING/usr/share/icons/hicolor/scalable/apps/claude-codex-usage-companion.svg"
+install -m 644 "$ROOT/src/CodexUsageCompanion/Assets/claude-codex-usage-companion.png" \
+  "$STAGING/usr/share/icons/hicolor/256x256/apps/claude-codex-usage-companion.png"
 cp -a "$PLASMOID_SOURCE/." \
   "$STAGING/usr/share/plasma/plasmoids/$PLASMOID_ID/"
 chmod -R go-w "$STAGING"
@@ -126,6 +129,10 @@ info "Building the portable archive."
 PORTABLE_ROOT="$ARTIFACTS/portable/claude-codex-usage-companion-$VERSION-$RID"
 mkdir -p "$PORTABLE_ROOT/assets/screenshots"
 install -m 755 "$PUBLISH/CodexUsageCompanion" "$PORTABLE_ROOT/claude-codex-usage-companion"
+install -m 755 "$ROOT/scripts/install-desktop.sh" "$PORTABLE_ROOT/install-desktop.sh"
+install -m 644 "$ROOT/packaging/linux/claude-codex-usage-companion.desktop" "$PORTABLE_ROOT/claude-codex-usage-companion.desktop"
+install -m 644 "$ROOT/packaging/linux/claude-codex-usage-companion.svg" "$PORTABLE_ROOT/claude-codex-usage-companion.svg"
+install -m 644 "$ROOT/src/CodexUsageCompanion/Assets/claude-codex-usage-companion.png" "$PORTABLE_ROOT/claude-codex-usage-companion.png"
 install -m 644 "$ROOT/README.md" "$PORTABLE_ROOT/README.md"
 install -m 644 "$ROOT/README.zh-TW.md" "$PORTABLE_ROOT/README.zh-TW.md"
 install -m 644 "$ROOT/README.zh-CN.md" "$PORTABLE_ROOT/README.zh-CN.md"

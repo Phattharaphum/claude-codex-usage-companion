@@ -35,6 +35,17 @@ internal sealed class AntigravityRuntimeProvider : IAsyncDisposable
 
     internal event Action<AntigravityUsageState?, string?, DateTimeOffset>? UsageChanged;
 
+    internal bool IsEnabled
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return !_disposed && _enabled;
+            }
+        }
+    }
+
     internal bool SetEnabled(bool enabled)
     {
         CancellationTokenSource? cancellation = null;
@@ -57,6 +68,7 @@ internal sealed class AntigravityRuntimeProvider : IAsyncDisposable
                 cancellation = _enabledCancellation;
                 _enabledCancellation = null;
                 _state = null;
+                UsageChanged?.Invoke(null, null, DateTimeOffset.Now);
             }
         }
 
@@ -64,11 +76,6 @@ internal sealed class AntigravityRuntimeProvider : IAsyncDisposable
         {
             cancellation.Cancel();
             cancellation.Dispose();
-        }
-
-        if (!enabled)
-        {
-            UsageChanged?.Invoke(null, null, DateTimeOffset.Now);
         }
 
         return changed;
@@ -118,35 +125,31 @@ internal sealed class AntigravityRuntimeProvider : IAsyncDisposable
             }
 
             var state = await reader.ReadUsageAsync(refreshCancellation.Token);
-            if (!IsCurrent(enabledCancellationToken))
-            {
-                return;
-            }
-
             lock (_sync)
             {
-                _state = state;
-            }
+                if (!IsCurrent(enabledCancellationToken))
+                {
+                    return;
+                }
 
-            UsageChanged?.Invoke(state, null, DateTimeOffset.Now);
+                _state = state;
+                UsageChanged?.Invoke(state, null, DateTimeOffset.Now);
+            }
         }
         catch (OperationCanceledException) when (refreshCancellation.IsCancellationRequested)
         {
         }
         catch (Exception exception)
         {
-            if (!IsCurrent(enabledCancellationToken))
-            {
-                return;
-            }
-
-            AntigravityUsageState? previous;
             lock (_sync)
             {
-                previous = _state;
-            }
+                if (!IsCurrent(enabledCancellationToken))
+                {
+                    return;
+                }
 
-            UsageChanged?.Invoke(previous, _friendlyError(exception), DateTimeOffset.Now);
+                UsageChanged?.Invoke(_state, _friendlyError(exception), DateTimeOffset.Now);
+            }
         }
         finally
         {
