@@ -231,7 +231,18 @@ Supported formats are `txt` (one key/value record per line), `csv` (a header fol
 
 Records older than `usageLogRetentionDays` (default `90`; `0` keeps everything) are removed automatically. The check runs at most every six hours when a record is written, streams the file instead of loading it, and replaces it atomically. Change it under **Settings → Logging → History retention**.
 
-The history windows show how much of a period was actually recorded. The app only samples while it is running, so quota can change unobserved; stretches with no samples are shaded "No data" on the chart, and reset cycles that were not sampled closely (or never used) are marked unverified and left out of the reset-efficiency averages.
+## Usage insights
+
+Open **⋯ → Usage insights** (or press **I**) to explore the usage history in one window. The period (24H / 7D / 30D / All, with previous/next navigation) and provider filters at the top are shared by four tabs, so switching between them keeps your place:
+
+- **Overview**: summary tiles, the remaining-quota trend chart and the latest activity.
+- **Analysis**: burn rate, quota balance, projected runway and a per-provider breakdown, with a copyable report.
+- **Efficiency**: how fully each quota cycle was used before it reset.
+- **Records**: every sample as a table you can search, narrow to "changed only" or "errors only", and export as CSV.
+
+Shortcuts: **Ctrl+1–4** switch tabs, **Ctrl+Tab** cycles them, **Ctrl+F** searches records, **Alt+←/→** moves the period, **F1** shows every shortcut.
+
+The insights window shows how much of a period was actually recorded. The app only samples while it is running, so quota can change unobserved; stretches with no samples are shaded "No data" on the chart, and reset cycles that were not sampled closely (or never used) are marked unverified and left out of the reset-efficiency averages.
 
 ## Build
 

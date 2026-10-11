@@ -616,14 +616,28 @@ public sealed class UiTextTests
         var groups = text.ShortcutGroups;
 
         Assert.Equal(
-            new[] { text.MainWindowShortcutsGroup, text.SettingsWindowShortcutsGroup },
+            new[]
+            {
+                text.MainWindowShortcutsGroup,
+                text.InsightsWindowShortcutsGroup,
+                text.SettingsWindowShortcutsGroup
+            },
             groups.Select(group => group.Title));
         Assert.Equal(
-            new[] { "F1", "S", "Ctrl+R", "Ctrl+M", "Esc" },
+            new[] { "F1", "S", "I", "Ctrl+R", "Ctrl+M", "Esc" },
             groups[0].Shortcuts.Select(shortcut => shortcut.Keys));
         Assert.Equal(
-            new[] { "Ctrl+S", "Esc" },
+            new[] { "Ctrl+1–4", "Ctrl+Tab", "Ctrl+F", "Ctrl+R", "Alt+←", "Alt+→", "Alt+Home", "Esc" },
             groups[1].Shortcuts.Select(shortcut => shortcut.Keys));
+        Assert.Equal(
+            new[] { "Ctrl+F", "Ctrl+S", "Esc" },
+            groups[2].Shortcuts.Select(shortcut => shortcut.Keys));
+        // A key combination must not be listed twice in one window.
+        Assert.All(
+            groups,
+            group => Assert.Equal(
+                group.Shortcuts.Count,
+                group.Shortcuts.Select(shortcut => shortcut.Keys).Distinct().Count()));
         Assert.All(
             groups.SelectMany(group => group.Shortcuts),
             shortcut => Assert.False(string.IsNullOrWhiteSpace(shortcut.Description)));
@@ -828,5 +842,32 @@ public sealed class UiTextTests
     public void UsageLogRetentionChoicesAreLocalized(UiLanguage language, int days, string expected)
     {
         Assert.Equal(expected, UiText.For(language).FormatUsageLogRetention(days));
+    }
+
+    [Theory]
+    [InlineData("F1", new[] { "F1" })]
+    [InlineData("Ctrl+R", new[] { "Ctrl", "R" })]
+    [InlineData("Ctrl+Shift+Tab", new[] { "Ctrl", "Shift", "Tab" })]
+    [InlineData("Alt+←", new[] { "Alt", "←" })]
+    [InlineData("Ctrl+1–4", new[] { "Ctrl", "1–4" })]
+    public void ShortcutKeysAreSplitIntoKeycaps(string keys, string[] expected)
+    {
+        Assert.Equal(expected, new ShortcutHint(keys, "x").KeyParts);
+    }
+
+    [Theory]
+    [InlineData(UiLanguage.English)]
+    [InlineData(UiLanguage.TraditionalChinese)]
+    [InlineData(UiLanguage.SimplifiedChinese)]
+    public void EveryShortcutGroupHasADistinctTitleAndDescriptions(UiLanguage language)
+    {
+        var groups = UiText.For(language).ShortcutGroups;
+
+        Assert.Equal(groups.Count, groups.Select(group => group.Title).Distinct().Count());
+        Assert.All(groups, group => Assert.NotEmpty(group.Shortcuts));
+        // A description that merely repeats its own key hint would be redundant next to the keycaps.
+        Assert.All(
+            groups.SelectMany(group => group.Shortcuts),
+            shortcut => Assert.DoesNotContain("(Alt", shortcut.Description));
     }
 }

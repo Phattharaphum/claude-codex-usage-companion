@@ -305,8 +305,8 @@ public sealed class UsageOverlayWindow : Window
     public event EventHandler? RefreshRequested;
     public event EventHandler? SettingsRequested;
     public event EventHandler? ShortcutsRequested;
-    public event EventHandler? HistoryRequested;
-    public event EventHandler? ResetEfficiencyRequested;
+    /// <summary>Open Usage insights on the given tab.</summary>
+    public event Action<InsightsTab>? InsightsRequested;
     public event Action<bool>? AlwaysOnTopRequested;
 
     private void HandleKeyDown(object? sender, KeyEventArgs eventArgs)
@@ -318,7 +318,9 @@ public sealed class UsageOverlayWindow : Window
             return;
         }
 
-        if (eventArgs.Key == Key.F1)
+        // "?" is Shift+/ on most layouts; the reference is reachable the way people expect.
+        if (eventArgs.Key == Key.F1 ||
+            (eventArgs.Key == Key.OemQuestion && (eventArgs.KeyModifiers & KeyModifiers.Shift) != 0))
         {
             eventArgs.Handled = true;
             ShortcutsRequested?.Invoke(this, EventArgs.Empty);
@@ -329,6 +331,13 @@ public sealed class UsageOverlayWindow : Window
         {
             eventArgs.Handled = true;
             SettingsRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        if (eventArgs.Key == Key.I && eventArgs.KeyModifiers == KeyModifiers.None)
+        {
+            eventArgs.Handled = true;
+            InsightsRequested?.Invoke(InsightsTab.Overview);
             return;
         }
 
@@ -1454,17 +1463,17 @@ public sealed class UsageOverlayWindow : Window
 
         var historyItem = new MenuItem
         {
-            Header = _text.UsageHistoryAction,
+            Header = $"{_text.InsightsTitle} (I)",
             Icon = CreateHeaderIcon("M12 2A10 10 0 1 0 12 22A10 10 0 0 0 12 2ZM12 4A8 8 0 1 1 12 20A8 8 0 0 1 12 4ZM11 7H13V11.4L16.8 13.6L15.8 15.3L11 12.5V7Z")
         };
-        historyItem.Click += (_, _) => HistoryRequested?.Invoke(this, EventArgs.Empty);
+        historyItem.Click += (_, _) => InsightsRequested?.Invoke(InsightsTab.Overview);
 
         var resetEfficiencyItem = new MenuItem
         {
             Header = _text.ResetEfficiencyAction,
             Icon = CreateHeaderIcon("M11 2V12H21C21 6.48 16.52 2 11 2ZM9 4.07C4.94 4.56 2 8.03 2 12C2 16.42 5.58 20 10 20C13.97 20 17.44 17.06 17.93 13H9V4.07Z")
         };
-        resetEfficiencyItem.Click += (_, _) => ResetEfficiencyRequested?.Invoke(this, EventArgs.Empty);
+        resetEfficiencyItem.Click += (_, _) => InsightsRequested?.Invoke(InsightsTab.Efficiency);
 
         var shortcutsItem = new MenuItem
         {

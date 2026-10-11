@@ -1227,6 +1227,118 @@ public sealed record UiText(
         _ => "Diagnostics"
     };
 
+    public string InsightsTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "用量洞察",
+        UiLanguage.SimplifiedChinese => "用量洞察",
+        _ => "Usage insights"
+    };
+
+    public string InsightsTabOverview => Language switch
+    {
+        UiLanguage.TraditionalChinese => "總覽",
+        UiLanguage.SimplifiedChinese => "总览",
+        _ => "Overview"
+    };
+
+    public string InsightsTabAnalysis => Language switch
+    {
+        UiLanguage.TraditionalChinese => "分析",
+        UiLanguage.SimplifiedChinese => "分析",
+        _ => "Analysis"
+    };
+
+    public string InsightsTabEfficiency => Language switch
+    {
+        UiLanguage.TraditionalChinese => "效率",
+        UiLanguage.SimplifiedChinese => "效率",
+        _ => "Efficiency"
+    };
+
+    public string InsightsTabRecords => Language switch
+    {
+        UiLanguage.TraditionalChinese => "記錄",
+        UiLanguage.SimplifiedChinese => "记录",
+        _ => "Records"
+    };
+
+    public string InsightsViewAllRecords => Language switch
+    {
+        UiLanguage.TraditionalChinese => "檢視所有記錄",
+        UiLanguage.SimplifiedChinese => "查看所有记录",
+        _ => "View all records"
+    };
+
+    public string InsightsWindowShortcutsGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "用量洞察",
+        UiLanguage.SimplifiedChinese => "用量洞察",
+        _ => "Usage insights"
+    };
+
+    public string SwitchTabShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "切換分頁",
+        UiLanguage.SimplifiedChinese => "切换标签页",
+        _ => "Switch tab"
+    };
+
+    public string NextTabShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "下一個分頁",
+        UiLanguage.SimplifiedChinese => "下一个标签页",
+        _ => "Next tab"
+    };
+
+    public string SearchRecordsShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "搜尋記錄",
+        UiLanguage.SimplifiedChinese => "搜索记录",
+        _ => "Search records"
+    };
+
+    public string SearchSettingsShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "搜尋設定",
+        UiLanguage.SimplifiedChinese => "搜索设置",
+        _ => "Search settings"
+    };
+
+    public string OpenInsightsShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "開啟用量洞察",
+        UiLanguage.SimplifiedChinese => "打开用量洞察",
+        _ => "Open usage insights"
+    };
+
+    public string ShortcutsCloseHint => Language switch
+    {
+        UiLanguage.TraditionalChinese => "按 Esc 或 F1 關閉",
+        UiLanguage.SimplifiedChinese => "按 Esc 或 F1 关闭",
+        _ => "Press Esc or F1 to close"
+    };
+
+    public string PreviousPeriodShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "上一個期間",
+        UiLanguage.SimplifiedChinese => "上一个期间",
+        _ => "Previous period"
+    };
+
+    public string NextPeriodShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "下一個期間",
+        UiLanguage.SimplifiedChinese => "下一个期间",
+        _ => "Next period"
+    };
+
+    public string JumpToTodayShortcut => Language switch
+    {
+        UiLanguage.TraditionalChinese => "跳到今天",
+        UiLanguage.SimplifiedChinese => "跳到今天",
+        _ => "Jump to today"
+    };
+
     public string EnableCodexUsageOption => Language switch
     {
         UiLanguage.TraditionalChinese => "啟用 Codex 用量顯示",
@@ -1789,14 +1901,29 @@ public sealed record UiText(
             {
                 new ShortcutHint("F1", ShowShortcutsShortcut),
                 new ShortcutHint("S", OpenSettingsShortcut),
+                new ShortcutHint("I", OpenInsightsShortcut),
                 new ShortcutHint("Ctrl+R", RefreshAction),
                 new ShortcutHint("Ctrl+M", CompactModeAction),
+                new ShortcutHint("Esc", CloseWindowShortcut)
+            }),
+        new ShortcutGroup(
+            InsightsWindowShortcutsGroup,
+            new[]
+            {
+                new ShortcutHint("Ctrl+1–4", SwitchTabShortcut),
+                new ShortcutHint("Ctrl+Tab", NextTabShortcut),
+                new ShortcutHint("Ctrl+F", SearchRecordsShortcut),
+                new ShortcutHint("Ctrl+R", RefreshAction),
+                new ShortcutHint("Alt+←", PreviousPeriodShortcut),
+                new ShortcutHint("Alt+→", NextPeriodShortcut),
+                new ShortcutHint("Alt+Home", JumpToTodayShortcut),
                 new ShortcutHint("Esc", CloseWindowShortcut)
             }),
         new ShortcutGroup(
             SettingsWindowShortcutsGroup,
             new[]
             {
+                new ShortcutHint("Ctrl+F", SearchSettingsShortcut),
                 new ShortcutHint("Ctrl+S", SaveSettingsShortcut),
                 new ShortcutHint("Esc", CloseSettingsShortcut)
             })

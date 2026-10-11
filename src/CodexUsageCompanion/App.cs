@@ -21,8 +21,7 @@ public sealed class App : Application
     private UsageOverlayWindow? _window;
     private SettingsWindow? _settingsWindow;
     private ShortcutsWindow? _shortcutsWindow;
-    private UsageHistoryWindow? _historyWindow;
-    private ResetEfficiencyWindow? _resetEfficiencyWindow;
+    private InsightsWindow? _insightsWindow;
     private TrayIcon? _trayIcon;
     private DispatcherTimer? _trayTooltipBridgeTimer;
     private readonly LinuxTrayTooltipBridge _trayTooltipBridge = new();
@@ -76,8 +75,7 @@ public sealed class App : Application
 
             _window.SettingsRequested += async (_, _) => await ShowSettingsAsync();
             _window.ShortcutsRequested += (_, _) => ShowShortcuts();
-            _window.HistoryRequested += (_, _) => ShowUsageHistory();
-            _window.ResetEfficiencyRequested += (_, _) => ShowResetEfficiency();
+            _window.InsightsRequested += ShowInsights;
             _window.AlwaysOnTopRequested += HandleAlwaysOnTopRequested;
             _window.Closing += async (_, eventArgs) =>
             {
@@ -446,43 +444,27 @@ public sealed class App : Application
         dialog.Show(_window);
     }
 
-    private void ShowUsageHistory()
+    private void ShowInsights(InsightsTab tab)
     {
         if (_window is null)
         {
             return;
         }
 
-        if (_historyWindow is not null)
+        if (_insightsWindow is not null)
         {
-            _historyWindow.Reload();
-            _historyWindow.Activate();
+            // Already open: bring it forward on the requested tab with fresh data.
+            _insightsWindow.ShowTab(tab);
+            _insightsWindow.Reload();
+            _insightsWindow.Activate();
             return;
         }
 
-        var dialog = new UsageHistoryWindow(_settings, _text);
-        dialog.Closed += (_, _) => _historyWindow = null;
-        _historyWindow = dialog;
-        dialog.Show(_window);
-    }
-
-    private void ShowResetEfficiency()
-    {
-        if (_window is null)
-        {
-            return;
-        }
-
-        if (_resetEfficiencyWindow is not null)
-        {
-            _resetEfficiencyWindow.Reload();
-            _resetEfficiencyWindow.Activate();
-            return;
-        }
-
-        var dialog = new ResetEfficiencyWindow(_settings, _text);
-        dialog.Closed += (_, _) => _resetEfficiencyWindow = null;
-        _resetEfficiencyWindow = dialog;
+        var dialog = new InsightsWindow(_settings, _text);
+        dialog.ShortcutsRequested += (_, _) => ShowShortcuts();
+        dialog.Closed += (_, _) => _insightsWindow = null;
+        _insightsWindow = dialog;
+        dialog.ShowTab(tab);
         dialog.Show(_window);
     }
 
@@ -591,10 +573,9 @@ public sealed class App : Application
         _window!.ApplySettings(_settings, _text);
         // The shortcuts window renders localized text captured when it opened.
         _shortcutsWindow?.Close();
-        // Recreate the history dashboard on the next open so its text, theme,
+        // Recreate the insights window on the next open so its text, theme,
         // taskbar visibility, and source file all match the new settings.
-        _historyWindow?.Close();
-        _resetEfficiencyWindow?.Close();
+        _insightsWindow?.Close();
         _runtime?.UpdateSettings(_settings);
         UpdateGnomeTopBarState();
         UpdateTrayIcon();
@@ -873,8 +854,7 @@ public sealed class App : Application
                     DisposeTrayIcon();
                     _gnomeTopBarBridge.Clear();
                     _shortcutsWindow?.Hide();
-                    _historyWindow?.Hide();
-                    _resetEfficiencyWindow?.Hide();
+                    _insightsWindow?.Hide();
                     _settingsWindow?.Hide();
                     _window?.Hide();
                 },
