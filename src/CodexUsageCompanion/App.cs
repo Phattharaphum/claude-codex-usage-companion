@@ -792,9 +792,13 @@ public sealed class App : Application
                 ? updatedAt
                 : state?.ObservedAt ?? _lastAntigravityUpdatedAt;
             _window.UpdateAntigravityUsage(state, error);
+            // The Antigravity section shows its own error (with a retry), so the
+            // header status only tracks when it last updated successfully.
             _runtime?.UpdateAntigravityStatus(
-                state is not null && string.IsNullOrWhiteSpace(error) ? updatedAt : null,
-                error);
+                state is null
+                    ? null
+                    : string.IsNullOrWhiteSpace(error) ? updatedAt : state.ObservedAt,
+                null);
             UpdateGnomeTopBarState();
             UpdateTrayIcon();
         });

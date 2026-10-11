@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- Redesigned the usage overlay. Quota cards now use one neutral surface for every provider (colour is reserved for the quota level), a clear "left" caption next to the percentage, a "Resets in 46m" countdown with the reset time beside it, and a bar that glides to new values. The coloured "5 HR" / "WEEK" chips became plain labels with a small cadence dot.
+- A full window with no reset time now says "Starts on next use" instead of "Reset time unavailable".
+- Antigravity groups are separated by a labelled divider instead of a grey pill, and its errors appear as a banner with a retry button beside the data they affect. Its error no longer repeats in the header, which now shows when it last updated successfully.
+- The header is less crowded: Usage history moved into the "…" menu, and long status text wraps to a second line instead of being cut off.
+- Refreshed the dark and light palettes (cooler neutrals, higher-contrast secondary text).
 - The companion now writes to `~/.claude/.credentials.json` when it renews a token. The write is atomic, stays owner-readable only, preserves every field the app does not own, and takes the same lock file the Claude CLI uses so the two never rotate the refresh token at once. Tokens are still never logged.
 
 ## [0.1.2] - 2026-08-10

@@ -740,6 +740,59 @@ public sealed record UiText(
         };
     }
 
+    public string QuotaFiveHourLabel => Language switch
+    {
+        UiLanguage.TraditionalChinese => "5 小時",
+        UiLanguage.SimplifiedChinese => "5 小时",
+        _ => "5-hour"
+    };
+
+    public string QuotaWeeklyLabel => Language switch
+    {
+        UiLanguage.TraditionalChinese => "每週",
+        UiLanguage.SimplifiedChinese => "每周",
+        _ => "Weekly"
+    };
+
+    public string RemainingCaption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "剩餘",
+        UiLanguage.SimplifiedChinese => "剩余",
+        _ => "left"
+    };
+
+    // A window that is still full and has no reset time has not started yet:
+    // the provider only starts the clock on the first request.
+    public string ResetNotStarted => Language switch
+    {
+        UiLanguage.TraditionalChinese => "下次使用時開始計算",
+        UiLanguage.SimplifiedChinese => "下次使用时开始计算",
+        _ => "Starts on next use"
+    };
+
+    public string FormatResetsIn(DateTimeOffset localReset, DateTimeOffset now)
+    {
+        var countdown = FormatShortCountdown(localReset, now);
+        return Language switch
+        {
+            UiLanguage.TraditionalChinese => $"{countdown}後重置",
+            UiLanguage.SimplifiedChinese => $"{countdown}后重置",
+            _ => $"Resets in {countdown}"
+        };
+    }
+
+    // The reset moment alone, in the user's chosen date format, for the small
+    // detail next to the countdown. A date-only format says nothing about a
+    // reset later today, so those show the clock time instead.
+    public string FormatResetMoment(DateTimeOffset localReset, DateTimeOffset now)
+    {
+        var dateOnly = ResetDateTimeFormat is
+            DateTimeFormatOptions.MonthDay or DateTimeFormatOptions.YearMonthDay;
+        return dateOnly && localReset - now < TimeSpan.FromHours(24)
+            ? FormatDateTime(localReset, DateTimeFormatOptions.HourMinute)
+            : FormatDateTime(localReset, ResetDateTimeFormat);
+    }
+
     public string EnableCodexUsageOption => Language switch
     {
         UiLanguage.TraditionalChinese => "啟用 Codex 用量顯示",

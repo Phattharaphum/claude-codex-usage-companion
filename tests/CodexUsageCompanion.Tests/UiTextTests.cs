@@ -766,4 +766,55 @@ public sealed class UiTextTests
         Assert.Equal(withTime, text.FormatStaleSince(observedAt));
         Assert.Equal(withoutTime, text.FormatStaleSince(null));
     }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "5-hour", "Weekly", "left", "Starts on next use")]
+    [InlineData(UiLanguage.TraditionalChinese, "5 小時", "每週", "剩餘", "下次使用時開始計算")]
+    [InlineData(UiLanguage.SimplifiedChinese, "5 小时", "每周", "剩余", "下次使用时开始计算")]
+    public void QuotaCardLabelsAreLocalized(
+        UiLanguage language,
+        string fiveHour,
+        string weekly,
+        string remaining,
+        string notStarted)
+    {
+        var text = UiText.For(language);
+
+        Assert.Equal(fiveHour, text.QuotaFiveHourLabel);
+        Assert.Equal(weekly, text.QuotaWeeklyLabel);
+        Assert.Equal(remaining, text.RemainingCaption);
+        Assert.Equal(notStarted, text.ResetNotStarted);
+    }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "Resets in 1d 16h")]
+    [InlineData(UiLanguage.TraditionalChinese, "1天 16時後重置")]
+    [InlineData(UiLanguage.SimplifiedChinese, "1天 16时后重置")]
+    public void FormatResetsInUsesTheShortCountdown(UiLanguage language, string expected)
+    {
+        var now = new DateTimeOffset(2026, 10, 11, 15, 0, 0, TimeSpan.Zero);
+
+        var formatted = UiText.For(language).FormatResetsIn(now.AddDays(1).AddHours(16), now);
+
+        Assert.Equal(expected, formatted);
+    }
+
+    [Fact]
+    public void FormatResetMomentShowsTheClockTimeForADateOnlyFormatWithinADay()
+    {
+        var now = new DateTimeOffset(2026, 10, 11, 15, 0, 0, TimeSpan.Zero);
+        var text = UiText.For(UiLanguage.English, DateTimeFormatOptions.MonthDay);
+
+        Assert.Equal("20:00", text.FormatResetMoment(now.AddHours(5), now));
+        Assert.Equal("Oct 13", text.FormatResetMoment(now.AddDays(2), now));
+    }
+
+    [Fact]
+    public void FormatResetMomentKeepsAFormatThatAlreadyIncludesTheTime()
+    {
+        var now = new DateTimeOffset(2026, 10, 11, 15, 0, 0, TimeSpan.Zero);
+        var text = UiText.For(UiLanguage.English, DateTimeFormatOptions.MonthDayTime);
+
+        Assert.Equal("Oct 11 20:00", text.FormatResetMoment(now.AddHours(5), now));
+    }
 }
