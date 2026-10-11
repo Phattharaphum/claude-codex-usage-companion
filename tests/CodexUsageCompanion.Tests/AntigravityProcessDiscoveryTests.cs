@@ -131,6 +131,101 @@ public sealed class AntigravityProcessDiscoveryTests
         Assert.Equal([37017], ports);
     }
 
+    [Theory]
+    [InlineData("socket:[12345]", 12345L)]
+    [InlineData("socket:[0]", 0L)]
+    [InlineData("pipe:[12345]", null)]
+    [InlineData("anon_inode:[eventpoll]", null)]
+    [InlineData("socket:[abc]", null)]
+    [InlineData("socket:[]", null)]
+    [InlineData("/dev/null", null)]
+    [InlineData(null, null)]
+    public void ParseSocketInodeOnlyAcceptsSocketLinks(string? linkTarget, long? expected)
+    {
+        Assert.Equal(expected, AntigravityProcessDiscovery.ParseSocketInode(linkTarget));
+    }
+
+    [Fact]
+    public void ParseProcNetListeningPortsReadsOwnedLoopbackListeners()
+    {
+        const string tcp = """
+          sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+           0: 0100007F:A0B3 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 111 1 0000000000000000 100 0 0 10 0
+           1: 0100007F:9049 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 111 1 0000000000000000 100 0 0 10 0
+           2: 0100007F:A0B3 0100007F:D2F0 01 00000000:00000000 00:00000000 00000000  1000        0 111 1 0000000000000000 100 0 0 10 0
+           3: 00000000:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 111 1 0000000000000000 100 0 0 10 0
+           4: 0100007F:2328 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 999 1 0000000000000000 100 0 0 10 0
+        """;
+
+        var ports = AntigravityProcessDiscovery.ParseProcNetListeningPorts(tcp, new HashSet<long> { 111 });
+
+        // 0xA0B3 and 0x9049; the established socket, the wildcard listener and
+        // the listener owned by another process are all ignored.
+        Assert.Equal([0x9049, 0xA0B3], ports);
+    }
+
+    [Fact]
+    public void ParseProcNetListeningPortsReadsIpv6AndMappedLoopback()
+    {
+        const string tcp6 = """
+          sl  local_address                         remote_address                        st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode
+           0: 00000000000000000000000001000000:9089 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 222 1 0000000000000000 100 0 0 10 0
+           1: 0000000000000000FFFF00000100007F:9A2B 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 222 1 0000000000000000 100 0 0 10 0
+           2: 00000000000000000000000000000000:1F90 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 222 1 0000000000000000 100 0 0 10 0
+        """;
+
+        var ports = AntigravityProcessDiscovery.ParseProcNetListeningPorts(tcp6, new HashSet<long> { 222 });
+
+        Assert.Equal([0x9089, 0x9A2B], ports);
+    }
+
+    [Fact]
+    public void ParseProcNetListeningPortsIgnoresMalformedRows()
+    {
+        const string tcp = """
+        header only
+           0: garbage
+           1: 0100007F:ZZZZ 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 111 1
+           2: 0100007F:0000 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 111 1
+           3: 0100007F:A0B3 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 notnum 1
+        """;
+
+        Assert.Empty(AntigravityProcessDiscovery.ParseProcNetListeningPorts(tcp, new HashSet<long> { 111 }));
+    }
+
+    [Fact]
+    public void ReadListeningPortsFromProcFindsARealLoopbackListenerOfThisProcess()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        using var ipv4 = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        using var wildcard = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Any, 0);
+        ipv4.Start();
+        wildcard.Start();
+        var loopbackPort = ((System.Net.IPEndPoint)ipv4.LocalEndpoint).Port;
+        var wildcardPort = ((System.Net.IPEndPoint)wildcard.LocalEndpoint).Port;
+
+        var ports = AntigravityProcessDiscovery.ReadListeningPortsFromProc(Environment.ProcessId);
+
+        Assert.NotNull(ports);
+        Assert.Contains(loopbackPort, ports);
+        Assert.DoesNotContain(wildcardPort, ports);
+    }
+
+    [Fact]
+    public void ReadListeningPortsFromProcReturnsNullWhenTheProcessIsGone()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        Assert.Null(AntigravityProcessDiscovery.ReadListeningPortsFromProc(int.MaxValue));
+    }
+
     [Fact]
     public void RedactedTypesNeverExposeCsrfTokensThroughToString()
     {

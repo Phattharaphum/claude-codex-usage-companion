@@ -241,4 +241,42 @@ public sealed class UsagePresentationTests
                 "weekly", "Weekly", AntigravityQuotaCadence.Weekly, weekly,
                 null, TimeSpan.FromDays(7)),
             []);
+
+    [Fact]
+    public void AntigravityPresentationMarksARetainedSnapshotAsStaleWithItsObservationTime()
+    {
+        var observedAt = new DateTimeOffset(2026, 10, 11, 14, 58, 0, TimeSpan.Zero);
+        var state = State([Pool("Gemini Models", 89, 88)]) with { ObservedAt = observedAt };
+
+        var stale = UsagePresentation.BuildAntigravityPresentation(true, state, "Antigravity is not running.");
+        var fresh = UsagePresentation.BuildAntigravityPresentation(true, state, null);
+
+        Assert.True(stale.IsStale);
+        Assert.Equal(observedAt, stale.ObservedAt);
+        Assert.False(fresh.IsStale);
+    }
+
+    [Fact]
+    public void AntigravityPresentationMarksObservedModelFallbackAsStaleWhenRefreshFails()
+    {
+        var state = new AntigravityUsageState(
+            null,
+            null,
+            [new AntigravityModelQuotaState("gemini", "Gemini", 54, null)]);
+
+        var presentation = UsagePresentation.BuildAntigravityPresentation(true, state, "failed");
+
+        Assert.Equal(AntigravityPresentationKind.ObservedModelFallback, presentation.Kind);
+        Assert.True(presentation.IsStale);
+    }
+
+    [Fact]
+    public void AntigravityPresentationDoesNotCallAnErrorWithoutDataStale()
+    {
+        var presentation = UsagePresentation.BuildAntigravityPresentation(true, null, "failed");
+
+        Assert.Equal(AntigravityPresentationKind.Error, presentation.Kind);
+        Assert.False(presentation.IsStale);
+        Assert.Null(presentation.ObservedAt);
+    }
 }

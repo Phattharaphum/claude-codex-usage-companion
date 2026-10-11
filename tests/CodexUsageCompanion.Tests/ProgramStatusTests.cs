@@ -237,4 +237,65 @@ public sealed class ProgramStatusTests
         Assert.Contains("Weekly Limit Remaining: 88%", rendered);
         Assert.DoesNotContain("Model-only observation", rendered);
     }
+
+    [Theory]
+    [InlineData("NotRunning", "not running")]
+    [InlineData("NoListeningPort", "still starting")]
+    [InlineData("AuthRejected", "rejected")]
+    [InlineData("Timeout", "did not respond")]
+    [InlineData("InvalidResponse", "unexpected")]
+    [InlineData("Unreachable", "Could not connect")]
+    [InlineData("MultipleAccounts", "Multiple Antigravity accounts")]
+    [InlineData("DiscoveryUnavailable", "unavailable")]
+    public void FriendlyAntigravityErrorExplainsEachFailureKind(string kind, string expected)
+    {
+        var message = Program.FriendlyAntigravityError(
+            new AntigravityUsageException(Enum.Parse<AntigravityFailureKind>(kind)));
+
+        Assert.Contains(expected, message);
+    }
+
+    [Fact]
+    public void FriendlyAntigravityErrorKeepsTheLsofHintAndHidesUntypedDetails()
+    {
+        var lsof = Program.FriendlyAntigravityError(new AntigravityUsageException(
+            AntigravityFailureKind.DiscoveryUnavailable,
+            "The lsof utility is required for Antigravity local process discovery."));
+        var untyped = Program.FriendlyAntigravityError(
+            new InvalidOperationException("token test-csrf-secret-do-not-log"));
+
+        Assert.Contains("lsof", lsof);
+        Assert.Equal("Antigravity local usage service was unavailable.", untyped);
+    }
+
+    [Fact]
+    public void WriteAntigravityShowsTheErrorAndStaleNoteBesideARetainedSnapshot()
+    {
+        var text = UiText.For(UiLanguage.English);
+        var original = Console.Out;
+        using var output = new StringWriter();
+        try
+        {
+            Console.SetOut(output);
+            ConsoleUsageRenderer.WriteAntigravity(
+                new AntigravityUsageState(
+                    null,
+                    null,
+                    [new AntigravityModelQuotaState("model", "Gemini", 54, null)])
+                {
+                    ObservedAt = new DateTimeOffset(2026, 10, 11, 14, 58, 0, TimeSpan.Zero)
+                },
+                "Antigravity is not running. Open it to refresh usage.",
+                text);
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+
+        var rendered = output.ToString();
+        Assert.Contains("Antigravity is not running", rendered);
+        Assert.Contains("Showing data from", rendered);
+        Assert.Contains("Observed remaining: 54%", rendered);
+    }
 }

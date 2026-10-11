@@ -22,6 +22,14 @@ public static class ConsoleUsageRenderer
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            // The snapshot below is the last successful reading, not current.
+            Console.WriteLine(error);
+            Console.WriteLine(text.FormatStaleSince(state.ObservedAt));
+            Console.WriteLine();
+        }
+
         if (!string.IsNullOrWhiteSpace(state.Account))
         {
             Console.WriteLine($"Account: {state.Account}");

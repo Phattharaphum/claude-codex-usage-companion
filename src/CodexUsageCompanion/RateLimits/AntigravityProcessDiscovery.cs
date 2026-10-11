@@ -74,6 +74,13 @@ internal static class AntigravityProcessDiscovery
             }
         }
 
+        // No language server at all means Antigravity is not running. A server
+        // without a loopback listener means it is still starting (or exiting).
+        if (endpoints.Count == 0 && candidates.Count > 0)
+        {
+            throw new AntigravityUsageException(AntigravityFailureKind.NoListeningPort);
+        }
+
         return endpoints;
     }
 
@@ -172,6 +179,140 @@ internal static class AntigravityProcessDiscovery
 
     private static IReadOnlyList<int> ReadListeningPorts(int processId)
     {
+        // /proc needs no helper binary. lsof stays as a fallback for kernels or
+        // sandboxes where the process's file descriptors are unreadable.
+        return ReadListeningPortsFromProc(processId) ?? ReadListeningPortsWithLsof(processId);
+    }
+
+    // Null means /proc could not be read for this process (caller may fall back).
+    internal static IReadOnlyList<int>? ReadListeningPortsFromProc(int processId)
+    {
+        try
+        {
+            var processDirectory = Path.Combine(
+                ProcDirectory,
+                processId.ToString(CultureInfo.InvariantCulture));
+            var inodes = ReadSocketInodes(Path.Combine(processDirectory, "fd"));
+            if (inodes.Count == 0)
+            {
+                return [];
+            }
+
+            var ports = new SortedSet<int>();
+            foreach (var table in new[] { "tcp", "tcp6" })
+            {
+                // The process's own network namespace, not necessarily ours.
+                var path = Path.Combine(processDirectory, "net", table);
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                foreach (var port in ParseProcNetListeningPorts(File.ReadAllText(path), inodes))
+                {
+                    ports.Add(port);
+                }
+            }
+
+            return ports.ToArray();
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static HashSet<long> ReadSocketInodes(string fdDirectory)
+    {
+        var inodes = new HashSet<long>();
+        foreach (var descriptor in Directory.EnumerateFileSystemEntries(fdDirectory))
+        {
+            try
+            {
+                if (ParseSocketInode(new FileInfo(descriptor).LinkTarget) is { } inode)
+                {
+                    inodes.Add(inode);
+                }
+            }
+            catch (IOException)
+            {
+                // The descriptor was closed between enumeration and readlink.
+            }
+        }
+
+        return inodes;
+    }
+
+    /// <summary>Parses the "socket:[12345]" target of a /proc/PID/fd link.</summary>
+    internal static long? ParseSocketInode(string? linkTarget)
+    {
+        const string prefix = "socket:[";
+        if (linkTarget is null ||
+            !linkTarget.StartsWith(prefix, StringComparison.Ordinal) ||
+            !linkTarget.EndsWith(']'))
+        {
+            return null;
+        }
+
+        return long.TryParse(
+            linkTarget.AsSpan(prefix.Length, linkTarget.Length - prefix.Length - 1),
+            NumberStyles.None,
+            CultureInfo.InvariantCulture,
+            out var inode)
+            ? inode
+            : null;
+    }
+
+    /// <summary>
+    /// Reads the loopback LISTEN ports of the given socket inodes from the
+    /// contents of /proc/net/tcp or /proc/net/tcp6.
+    /// </summary>
+    internal static IReadOnlyList<int> ParseProcNetListeningPorts(
+        string contents,
+        IReadOnlySet<long> socketInodes)
+    {
+        const string listenState = "0A";
+        var ports = new SortedSet<int>();
+        foreach (var line in contents.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var fields = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length < 10 ||
+                fields[3] != listenState ||
+                !long.TryParse(fields[9], NumberStyles.None, CultureInfo.InvariantCulture, out var inode) ||
+                !socketInodes.Contains(inode))
+            {
+                continue;
+            }
+
+            var separator = fields[1].IndexOf(':');
+            if (separator <= 0 ||
+                !IsLoopbackHexAddress(fields[1][..separator]) ||
+                !int.TryParse(
+                    fields[1][(separator + 1)..],
+                    NumberStyles.AllowHexSpecifier,
+                    CultureInfo.InvariantCulture,
+                    out var port) ||
+                port is < 1 or > 65535)
+            {
+                continue;
+            }
+
+            ports.Add(port);
+        }
+
+        return ports.ToArray();
+    }
+
+    // /proc/net prints each 32-bit word of the address in host (little-endian)
+    // order: 127.0.0.1 is 0100007F and ::1 is 00000000000000000000000001000000.
+    private static bool IsLoopbackHexAddress(string address) =>
+        address.Equals("0100007F", StringComparison.OrdinalIgnoreCase) ||
+        address.Equals("00000000000000000000000001000000", StringComparison.OrdinalIgnoreCase) ||
+        address.Equals("0000000000000000FFFF00000100007F", StringComparison.OrdinalIgnoreCase);
+
+    private static IReadOnlyList<int> ReadListeningPortsWithLsof(int processId)
+    {
         try
         {
             var startInfo = new ProcessStartInfo
@@ -199,7 +340,8 @@ internal static class AntigravityProcessDiscovery
         }
         catch (Win32Exception exception)
         {
-            throw new InvalidOperationException(
+            throw new AntigravityUsageException(
+                AntigravityFailureKind.DiscoveryUnavailable,
                 "The lsof utility is required for Antigravity local process discovery.",
                 exception);
         }

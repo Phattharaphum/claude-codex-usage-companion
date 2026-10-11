@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
@@ -11,13 +13,14 @@ public sealed class AntigravityUsageClientTests
     private const string Secret = "test-csrf-secret-do-not-log";
 
     [Fact]
-    public async Task ReadUsageAsyncUsesHttpsFirstAndSendsTheValidatedRequest()
+    public async Task ReadUsageAsyncSendsTheValidatedRequestOverHttps()
     {
         HttpRequestMessage? captured = null;
         string? capturedBody = null;
         var handler = new StubHandler((request, _) =>
         {
-            if (request.RequestUri!.AbsolutePath.EndsWith("GetUserStatus", StringComparison.Ordinal))
+            if (request.RequestUri!.AbsolutePath.EndsWith("GetUserStatus", StringComparison.Ordinal) &&
+                RequestKey(request) == "https://127.0.0.1:37017")
             {
                 captured = request;
                 capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
@@ -52,10 +55,10 @@ public sealed class AntigravityUsageClientTests
     [Fact]
     public async Task ReadUsageAsyncTriesNextPortAfterConnectionFailure()
     {
-        var attempts = new List<string>();
+        var attempts = new ConcurrentQueue<string>();
         var handler = new StubHandler((request, _) =>
         {
-            attempts.Add(RequestKey(request));
+            attempts.Enqueue(RequestKey(request));
             return request.RequestUri!.Port == 38507
                 ? Response()
                 : throw new HttpRequestException("connection refused");
@@ -66,17 +69,19 @@ public sealed class AntigravityUsageClientTests
 
         Assert.Single(state.Models);
         Assert.Contains("https://127.0.0.1:37017", attempts);
-        Assert.Contains("http://[::1]:37017", attempts);
+        Assert.Contains("https://[::1]:37017", attempts);
         Assert.Contains("https://127.0.0.1:38507", attempts);
+        // Plain HTTP is only a fallback for missing metadata.
+        Assert.DoesNotContain(attempts, attempt => attempt.StartsWith("http://", StringComparison.Ordinal));
     }
 
     [Fact]
     public async Task ReadUsageAsyncFallsBackToHttpAfterHttpsFails()
     {
-        var attempts = new List<string>();
+        var attempts = new ConcurrentQueue<string>();
         var handler = new StubHandler((request, _) =>
         {
-            attempts.Add(RequestKey(request));
+            attempts.Enqueue(RequestKey(request));
             return request.RequestUri!.Scheme == "http" && request.RequestUri.Host == "127.0.0.1"
                 ? Response()
                 : throw new HttpRequestException("unavailable");
@@ -155,22 +160,201 @@ public sealed class AntigravityUsageClientTests
     }
 
     [Fact]
-    public async Task ReadUsageAsyncReturnsSanitizedUnavailableFailure()
+    public async Task ReadUsageAsyncReportsNotRunningWhenNoLanguageServerIsFound()
     {
-        await using var noCandidates = Client(new StubHandler((_, _) => Response()));
-        var noCandidatesError = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => noCandidates.ReadUsageAsync(CancellationToken.None));
+        await using var client = Client(new StubHandler((_, _) => Response()));
 
-        await using var unreachable = Client(
+        var error = await Assert.ThrowsAsync<AntigravityUsageException>(
+            () => client.ReadUsageAsync(CancellationToken.None));
+
+        Assert.Equal(AntigravityFailureKind.NotRunning, error.Kind);
+        Assert.Contains("not running", error.Message);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncReportsUnreachableWithoutLeakingTransportDetails()
+    {
+        await using var client = Client(
             new StubHandler((Func<HttpRequestMessage, CancellationToken, HttpResponseMessage>)
                 ((_, _) => throw new HttpRequestException(Secret))),
             Endpoint(37017));
-        var unreachableError = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => unreachable.ReadUsageAsync(CancellationToken.None));
 
-        Assert.Equal("Antigravity local usage service was unavailable.", noCandidatesError.Message);
-        Assert.Equal("Antigravity local usage service was unavailable.", unreachableError.Message);
-        Assert.DoesNotContain(Secret, unreachableError.Message);
+        var error = await Assert.ThrowsAsync<AntigravityUsageException>(
+            () => client.ReadUsageAsync(CancellationToken.None));
+
+        Assert.Equal(AntigravityFailureKind.Unreachable, error.Kind);
+        Assert.DoesNotContain(Secret, error.Message);
+        Assert.Null(error.InnerException);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task ReadUsageAsyncReportsRejectedCsrfToken(HttpStatusCode status)
+    {
+        await using var client = Client(
+            new StubHandler((_, _) => new HttpResponseMessage(status)),
+            Endpoint(37017));
+
+        var error = await Assert.ThrowsAsync<AntigravityUsageException>(
+            () => client.ReadUsageAsync(CancellationToken.None));
+
+        Assert.Equal(AntigravityFailureKind.AuthRejected, error.Kind);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncReportsUnexpectedPayloads()
+    {
+        await using var client = Client(
+            new StubHandler((_, _) => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{")
+            }),
+            Endpoint(37017));
+
+        var error = await Assert.ThrowsAsync<AntigravityUsageException>(
+            () => client.ReadUsageAsync(CancellationToken.None));
+
+        Assert.Equal(AntigravityFailureKind.InvalidResponse, error.Kind);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncReportsTimeoutWhenEveryProbeHangs()
+    {
+        var handler = new StubHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return Response();
+        });
+        await using var client = ClientWithTimeout(
+            handler,
+            TimeSpan.FromMilliseconds(25),
+            Endpoint(37017));
+
+        var error = await Assert.ThrowsAsync<AntigravityUsageException>(
+            () => client.ReadUsageAsync(CancellationToken.None));
+
+        Assert.Equal(AntigravityFailureKind.Timeout, error.Kind);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncPassesThroughTypedDiscoveryFailures()
+    {
+        await using var client = new AntigravityUsageClient(
+            new HttpClient(new StubHandler((_, _) => Response())),
+            () => throw new AntigravityUsageException(AntigravityFailureKind.NoListeningPort));
+
+        var error = await Assert.ThrowsAsync<AntigravityUsageException>(
+            () => client.ReadUsageAsync(CancellationToken.None));
+
+        Assert.Equal(AntigravityFailureKind.NoListeningPort, error.Kind);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncSanitizesUnexpectedDiscoveryFailures()
+    {
+        await using var client = new AntigravityUsageClient(
+            new HttpClient(new StubHandler((_, _) => Response())),
+            () => throw new IOException($"cannot read /proc {Secret}"));
+
+        var error = await Assert.ThrowsAsync<AntigravityUsageException>(
+            () => client.ReadUsageAsync(CancellationToken.None));
+
+        Assert.Equal(AntigravityFailureKind.DiscoveryUnavailable, error.Kind);
+        Assert.DoesNotContain(Secret, error.Message);
+        Assert.Null(error.InnerException);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncStampsWhenTheSnapshotWasObserved()
+    {
+        await using var client = Client(new StubHandler((_, _) => Response()), Endpoint(37017));
+        var before = DateTimeOffset.Now;
+
+        var state = await client.ReadUsageAsync(CancellationToken.None);
+
+        Assert.NotNull(state.ObservedAt);
+        Assert.InRange(state.ObservedAt!.Value, before, DateTimeOffset.Now);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncIsNotDelayedByAHungPort()
+    {
+        var handler = new StubHandler(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.Port == 37017)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+
+            return request.RequestUri.AbsolutePath.EndsWith("RetrieveUserQuotaSummary", StringComparison.Ordinal)
+                ? SummaryResponse()
+                : Response();
+        });
+        // Each hung attempt would cost 3s and the whole read has 2s, so a serial
+        // scan could never reach the second port.
+        await using var client = Client(handler, Endpoint(37017, 38507));
+        var timer = Stopwatch.StartNew();
+
+        var state = await client.ReadUsageAsync(CancellationToken.None);
+
+        Assert.Single(state.QuotaPools);
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(2), $"Took {timer.Elapsed}.");
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncProbesTheLastWorkingTransportFirst()
+    {
+        var attempts = new ConcurrentQueue<string>();
+        var handler = new StubHandler((request, _) =>
+        {
+            attempts.Enqueue(RequestKey(request));
+            if (request.RequestUri!.Port != 38507)
+            {
+                throw new HttpRequestException("connection refused");
+            }
+
+            return request.RequestUri.AbsolutePath.EndsWith("RetrieveUserQuotaSummary", StringComparison.Ordinal)
+                ? SummaryResponse()
+                : Response();
+        });
+        await using var client = Client(handler, Endpoint(37017, 38507));
+
+        await client.ReadUsageAsync(CancellationToken.None);
+        attempts.Clear();
+        var state = await client.ReadUsageAsync(CancellationToken.None);
+
+        Assert.Single(state.QuotaPools);
+        // Both loopback hosts answer in this stub, so either may be the one
+        // remembered; what matters is that nothing else is probed.
+        var probed = Assert.Single(attempts.Distinct());
+        Assert.StartsWith("https://", probed);
+        Assert.EndsWith(":38507", probed);
+    }
+
+    [Fact]
+    public async Task ReadUsageAsyncForgetsAPreferredTransportThatStoppedAnswering()
+    {
+        var generation = 0;
+        var handler = new StubHandler((request, _) =>
+        {
+            var livePort = generation == 0 ? 38507 : 41011;
+            if (request.RequestUri!.Port != livePort)
+            {
+                throw new HttpRequestException("connection refused");
+            }
+
+            return request.RequestUri.AbsolutePath.EndsWith("RetrieveUserQuotaSummary", StringComparison.Ordinal)
+                ? SummaryResponse()
+                : Response();
+        });
+        await using var client = Client(handler, Endpoint(38507, 41011));
+
+        await client.ReadUsageAsync(CancellationToken.None);
+        generation = 1;
+        var state = await client.ReadUsageAsync(CancellationToken.None);
+
+        Assert.Single(state.QuotaPools);
     }
 
     [Fact]
@@ -194,9 +378,10 @@ public sealed class AntigravityUsageClientTests
             : Response("second@example.invalid"));
         await using var client = Client(handler, Endpoint(37017), Endpoint(38507));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<AntigravityUsageException>(
             () => client.ReadUsageAsync(CancellationToken.None));
 
+        Assert.Equal(AntigravityFailureKind.MultipleAccounts, exception.Kind);
         Assert.Equal("Multiple Antigravity accounts are active.", exception.Message);
         Assert.DoesNotContain(Secret, exception.Message);
     }
@@ -242,12 +427,12 @@ public sealed class AntigravityUsageClientTests
     [Fact]
     public async Task ReadUsageAsyncUsesQuotaSummaryWhenMetadataIsUnavailableAndTriesLaterPort()
     {
-        var summaryPorts = new List<int>();
+        var summaryPorts = new ConcurrentQueue<int>();
         var handler = new StubHandler((request, _) =>
         {
             if (request.RequestUri!.AbsolutePath.EndsWith("RetrieveUserQuotaSummary", StringComparison.Ordinal))
             {
-                summaryPorts.Add(request.RequestUri.Port);
+                summaryPorts.Enqueue(request.RequestUri.Port);
                 return request.RequestUri.Port == 38507 ? SummaryResponse() : new HttpResponseMessage(HttpStatusCode.NotFound);
             }
 

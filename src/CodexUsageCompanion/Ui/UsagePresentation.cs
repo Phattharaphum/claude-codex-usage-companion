@@ -29,7 +29,9 @@ public sealed record AntigravityPresentationState(
     AntigravityPresentationKind Kind,
     IReadOnlyList<AntigravityQuotaPoolPresentation> Pools,
     int ObservedModelCount,
-    string? Error);
+    string? Error,
+    bool IsStale = false,
+    DateTimeOffset? ObservedAt = null);
 
 public static class UsagePresentation
 {
@@ -60,7 +62,9 @@ public static class UsagePresentation
                     AntigravityPresentationKind.QuotaPools,
                     pools,
                     state.Models.Count,
-                    error);
+                    error,
+                    IsStale: IsStale(error),
+                    ObservedAt: state.ObservedAt);
             }
         }
 
@@ -70,7 +74,9 @@ public static class UsagePresentation
                 AntigravityPresentationKind.ObservedModelFallback,
                 [],
                 state.Models.Count,
-                error);
+                error,
+                IsStale: IsStale(error),
+                ObservedAt: state.ObservedAt);
         }
 
         return new AntigravityPresentationState(
@@ -81,6 +87,10 @@ public static class UsagePresentation
             0,
             error);
     }
+
+    // A snapshot that is shown together with a refresh error is the last good
+    // reading, not current data.
+    private static bool IsStale(string? error) => !string.IsNullOrWhiteSpace(error);
 
     public static UsageSignal GetSignal(int remainingPercent)
     {

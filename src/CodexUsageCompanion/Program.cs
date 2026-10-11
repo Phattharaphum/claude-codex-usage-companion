@@ -580,12 +580,11 @@ public static class Program
 
     internal static string FriendlyAntigravityError(Exception exception)
     {
-        return exception.Message switch
-        {
-            "Multiple Antigravity accounts are active." => exception.Message,
-            "The lsof utility is required for Antigravity local process discovery." => exception.Message,
-            _ => "Antigravity local usage service was unavailable."
-        };
+        // Typed failures carry a message that is already safe to show. Anything
+        // else may embed transport details, so it collapses to the generic text.
+        return exception is AntigravityUsageException typed
+            ? typed.Message
+            : AntigravityUsageException.DefaultMessage(AntigravityFailureKind.DiscoveryUnavailable);
     }
 }
 

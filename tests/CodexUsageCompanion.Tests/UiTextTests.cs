@@ -738,4 +738,32 @@ public sealed class UiTextTests
         Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisCycleReset));
         Assert.False(string.IsNullOrWhiteSpace(text.UsageAnalysisIndefinite));
     }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "Stale", "Reset time passed · waiting for new data")]
+    [InlineData(UiLanguage.TraditionalChinese, "已過期", "已過重置時間・等待新資料")]
+    [InlineData(UiLanguage.SimplifiedChinese, "已过期", "已过重置时间・等待新数据")]
+    public void AntigravityStaleTextsAreLocalized(UiLanguage language, string stale, string resetPassed)
+    {
+        var text = UiText.For(language);
+
+        Assert.Equal(stale, text.AntigravityStaleShort);
+        Assert.Equal(resetPassed, text.ResetPassedAwaitingRefresh);
+    }
+
+    [Theory]
+    [InlineData(UiLanguage.English, "Showing data from 14:58; it may be out of date", "Showing the last successful reading")]
+    [InlineData(UiLanguage.TraditionalChinese, "顯示 14:58 的資料，可能已過期", "顯示的是上次成功讀取的資料")]
+    [InlineData(UiLanguage.SimplifiedChinese, "显示 14:58 的数据，可能已过期", "显示的是上次成功读取的数据")]
+    public void FormatStaleSinceUsesTheObservationTimeWhenKnown(
+        UiLanguage language,
+        string withTime,
+        string withoutTime)
+    {
+        var text = UiText.For(language);
+        var observedAt = new DateTimeOffset(2026, 10, 11, 14, 58, 0, TimeSpan.Zero);
+
+        Assert.Equal(withTime, text.FormatStaleSince(observedAt));
+        Assert.Equal(withoutTime, text.FormatStaleSince(null));
+    }
 }

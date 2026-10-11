@@ -705,6 +705,41 @@ public sealed record UiText(
         _ => "Observed remaining model data; shared quota limits are unavailable"
     };
 
+    public string AntigravityStaleShort => Language switch
+    {
+        UiLanguage.TraditionalChinese => "已過期",
+        UiLanguage.SimplifiedChinese => "已过期",
+        _ => "Stale"
+    };
+
+    public string ResetPassedAwaitingRefresh => Language switch
+    {
+        UiLanguage.TraditionalChinese => "已過重置時間・等待新資料",
+        UiLanguage.SimplifiedChinese => "已过重置时间・等待新数据",
+        _ => "Reset time passed · waiting for new data"
+    };
+
+    public string FormatStaleSince(DateTimeOffset? observedAt)
+    {
+        if (observedAt is not { } value)
+        {
+            return Language switch
+            {
+                UiLanguage.TraditionalChinese => "顯示的是上次成功讀取的資料",
+                UiLanguage.SimplifiedChinese => "显示的是上次成功读取的数据",
+                _ => "Showing the last successful reading"
+            };
+        }
+
+        var dateTime = FormatDateTime(value, LastUpdatedDateTimeFormat);
+        return Language switch
+        {
+            UiLanguage.TraditionalChinese => $"顯示 {dateTime} 的資料，可能已過期",
+            UiLanguage.SimplifiedChinese => $"显示 {dateTime} 的数据，可能已过期",
+            _ => $"Showing data from {dateTime}; it may be out of date"
+        };
+    }
+
     public string EnableCodexUsageOption => Language switch
     {
         UiLanguage.TraditionalChinese => "啟用 Codex 用量顯示",

@@ -18,6 +18,10 @@ public sealed record AntigravityUsageState(
 {
     public IReadOnlyList<AntigravityQuotaPoolState> QuotaPools { get; init; } = [];
 
+    // When this snapshot was actually read from the local service. It lets a
+    // later failed refresh label the retained snapshot as stale.
+    public DateTimeOffset? ObservedAt { get; init; }
+
     public AntigravityUsageState(
         string? account,
         string? plan,

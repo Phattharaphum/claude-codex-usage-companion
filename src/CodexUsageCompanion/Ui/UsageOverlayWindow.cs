@@ -30,6 +30,8 @@ public sealed class UsageOverlayWindow : Window
     private const double AntigravityGroupTitleHeight = 20;
     private const double AntigravityMessageCardHeight = 46;
     private const double AntigravityErrorCardHeight = 52;
+    private const double AntigravityStaleErrorCardHeight = 68;
+    private const double StaleCardOpacity = 0.55;
     private const double ContentBottomPadding = 4;
     private const double IconSize = 14;
     private const double HeaderGroupSpacing = 6;
@@ -647,15 +649,25 @@ public sealed class UsageOverlayWindow : Window
                     (pool.Windows.Count * (AntigravityWindowCardHeight + CardSpacing))) +
                 (string.IsNullOrWhiteSpace(presentation.Error)
                     ? 0
-                    : AntigravityErrorCardHeight + CardSpacing),
+                    : AntigravityErrorHeight(presentation) + CardSpacing),
             AntigravityPresentationKind.Error =>
                 AntigravitySectionTitleHeight + AntigravityErrorCardHeight + CardSpacing,
             _ => AntigravitySectionTitleHeight + AntigravityMessageCardHeight + CardSpacing +
                 (string.IsNullOrWhiteSpace(presentation.Error)
                     ? 0
-                    : AntigravityErrorCardHeight + CardSpacing)
+                    : AntigravityErrorHeight(presentation) + CardSpacing)
         };
     }
+
+    private static double AntigravityErrorHeight(AntigravityPresentationState presentation) =>
+        presentation.IsStale ? AntigravityStaleErrorCardHeight : AntigravityErrorCardHeight;
+
+    // A retained snapshot is labelled with when it was read, so the error is
+    // never shown beside numbers that look current.
+    private string AntigravityErrorText(AntigravityPresentationState presentation) =>
+        presentation.IsStale
+            ? $"{presentation.Error}\n{_text.FormatStaleSince(presentation.ObservedAt)}"
+            : presentation.Error ?? string.Empty;
 
     private void RebuildAntigravitySection(bool applySize)
     {
@@ -682,13 +694,16 @@ public sealed class UsageOverlayWindow : Window
                     AddAntigravityHeading(CompactPoolName(pool.Name), sectionTitle: false);
                     foreach (var window in pool.Windows)
                     {
-                        AddAntigravityWindow(window);
+                        AddAntigravityWindow(window, presentation.IsStale);
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(presentation.Error))
                 {
-                    AddAntigravityMessage(presentation.Error, error: true);
+                    AddAntigravityMessage(
+                        AntigravityErrorText(presentation),
+                        error: true,
+                        AntigravityErrorHeight(presentation));
                 }
             }
             else
@@ -703,7 +718,10 @@ public sealed class UsageOverlayWindow : Window
                 if (presentation.Kind != AntigravityPresentationKind.Error &&
                     !string.IsNullOrWhiteSpace(presentation.Error))
                 {
-                    AddAntigravityMessage(presentation.Error, error: true);
+                    AddAntigravityMessage(
+                        AntigravityErrorText(presentation),
+                        error: true,
+                        AntigravityErrorHeight(presentation));
                 }
             }
 
@@ -1006,9 +1024,18 @@ public sealed class UsageOverlayWindow : Window
             {
                 var worst = windows.OrderBy(w => w.RemainingPercent).First();
                 var signal = UsagePresentation.GetSignal(worst.RemainingPercent);
-                if (worst.ResetAt is { } resetAt)
+                if (presentation.IsStale)
                 {
-                    var countdown = _text.FormatShortCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now);
+                    _antigravitySummaryText.Text = $"{worst.RemainingPercent}% • {_text.AntigravityStaleShort}";
+                    signal = UsageSignal.Gray;
+                }
+                else if (worst.ResetAt is { } resetAt && resetAt <= DateTimeOffset.Now)
+                {
+                    _antigravitySummaryText.Text = $"{worst.RemainingPercent}%";
+                }
+                else if (worst.ResetAt is { } upcomingReset)
+                {
+                    var countdown = _text.FormatShortCountdown(upcomingReset.ToLocalTime(), DateTimeOffset.Now);
                     _antigravitySummaryText.Text = $"{worst.RemainingPercent}% • {countdown}";
                 }
                 else
@@ -1029,8 +1056,13 @@ public sealed class UsageOverlayWindow : Window
         {
             var worstModel = _lastAntigravityState.Models.OrderBy(m => m.RemainingPercent).First();
             var signal = UsagePresentation.GetSignal(worstModel.RemainingPercent);
-            _antigravitySummaryText.Text = $"{worstModel.RemainingPercent}%";
-            ApplyPillTheme(_antigravitySummaryPill, _antigravitySummaryText, signal);
+            _antigravitySummaryText.Text = presentation.IsStale
+                ? $"{worstModel.RemainingPercent}% • {_text.AntigravityStaleShort}"
+                : $"{worstModel.RemainingPercent}%";
+            ApplyPillTheme(
+                _antigravitySummaryPill,
+                _antigravitySummaryText,
+                presentation.IsStale ? UsageSignal.Gray : signal);
             return;
         }
 
@@ -1069,14 +1101,14 @@ public sealed class UsageOverlayWindow : Window
         _antigravityContentContainer.Children.Add(groupHeader);
     }
 
-    private void AddAntigravityWindow(AntigravityQuotaWindowState window)
+    private void AddAntigravityWindow(AntigravityQuotaWindowState window, bool stale)
     {
         var badge = window.Cadence == AntigravityQuotaCadence.Weekly
             ? LimitBadge.Week
             : LimitBadge.FiveHour;
         var card = CreateCard(badge, "Gemini");
         card.Container.Margin = new Thickness(4, 0, 0, 0);
-        UpdateAntigravityCard(card, window);
+        UpdateAntigravityCard(card, window, stale);
         _antigravityCards.Add(card);
         _antigravityContentContainer.Children.Add(card.Container);
     }
@@ -1086,20 +1118,20 @@ public sealed class UsageOverlayWindow : Window
             ? "Gemini"
             : name;
 
-    private void AddAntigravityMessage(string message, bool error)
+    private void AddAntigravityMessage(string message, bool error, double? errorHeight = null)
     {
         var text = new TextBlock
         {
             Text = message,
             FontSize = 11.5,
             TextWrapping = TextWrapping.Wrap,
-            MaxLines = error ? 2 : 3,
+            MaxLines = error ? (errorHeight > AntigravityErrorCardHeight ? 3 : 2) : 3,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center
         };
         var card = new Border
         {
-            Height = error ? AntigravityErrorCardHeight : AntigravityMessageCardHeight,
+            Height = error ? errorHeight ?? AntigravityErrorCardHeight : AntigravityMessageCardHeight,
             CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
             Padding = new Thickness(10, 6),
@@ -1750,15 +1782,22 @@ public sealed class UsageOverlayWindow : Window
 
     private void UpdateAntigravityCard(
         UsageCardControls card,
-        AntigravityQuotaWindowState window)
+        AntigravityQuotaWindowState window,
+        bool stale)
     {
         card.Container.Height = AntigravityWindowCardHeight;
         card.Container.Padding = new Thickness(12, 8);
+        card.Container.Opacity = stale ? StaleCardOpacity : 1;
         card.ProgressTrack.IsVisible = true;
         card.Remaining.Text = FormatPercent(window.RemainingPercent);
-        card.Reset.Text = window.ResetAt is { } resetAt
-            ? $"⏱ {_text.FormatResetWithCountdown(resetAt.ToLocalTime(), DateTimeOffset.Now)}"
-            : _text.ResetUnavailable;
+        var now = DateTimeOffset.Now;
+        // Once the reset time is behind us the percentage describes the old
+        // window; say so instead of counting down "0d 0h 0m".
+        card.Reset.Text = window.ResetAt is not { } resetAt
+            ? _text.ResetUnavailable
+            : resetAt <= now
+                ? _text.ResetPassedAwaitingRefresh
+                : $"⏱ {_text.FormatResetWithCountdown(resetAt.ToLocalTime(), now)}";
         ApplyBar(card, window.RemainingPercent, UsagePresentation.GetSignal(window.RemainingPercent));
     }
 

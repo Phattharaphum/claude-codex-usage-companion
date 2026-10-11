@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 
+- Antigravity no longer shows an old reading as if it were current when its local service stops answering. A snapshot kept after a failed refresh is now dimmed, labelled with the time it was read and marked "Stale" in the section summary, and a quota whose reset time has already passed says it is waiting for new data instead of counting down "0d 0h 0m".
+- Antigravity failures now say what went wrong (not running, still starting, request rejected, timed out, unexpected data, or unreachable) instead of one generic "unavailable" message. `status --watch` also prints the error beside a retained snapshot.
+- Antigravity refreshes no longer fail because one unresponsive port used up the whole time budget. The ports are probed concurrently, and the transport that answered last is tried first.
+- Antigravity discovery reads listening ports from `/proc` and no longer needs `lsof` (kept only as a fallback).
 - Claude usage no longer stalls at "Waiting for usage data" after a login autostart. The stored OAuth access token expires after a few hours and the Claude CLI renews it only while the CLI itself runs, so following a reboot the companion was reading an expired token and reporting "Claude session expired" until the user happened to open Claude Code. It now renews the token itself through the same OAuth refresh grant the CLI uses, and also retries once when the server rejects a token that has not reached its recorded expiry.
 
 ### Changed

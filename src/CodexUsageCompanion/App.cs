@@ -786,7 +786,11 @@ public sealed class App : Application
             }
 
             _lastAntigravityUsage = state;
-            _lastAntigravityUpdatedAt = updatedAt;
+            // A failed refresh keeps the previous snapshot; its timestamp must
+            // stay the time it was read, not the time the refresh failed.
+            _lastAntigravityUpdatedAt = string.IsNullOrWhiteSpace(error)
+                ? updatedAt
+                : state?.ObservedAt ?? _lastAntigravityUpdatedAt;
             _window.UpdateAntigravityUsage(state, error);
             _runtime?.UpdateAntigravityStatus(
                 state is not null && string.IsNullOrWhiteSpace(error) ? updatedAt : null,
