@@ -697,7 +697,8 @@ public sealed class App : Application
                 _settings.UsageLogFormat,
                 provider,
                 state,
-                updatedAt));
+                updatedAt,
+                _settings.UsageLogRetentionDays));
         }
 
         foreach (var notification in notifications)
@@ -751,7 +752,8 @@ public sealed class App : Application
                 _settings.UsageLogFormat,
                 provider,
                 error,
-                updatedAt));
+                updatedAt,
+                _settings.UsageLogRetentionDays));
         }
     }
 
@@ -774,7 +776,8 @@ public sealed class App : Application
                 _settings.UsageLogFormat,
                 state,
                 error,
-                updatedAt));
+                updatedAt,
+                _settings.UsageLogRetentionDays));
         }
 
         Dispatcher.UIThread.Post(() =>

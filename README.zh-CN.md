@@ -174,6 +174,7 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/claude-codex-usage-companion/settings.json
   "enableUsageLogging": false,
   "usageLogFilePath": "/home/you/.local/state/claude-codex-usage-companion/usage-history.csv",
   "usageLogFormat": "csv",
+  "usageLogRetentionDays": 90,
   "position": "right-bottom",
   "opacity": 1.0,
   "margin": 16,

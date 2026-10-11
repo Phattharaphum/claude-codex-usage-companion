@@ -188,6 +188,7 @@ ${XDG_CONFIG_HOME:-$HOME/.config}/claude-codex-usage-companion/settings.json
   "enableUsageLogging": false,
   "usageLogFilePath": "/home/you/.local/state/claude-codex-usage-companion/usage-history.csv",
   "usageLogFormat": "csv",
+  "usageLogRetentionDays": 90,
   "position": "right-bottom",
   "opacity": 1.0,
   "margin": 16,
@@ -224,9 +225,13 @@ The **Displayed limits** checkboxes independently control Claude's current sessi
 
 ## Usage update logging
 
-Usage logging is disabled by default. When enabled, every successful refresh and refresh error is appended to the configured file. CSV is the default format, and the default path follows `${XDG_STATE_HOME:-$HOME/.local/state}/claude-codex-usage-companion/usage-history.csv`.
+Usage logging is disabled by default. When enabled, every successful refresh is appended to the configured file. A refresh error is recorded when it starts or changes, and repeated again every 30 minutes while it lasts, so an outage does not fill the history with identical rows. CSV is the default format, and the default path follows `${XDG_STATE_HOME:-$HOME/.local/state}/claude-codex-usage-companion/usage-history.csv`.
 
 Supported formats are `txt` (one key/value record per line), `csv` (a header followed by data rows), and `jsonl` (one JSON object per line). Changing the format automatically changes the configured filename extension to `.txt`, `.csv`, or `.jsonl`. Records include the update timestamp, provider, success or error status, five-hour and weekly remaining percentages and reset times, available reset credits, and any refresh error. Antigravity writes only two authoritative shared-quota histories: `Antigravity-Gemini` and `Antigravity-ClaudeAndChatGPT`. No individual model, account, plan, or model-membership data is written. CSV files created by older releases are upgraded in place on the next write: prior rows are retained and the new columns are blank for them. Relative paths are resolved under the app's XDG state directory.
+
+Records older than `usageLogRetentionDays` (default `90`; `0` keeps everything) are removed automatically. The check runs at most every six hours when a record is written, streams the file instead of loading it, and replaces it atomically. Change it under **Settings → Logging → History retention**.
+
+The history windows show how much of a period was actually recorded. The app only samples while it is running, so quota can change unobserved; stretches with no samples are shaded "No data" on the chart, and reset cycles that were not sampled closely (or never used) are marked unverified and left out of the reset-efficiency averages.
 
 ## Build
 

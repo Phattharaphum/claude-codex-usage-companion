@@ -683,12 +683,12 @@ public sealed record UiText(
     public string FormatUsageHistoryCount(int count, int visibleLimit) => Language switch
     {
         UiLanguage.TraditionalChinese =>
-            count > visibleLimit ? $"本機 CSV 記錄 · 顯示最新 {visibleLimit} / {count} 筆" : $"本機 CSV 記錄 · {count} 筆",
+            count > visibleLimit ? $"本機 CSV 記錄 · 顯示最新 {visibleLimit:N0} / {count:N0} 筆" : $"本機 CSV 記錄 · {count:N0} 筆",
         UiLanguage.SimplifiedChinese =>
-            count > visibleLimit ? $"本地 CSV 记录 · 显示最新 {visibleLimit} / {count} 条" : $"本地 CSV 记录 · {count} 条",
+            count > visibleLimit ? $"本地 CSV 记录 · 显示最新 {visibleLimit:N0} / {count:N0} 条" : $"本地 CSV 记录 · {count:N0} 条",
         _ => count > visibleLimit
-            ? $"Local CSV history · newest {visibleLimit} of {count} records"
-            : $"Local CSV history · {count} records"
+            ? $"Local CSV history · newest {visibleLimit:N0} of {count:N0} records"
+            : $"Local CSV history · {count:N0} records"
     };
 
     public string FormatUsageHistoryReset(DateTimeOffset resetAt) => Language switch
@@ -1204,6 +1204,42 @@ public sealed record UiText(
         UiLanguage.TraditionalChinese => "歷程記錄檔案的儲存格式（CSV 或 JSONL）",
         UiLanguage.SimplifiedChinese => "历史记录文件的存储格式（CSV 或 JSONL）",
         _ => "Data file format for logging (CSV or JSONL)"
+    };
+
+    public string UsageLogRetentionOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "歷史保留期限",
+        UiLanguage.SimplifiedChinese => "历史保留期限",
+        _ => "History retention"
+    };
+
+    public string UsageLogRetentionDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "自動移除較舊的記錄，避免檔案無限增長",
+        UiLanguage.SimplifiedChinese => "自动移除较旧的记录，避免文件无限增长",
+        _ => "Older records are removed automatically so the file does not grow forever"
+    };
+
+    public string FormatUsageLogRetention(int days) => days switch
+    {
+        UsageLogRetentionOptions.Forever => Language switch
+        {
+            UiLanguage.TraditionalChinese => "全部保留",
+            UiLanguage.SimplifiedChinese => "全部保留",
+            _ => "Keep everything"
+        },
+        365 => Language switch
+        {
+            UiLanguage.TraditionalChinese => "1 年",
+            UiLanguage.SimplifiedChinese => "1 年",
+            _ => "1 year"
+        },
+        _ => Language switch
+        {
+            UiLanguage.TraditionalChinese => $"{days} 天",
+            UiLanguage.SimplifiedChinese => $"{days} 天",
+            _ => $"{days} days"
+        }
     };
 
     public string BrowseFileAction => Language switch

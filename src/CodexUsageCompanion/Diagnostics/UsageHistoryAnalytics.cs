@@ -7,6 +7,22 @@ public enum UsageResetKind
     Both
 }
 
+/// <summary>
+/// How far a reset event can be trusted as a measurement of how fully a cycle
+/// was used. Only <see cref="Measured"/> events say something about usage.
+/// </summary>
+public enum UsageResetQuality
+{
+    /// <summary>Sampled closely enough that the pre-reset value is meaningful.</summary>
+    Measured,
+
+    /// <summary>The window was never touched: it expired full, so there is no cycle to judge.</summary>
+    Idle,
+
+    /// <summary>The app was not sampling around the reset, so usage just before it is unknown.</summary>
+    Estimated
+}
+
 public sealed record UsageResetEvent(
     string Provider,
     UsageResetKind Kind,
@@ -19,6 +35,11 @@ public sealed record UsageResetEvent(
     int? WeeklyRemainingAfter)
 {
     public TimeSpan ObservationGap => ObservedAt - PreviousObservationAt;
+
+    public UsageResetQuality Quality { get; init; } = UsageResetQuality.Measured;
+
+    /// <summary>The longest gap that still counted as continuous sampling.</summary>
+    public TimeSpan GapThreshold { get; init; }
 }
 
 public sealed record UsageWindowMetrics(
@@ -29,14 +50,77 @@ public sealed record UsageWindowMetrics(
     double ConsumedPercent,
     double ConsumptionPerHour,
     int? FirstRemainingPercent,
-    int? LastRemainingPercent);
+    int? LastRemainingPercent)
+{
+    /// <summary>How many providers contributed to these figures.</summary>
+    public int ProviderCount { get; init; } = 1;
+
+    /// <summary>
+    /// The average burn per provider. <see cref="ConsumptionPerHour"/> adds the
+    /// providers together, which grows with how many are being tracked and so
+    /// cannot be compared with a per-provider threshold.
+    /// </summary>
+    public double ConsumptionPerProviderHour { get; init; }
+
+    /// <summary>Consumption expressed as whole quota windows used (100 points each).</summary>
+    public double EquivalentWindows => ConsumedPercent / 100d;
+
+    /// <summary>Hours until the last observed remaining quota runs out at the average burn.</summary>
+    public double? RunwayHours => LastRemainingPercent is int remaining && ConsumptionPerHour > 0
+        ? remaining / ConsumptionPerHour
+        : null;
+}
+
+public sealed record UsageProviderSummary(
+    string Provider,
+    int RecordCount,
+    TimeSpan ObservedDuration,
+    UsageWindowMetrics FiveHour,
+    UsageWindowMetrics Weekly,
+    UsageDataQuality Quality)
+{
+    public UsageWindowMetrics For(UsageHistoryQuotaWindow window) =>
+        window == UsageHistoryQuotaWindow.FiveHour ? FiveHour : Weekly;
+}
+
+public sealed record UsageRunway(string Provider, double Hours);
 
 public sealed record UsageSelectionSummary(
     int RecordCount,
     int ProviderCount,
     TimeSpan ObservedDuration,
     UsageWindowMetrics FiveHour,
-    UsageWindowMetrics Weekly);
+    UsageWindowMetrics Weekly)
+{
+    public IReadOnlyList<UsageProviderSummary> Providers { get; init; } = [];
+
+    public UsageDataQuality Quality { get; init; } = UsageDataQuality.Complete;
+
+    public IReadOnlyList<UsageResetEvent> ResetEvents { get; init; } = [];
+
+    /// <summary>
+    /// How long a typical provider went unobserved. <see cref="Quality"/> adds
+    /// providers' gaps together, which can exceed the span being shown.
+    /// </summary>
+    public TimeSpan UnobservedPerProvider => ProviderCount <= 0
+        ? TimeSpan.Zero
+        : TimeSpan.FromTicks(Quality.MissingDuration.Ticks / ProviderCount);
+
+    public UsageWindowMetrics For(UsageHistoryQuotaWindow window) =>
+        window == UsageHistoryQuotaWindow.FiveHour ? FiveHour : Weekly;
+
+    /// <summary>
+    /// The provider that would run out first at its own average burn. A single
+    /// combined runway would divide one provider's remaining quota by every
+    /// provider's consumption, which answers nothing.
+    /// </summary>
+    public UsageRunway? SoonestRunway(UsageHistoryQuotaWindow window) => Providers
+        .Select(provider => new UsageRunway(provider.Provider, provider.For(window).RunwayHours ?? double.NaN))
+        .Where(runway => !double.IsNaN(runway.Hours))
+        .OrderBy(runway => runway.Hours)
+        .Cast<UsageRunway?>()
+        .FirstOrDefault();
+}
 
 /// <summary>
 /// Computes reset-cycle and selected-period statistics from successful local
@@ -45,6 +129,9 @@ public sealed record UsageSelectionSummary(
 /// </summary>
 public static class UsageHistoryAnalytics
 {
+    /// <summary>A window this full when it reset was effectively never used.</summary>
+    public const int IdleRemainingPercent = 99;
+
     private static readonly string[] SupportedProviders =
     [
         "claude",
@@ -76,12 +163,68 @@ public static class UsageHistoryAnalytics
         var duration = successful.Length < 2
             ? TimeSpan.Zero
             : successful[^1].UpdatedAt - successful[0].UpdatedAt;
+        var events = FindResetEvents(successful);
+
+        var providers = successful
+            .GroupBy(entry => entry.Provider, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(group => ProviderRank(group.Key))
+            .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group =>
+            {
+                var own = group.ToArray();
+                var times = own.Select(entry => entry.UpdatedAt).ToArray();
+                var ownEvents = events
+                    .Where(item => string.Equals(item.Provider, group.Key, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                return new UsageProviderSummary(
+                    group.Key,
+                    own.Length,
+                    own.Length < 2 ? TimeSpan.Zero : times[^1] - times[0],
+                    Metrics(own, UsageHistoryQuotaWindow.FiveHour, ownEvents),
+                    Metrics(own, UsageHistoryQuotaWindow.Weekly, ownEvents),
+                    UsageHistoryCoverage.Measure(times));
+            })
+            .ToArray();
+
         return new UsageSelectionSummary(
             successful.Length,
-            successful.Select(entry => entry.Provider).Distinct(StringComparer.OrdinalIgnoreCase).Count(),
+            providers.Length,
             duration,
-            Metrics(successful, UsageHistoryQuotaWindow.FiveHour),
-            Metrics(successful, UsageHistoryQuotaWindow.Weekly));
+            WithProviderAverage(
+                Metrics(successful, UsageHistoryQuotaWindow.FiveHour, events),
+                providers.Select(provider => provider.FiveHour)),
+            WithProviderAverage(
+                Metrics(successful, UsageHistoryQuotaWindow.Weekly, events),
+                providers.Select(provider => provider.Weekly)))
+        {
+            Providers = providers,
+            Quality = UsageHistoryCoverage.Combine(providers
+                .Select(provider => (provider.Quality, provider.ObservedDuration))
+                .ToArray()),
+            ResetEvents = events
+        };
+    }
+
+    private static UsageWindowMetrics WithProviderAverage(
+        UsageWindowMetrics combined,
+        IEnumerable<UsageWindowMetrics> perProvider)
+    {
+        var contributing = perProvider.Where(item => item.SampleCount > 0).ToArray();
+        return combined with
+        {
+            ProviderCount = contributing.Length,
+            ConsumptionPerProviderHour = contributing.Length == 0
+                ? 0
+                : contributing.Average(item => item.ConsumptionPerHour)
+        };
+    }
+
+    private static int ProviderRank(string provider)
+    {
+        var index = Array.FindIndex(
+            SupportedProviders,
+            name => string.Equals(name, provider, StringComparison.OrdinalIgnoreCase));
+        return index < 0 ? SupportedProviders.Length : index;
     }
 
     public static IReadOnlyList<UsageResetEvent> FindResetEvents(
@@ -101,6 +244,8 @@ public static class UsageHistoryAnalytics
         foreach (var group in candidates)
         {
             var ordered = group.OrderBy(entry => entry.UpdatedAt).ToArray();
+            var gapThreshold = UsageHistoryCoverage.GapThreshold(
+                ordered.Select(entry => entry.UpdatedAt).ToArray());
             for (var index = 1; index < ordered.Length; index++)
             {
                 var previous = ordered[index - 1];
@@ -133,27 +278,63 @@ public static class UsageHistoryAnalytics
                 var expectedAt = fiveHourReset
                     ? previous.FiveHourResetAt!.Value
                     : previous.WeeklyResetAt!.Value;
+                var kind = fiveHourReset && weeklyReset
+                    ? UsageResetKind.Both
+                    : fiveHourReset ? UsageResetKind.FiveHour : UsageResetKind.Weekly;
                 events.Add(new UsageResetEvent(
                     group.Key,
-                    fiveHourReset && weeklyReset
-                        ? UsageResetKind.Both
-                        : fiveHourReset ? UsageResetKind.FiveHour : UsageResetKind.Weekly,
+                    kind,
                     expectedAt,
                     current.UpdatedAt,
                     previous.UpdatedAt,
                     previous.FiveHourRemainingPercent,
                     previous.WeeklyRemainingPercent,
                     current.FiveHourRemainingPercent,
-                    current.WeeklyRemainingPercent));
+                    current.WeeklyRemainingPercent)
+                {
+                    GapThreshold = gapThreshold,
+                    Quality = Classify(
+                        kind,
+                        current.UpdatedAt - previous.UpdatedAt,
+                        gapThreshold,
+                        previous.FiveHourRemainingPercent,
+                        previous.WeeklyRemainingPercent)
+                });
             }
         }
 
         return events.OrderByDescending(item => item.ObservedAt).ToArray();
     }
 
+    private static UsageResetQuality Classify(
+        UsageResetKind kind,
+        TimeSpan observationGap,
+        TimeSpan gapThreshold,
+        int? fiveHourBefore,
+        int? weeklyBefore)
+    {
+        // Usage between the last sample and the reset is unknown, so even a
+        // full-looking window may have been drained before it expired.
+        if (observationGap > gapThreshold)
+        {
+            return UsageResetQuality.Estimated;
+        }
+
+        var fiveHourUntouched = fiveHourBefore is >= IdleRemainingPercent;
+        var weeklyUntouched = weeklyBefore is >= IdleRemainingPercent;
+        var untouched = kind switch
+        {
+            UsageResetKind.FiveHour => fiveHourUntouched,
+            UsageResetKind.Weekly => weeklyUntouched,
+            _ => fiveHourUntouched && weeklyUntouched
+        };
+        return untouched ? UsageResetQuality.Idle : UsageResetQuality.Measured;
+    }
+
     private static UsageWindowMetrics Metrics(
         IReadOnlyList<UsageHistoryEntry> entries,
-        UsageHistoryQuotaWindow window)
+        UsageHistoryQuotaWindow window,
+        IReadOnlyList<UsageResetEvent> resetEvents)
     {
         var values = entries
             .Select(entry => new
@@ -181,7 +362,7 @@ public static class UsageHistoryAnalytics
         var hours = entries.Count < 2
             ? 0
             : (entries.Max(entry => entry.UpdatedAt) - entries.Min(entry => entry.UpdatedAt)).TotalHours;
-        var resetCount = FindResetEvents(entries).Count(item =>
+        var resetCount = resetEvents.Count(item =>
             window == UsageHistoryQuotaWindow.FiveHour
                 ? item.Kind is UsageResetKind.FiveHour or UsageResetKind.Both
                 : item.Kind is UsageResetKind.Weekly or UsageResetKind.Both);

@@ -817,4 +817,16 @@ public sealed class UiTextTests
 
         Assert.Equal("Oct 11 20:00", text.FormatResetMoment(now.AddHours(5), now));
     }
+
+    [Theory]
+    [InlineData(UiLanguage.English, 30, "30 days")]
+    [InlineData(UiLanguage.English, 365, "1 year")]
+    [InlineData(UiLanguage.English, 0, "Keep everything")]
+    [InlineData(UiLanguage.TraditionalChinese, 90, "90 天")]
+    [InlineData(UiLanguage.TraditionalChinese, 0, "全部保留")]
+    [InlineData(UiLanguage.SimplifiedChinese, 365, "1 年")]
+    public void UsageLogRetentionChoicesAreLocalized(UiLanguage language, int days, string expected)
+    {
+        Assert.Equal(expected, UiText.For(language).FormatUsageLogRetention(days));
+    }
 }

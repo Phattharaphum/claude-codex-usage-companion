@@ -194,4 +194,118 @@ public sealed class UsageUpdateLogTests
             Directory.Delete(directory, recursive: true);
         }
     }
+
+    [Fact]
+    public void RepeatedIdenticalFailuresAreRecordedOnceUntilRecovery()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            var log = new UsageUpdateLog();
+
+            for (var minute = 0; minute < 5; minute++)
+            {
+                log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Claude, "offline", UpdatedAt.AddMinutes(minute));
+            }
+
+            Assert.Equal(2, File.ReadAllLines(path).Length); // Header + one failure.
+
+            log.WriteSuccess(path, UsageLogOptions.Csv, UsageProvider.Claude, State, UpdatedAt.AddMinutes(5));
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Claude, "offline", UpdatedAt.AddMinutes(6));
+
+            // The outage after the recovery is a new event.
+            Assert.Equal(4, File.ReadAllLines(path).Length);
+        });
+    }
+
+    [Fact]
+    public void AChangedFailureIsRecordedAndALongOutageIsRemindedAboutOccasionally()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            var log = new UsageUpdateLog();
+
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Codex, "timeout", UpdatedAt);
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Codex, "auth", UpdatedAt.AddMinutes(1));
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Codex, "auth", UpdatedAt.AddMinutes(10));
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Codex, "auth", UpdatedAt.AddMinutes(32));
+
+            var lines = File.ReadAllLines(path);
+            Assert.Equal(4, lines.Length); // Header, timeout, auth, 30-minute reminder.
+            Assert.Contains("timeout", lines[1]);
+            Assert.Contains("auth", lines[2]);
+            Assert.Contains("auth", lines[3]);
+        });
+    }
+
+    [Fact]
+    public void FailuresAreTrackedPerProvider()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            var log = new UsageUpdateLog();
+
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Claude, "offline", UpdatedAt);
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Codex, "offline", UpdatedAt);
+            log.WriteFailure(path, UsageLogOptions.Csv, UsageProvider.Claude, "offline", UpdatedAt.AddMinutes(1));
+
+            Assert.Equal(3, File.ReadAllLines(path).Length);
+        });
+    }
+
+    [Fact]
+    public void AntigravityFailuresAreDedupedForBothPools()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            var log = new UsageUpdateLog();
+
+            for (var minute = 0; minute < 4; minute++)
+            {
+                log.WriteAntigravity(path, UsageLogOptions.Csv, null, "not running", UpdatedAt.AddMinutes(minute));
+            }
+
+            Assert.Equal(3, File.ReadAllLines(path).Length); // Header + one row per pool.
+        });
+    }
+
+    [Fact]
+    public void WritingPrunesRecordsOlderThanTheRetentionPeriod()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            var log = new UsageUpdateLog();
+            var now = DateTimeOffset.Now;
+
+            log.WriteSuccess(path, UsageLogOptions.Csv, UsageProvider.Codex, State, now.AddDays(-200));
+            log.WriteSuccess(path, UsageLogOptions.Csv, UsageProvider.Codex, State, now.AddDays(-100));
+            log.WriteSuccess(path, UsageLogOptions.Csv, UsageProvider.Codex, State, now.AddDays(-1));
+            // A fresh instance has not pruned yet, so its first write does.
+            new UsageUpdateLog().WriteSuccess(path, UsageLogOptions.Csv, UsageProvider.Codex, State, now, retentionDays: 90);
+
+            var lines = File.ReadAllLines(path);
+            Assert.Equal(3, lines.Length); // Header, -1 day, now.
+            Assert.DoesNotContain(lines, line => line.StartsWith(now.AddDays(-200).ToString("yyyy-MM-dd"), StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
+    public void RetentionOfZeroKeepsEverything()
+    {
+        WithTemporaryDirectory(directory =>
+        {
+            var path = Path.Combine(directory, "usage.csv");
+            var log = new UsageUpdateLog();
+            var now = DateTimeOffset.Now;
+            log.WriteSuccess(path, UsageLogOptions.Csv, UsageProvider.Codex, State, now.AddDays(-900));
+
+            new UsageUpdateLog().WriteSuccess(path, UsageLogOptions.Csv, UsageProvider.Codex, State, now, retentionDays: 0);
+
+            Assert.Equal(3, File.ReadAllLines(path).Length);
+        });
+    }
 }

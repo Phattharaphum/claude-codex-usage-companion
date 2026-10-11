@@ -94,6 +94,8 @@ public sealed class SettingsWindow : Window
     private readonly ToggleSwitch _usageLogging;
     private readonly TextBox _usageLogFilePath;
     private readonly ComboBox _usageLogFormat;
+    private readonly ComboBox _usageLogRetention;
+    private Border _usageLogRetentionRow = null!;
     private Border _usageLogFilePathRow = null!;
     private Border _usageLogFormatRow = null!;
 
@@ -317,6 +319,20 @@ public sealed class SettingsWindow : Window
             }
 
             _usageLogFilePath.Text = UsageLogOptions.ChangeFileExtension(_usageLogFilePath.Text, newFormat);
+        };
+        var retentionChoices = UsageLogRetentionOptions.Choices
+            .Append(UsageLogRetentionOptions.Normalize(settings.UsageLogRetentionDays))
+            .Distinct()
+            .OrderBy(days => days == UsageLogRetentionOptions.Forever ? int.MaxValue : days)
+            .Select(days => new LogRetentionChoice(days, text.FormatUsageLogRetention(days)))
+            .ToArray();
+        var selectedRetention = UsageLogRetentionOptions.Normalize(settings.UsageLogRetentionDays);
+        _usageLogRetention = new ComboBox
+        {
+            ItemsSource = retentionChoices,
+            SelectedItem = retentionChoices.First(choice => choice.Days == selectedRetention),
+            MinWidth = 160,
+            HorizontalAlignment = HorizontalAlignment.Right
         };
         _usageLogging.IsCheckedChanged += (_, _) => UpdateUsageLoggingControls();
 
@@ -751,7 +767,12 @@ public sealed class SettingsWindow : Window
         _usageLogFormatRow = CreateSettingRow(
             _text.UsageLogFormatOption,
             _text.UsageLogFormatDescription,
-            _usageLogFormat,
+            _usageLogFormat);
+
+        _usageLogRetentionRow = CreateSettingRow(
+            _text.UsageLogRetentionOption,
+            _text.UsageLogRetentionDescription,
+            _usageLogRetention,
             showDivider: false);
 
         var loggingCard = CreateCardGroup(
@@ -759,7 +780,8 @@ public sealed class SettingsWindow : Window
             "Audit and record historical rate limit usage samples to local storage.",
             CreateSettingRow(_text.UsageLoggingOption, _text.UsageLoggingDescription, _usageLogging),
             _usageLogFilePathRow,
-            _usageLogFormatRow);
+            _usageLogFormatRow,
+            _usageLogRetentionRow);
 
         var loggingPanel = new StackPanel
         {
@@ -1631,6 +1653,7 @@ public sealed class SettingsWindow : Window
             }
         };
         _usageLogFormat.SelectionChanged += (_, _) => UpdateDirtyState();
+        _usageLogRetention.SelectionChanged += (_, _) => UpdateDirtyState();
     }
 
     private void UpdateDirtyState()
@@ -1823,7 +1846,10 @@ public sealed class SettingsWindow : Window
             EnableUsageLogging = _usageLogging.IsChecked == true,
             UsageLogFilePath = _usageLogFilePath.Text ?? string.Empty,
             UsageLogFormat =
-                _usageLogFormat.SelectedItem as string ?? UsageLogOptions.Csv
+                _usageLogFormat.SelectedItem as string ?? UsageLogOptions.Csv,
+            UsageLogRetentionDays =
+                (_usageLogRetention.SelectedItem as LogRetentionChoice)?.Days ??
+                UsageLogRetentionOptions.DefaultDays
         };
     }
 
@@ -1848,8 +1874,11 @@ public sealed class SettingsWindow : Window
         _usageLogFilePathRow.Opacity = enabled ? 1.0 : 0.45;
         _usageLogFormatRow.IsEnabled = enabled;
         _usageLogFormatRow.Opacity = enabled ? 1.0 : 0.45;
+        _usageLogRetentionRow.IsEnabled = enabled;
+        _usageLogRetentionRow.Opacity = enabled ? 1.0 : 0.45;
         _usageLogFilePath.IsEnabled = enabled;
         _usageLogFormat.IsEnabled = enabled;
+        _usageLogRetention.IsEnabled = enabled;
     }
 
     private void UpdateLowUsageAlertControls()
@@ -1977,6 +2006,11 @@ public sealed class SettingsWindow : Window
     }
 
     private sealed record TrayIconStyleChoice(string Value, string DisplayName)
+    {
+        public override string ToString() => DisplayName;
+    }
+
+    private sealed record LogRetentionChoice(int Days, string DisplayName)
     {
         public override string ToString() => DisplayName;
     }

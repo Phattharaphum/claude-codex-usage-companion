@@ -22,12 +22,16 @@ public sealed class UsageHistoryChart : Control
     private IBrush _axisBrush = Brush("#69756E");
     private IBrush _resetBrush = Brush("#E48332");
     private IBrush _hoverGuideBrush = Brush("#8A9890");
+    private IBrush _gapBrush = Brush("#0D000000");
+    private IBrush _gapEdgeBrush = Brush("#30000000");
     private IBrush _tooltipBrush = Brush("#25332C");
     private IBrush _tooltipBorderBrush = Brush("#506158");
     private Pen _gridPen = new(Brush("#DFE7E2"), 1);
     private Pen _resetPen = new(Brush("#E48332"), 1.5, DashStyle.Dash);
     private bool _isLight = true;
     private IReadOnlyList<UsageHistoryChartSeries> _series = [];
+    private IReadOnlyList<UsageGap> _commonGaps = [];
+    private UsageGap? _hoveredGap;
     private HoveredPoint? _hoveredPoint;
     private DateTimeOffset? _viewportStart;
     private DateTimeOffset? _viewportEnd;
@@ -35,6 +39,13 @@ public sealed class UsageHistoryChart : Control
     public string RemainingLabel { get; set; } = "Remaining";
     public string ResetLabel { get; set; } = "Reset";
     public string NoDataText { get; set; } = "No chart data for this selection.";
+
+    /// <summary>Legend text for stretches nobody was sampling, e.g. "No data".</summary>
+    public string GapLabel { get; set; } = "No data";
+
+    /// <summary>Formats a gap's length for its hover tooltip.</summary>
+    public Func<TimeSpan, string> GapDurationFormatter { get; set; } = duration =>
+        duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}h {duration.Minutes}m" : $"{duration.Minutes}m";
     public Func<string, string>? ProviderLabelFormatter { get; set; }
 
     public UsageHistoryChart()
@@ -47,6 +58,7 @@ public sealed class UsageHistoryChart : Control
         PointerExited += (_, _) =>
         {
             _hoveredPoint = null;
+            _hoveredGap = null;
             InvalidateVisual();
         };
     }
@@ -54,7 +66,9 @@ public sealed class UsageHistoryChart : Control
     public void SetSeries(IReadOnlyList<UsageHistoryChartSeries> series)
     {
         _series = series;
+        _commonGaps = UsageHistorySeriesBuilder.CommonGaps(series);
         _hoveredPoint = null;
+        _hoveredGap = null;
         InvalidateVisual();
     }
 
@@ -75,6 +89,8 @@ public sealed class UsageHistoryChart : Control
         _axisBrush = Brush(isLight ? "#FF667169" : "#FFADB7AF");
         _resetBrush = Brush(isLight ? "#FFE47B2B" : "#FFFFA04F");
         _hoverGuideBrush = Brush(isLight ? "#FF8A9890" : "#FF758079");
+        _gapBrush = Brush(isLight ? "#0D000000" : "#0DFFFFFF");
+        _gapEdgeBrush = Brush(isLight ? "#26000000" : "#2EFFFFFF");
         _tooltipBrush = Brush(isLight ? "#FF24312A" : "#FFEEF3EF");
         _tooltipBorderBrush = Brush(isLight ? "#FF506158" : "#FFBEC8C0");
         _gridPen = new Pen(_gridBrush, 1);
@@ -97,6 +113,8 @@ public sealed class UsageHistoryChart : Control
         var (minimumTime, maximumTime) = ResolveTimeBounds(points);
         DrawGrid(context, plot, minimumTime, maximumTime);
         DrawLegend(context, plot);
+
+        DrawGaps(context, plot, minimumTime, maximumTime);
 
         var resetMarkers = _series
             .SelectMany(series => series.ResetMarkers)
@@ -123,6 +141,10 @@ public sealed class UsageHistoryChart : Control
         if (_hoveredPoint is not null)
         {
             DrawTooltip(context, plot, _hoveredPoint, minimumTime, maximumTime);
+        }
+        else if (_hoveredGap is UsageGap hoveredGap)
+        {
+            DrawGapTooltip(context, plot, hoveredGap, minimumTime, maximumTime);
         }
     }
 
@@ -188,7 +210,15 @@ public sealed class UsageHistoryChart : Control
         if (_series.SelectMany(series => series.ResetMarkers).Any())
         {
             context.DrawLine(_resetPen, new Point(legendX + 2, 5), new Point(legendX + 2, 19));
-            DrawText(context, ResetLabel, new Point(legendX + 9, 5), _axisBrush, 10);
+            var resetText = Text(ResetLabel, 10, _axisBrush);
+            context.DrawText(resetText, new Point(legendX + 9, 5));
+            legendX += 24 + resetText.Width;
+        }
+
+        if (_commonGaps.Count > 0)
+        {
+            context.DrawRectangle(_gapBrush, new Pen(_gapEdgeBrush, 1), new Rect(legendX, 6, 12, 10), 2, 2);
+            DrawText(context, GapLabel, new Point(legendX + 17, 5), _axisBrush, 10);
         }
     }
 
@@ -212,6 +242,33 @@ public sealed class UsageHistoryChart : Control
         context.DrawGeometry(_resetBrush, null, triangle);
     }
 
+    private void DrawGaps(
+        DrawingContext context,
+        Rect plot,
+        DateTimeOffset minimumTime,
+        DateTimeOffset maximumTime)
+    {
+        var edge = new Pen(_gapEdgeBrush, 1, DashStyle.Dot);
+        foreach (var gap in _commonGaps)
+        {
+            if (gap.End < minimumTime || gap.Start > maximumTime)
+            {
+                continue;
+            }
+
+            var left = X(gap.Start < minimumTime ? minimumTime : gap.Start, minimumTime, maximumTime, plot);
+            var right = X(gap.End > maximumTime ? maximumTime : gap.End, minimumTime, maximumTime, plot);
+            if (right - left < 1.5)
+            {
+                continue;
+            }
+
+            context.DrawRectangle(_gapBrush, null, new Rect(left, plot.Top, right - left, plot.Height));
+            context.DrawLine(edge, new Point(left, plot.Top), new Point(left, plot.Bottom));
+            context.DrawLine(edge, new Point(right, plot.Top), new Point(right, plot.Bottom));
+        }
+    }
+
     private void DrawSeries(
         DrawingContext context,
         Rect plot,
@@ -221,21 +278,24 @@ public sealed class UsageHistoryChart : Control
     {
         var color = ProviderColor(series.Provider);
         var pen = new Pen(color, 2.4, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+        // Across a hole the value is unknown, so only hint at a connection.
+        var unobservedPen = new Pen(
+            new SolidColorBrush(((SolidColorBrush)color).Color, 0.3),
+            1.4,
+            DashStyle.Dot,
+            PenLineCap.Round);
         Point? previous = null;
-        DateTimeOffset? previousTime = null;
         var visible = series.Points
             .Where(point => point.UpdatedAt >= minimumTime && point.UpdatedAt <= maximumTime)
             .ToArray();
-        var span = maximumTime - minimumTime;
         foreach (var sample in visible)
         {
             var current = new Point(
                 X(sample.UpdatedAt, minimumTime, maximumTime, plot),
                 Y(sample.RemainingPercent, plot));
-            if (previous is Point previousPoint && previousTime is not null &&
-                sample.UpdatedAt - previousTime <= TimeSpan.FromTicks(Math.Max(TimeSpan.FromMinutes(90).Ticks, span.Ticks / 5)))
+            if (previous is Point previousPoint)
             {
-                context.DrawLine(pen, previousPoint, current);
+                context.DrawLine(sample.BreaksBefore ? unobservedPen : pen, previousPoint, current);
             }
 
             if (visible.Length <= 100)
@@ -243,7 +303,6 @@ public sealed class UsageHistoryChart : Control
                 context.DrawEllipse(_canvasBrush, new Pen(color, 1.5), current, 3, 3);
             }
             previous = current;
-            previousTime = sample.UpdatedAt;
         }
     }
 
@@ -297,6 +356,48 @@ public sealed class UsageHistoryChart : Control
         }
     }
 
+    private void DrawGapTooltip(
+        DrawingContext context,
+        Rect plot,
+        UsageGap gap,
+        DateTimeOffset minimumTime,
+        DateTimeOffset maximumTime)
+    {
+        var lines = new[]
+        {
+            GapLabel,
+            GapDurationFormatter(gap.Duration),
+            $"{gap.Start.ToLocalTime().ToString("MMM d · HH:mm", CultureInfo.CurrentCulture)} → " +
+            gap.End.ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture)
+        };
+        var tooltipText = _isLight ? Brushes.White : Brush("#FF1F2822");
+        var width = Math.Max(150, lines.Max(line => Text(line, 11, tooltipText).Width) + 22);
+        var height = lines.Length * 18 + 14;
+        var center = X(gap.Start + (gap.End - gap.Start) / 2, minimumTime, maximumTime, plot);
+        var left = Math.Clamp(center - width / 2, 6, Math.Max(6, Bounds.Width - width - 6));
+        var bounds = new Rect(left, plot.Top + 10, width, height);
+        context.DrawRectangle(_tooltipBrush, new Pen(_tooltipBorderBrush, 1), bounds, 9, 9);
+        for (var index = 0; index < lines.Length; index++)
+        {
+            DrawText(context, lines[index], new Point(left + 12, bounds.Top + 8 + index * 18), tooltipText, 11);
+        }
+    }
+
+    private UsageGap? GapAt(Point pointer, Rect plot, DateTimeOffset minimumTime, DateTimeOffset maximumTime)
+    {
+        foreach (var gap in _commonGaps)
+        {
+            var left = X(gap.Start, minimumTime, maximumTime, plot);
+            var right = X(gap.End, minimumTime, maximumTime, plot);
+            if (right - left >= 1.5 && pointer.X >= left && pointer.X <= right)
+            {
+                return gap;
+            }
+        }
+
+        return null;
+    }
+
     private void HandlePointerMoved(object? sender, PointerEventArgs eventArgs)
     {
         var points = _series.SelectMany(series => series.Points).ToArray();
@@ -304,15 +405,26 @@ public sealed class UsageHistoryChart : Control
         var pointer = eventArgs.GetPosition(this);
         if (points.Length == 0 || !plot.Contains(pointer))
         {
-            if (_hoveredPoint is not null)
+            if (_hoveredPoint is not null || _hoveredGap is not null)
             {
                 _hoveredPoint = null;
+                _hoveredGap = null;
                 InvalidateVisual();
             }
             return;
         }
 
         var (minimumTime, maximumTime) = ResolveTimeBounds(points);
+        // Inside a "no data" band there is nothing to read off a line; explain
+        // the hole instead of snapping to the nearest sample beside it.
+        _hoveredGap = GapAt(pointer, plot, minimumTime, maximumTime);
+        if (_hoveredGap is not null)
+        {
+            _hoveredPoint = null;
+            InvalidateVisual();
+            return;
+        }
+
         // Select by actual on-screen distance. Sorting by time first makes a
         // point on another provider win whenever both samples share (or nearly
         // share) a timestamp, even when the pointer is directly over a line.

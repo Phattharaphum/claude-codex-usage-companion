@@ -147,9 +147,6 @@ public sealed class UsageAnalysisWindow : Window
 
     private void RebuildBody()
     {
-        var ratio = _summary.Weekly.ConsumedPercent <= 0
-            ? "—"
-            : $"{_summary.FiveHour.ConsumedPercent / _summary.Weekly.ConsumedPercent:0.##}×";
         var period = _start.ToLocalTime().Date == _end.ToLocalTime().Date
             ? $"{_start.ToLocalTime():dddd, MMM d, yyyy}  ·  {_start.ToLocalTime():HH:mm}–{_end.ToLocalTime():HH:mm}"
             : $"{_start.ToLocalTime():MMM d, yyyy HH:mm} — {_end.ToLocalTime():MMM d, yyyy HH:mm}";
@@ -270,9 +267,9 @@ public sealed class UsageAnalysisWindow : Window
             Child = new TextBlock
             {
                 Text = L(
-                    $"{_summary.RecordCount} samples  ·  {_resetEvents.Count} resets",
-                    $"{_summary.RecordCount} 筆樣本  ·  {_resetEvents.Count} 次重置",
-                    $"{_summary.RecordCount} 条样本  ·  {_resetEvents.Count} 次重置"),
+                    $"{_summary.RecordCount:N0} samples  ·  {_resetEvents.Count} resets",
+                    $"{_summary.RecordCount:N0} 筆樣本  ·  {_resetEvents.Count} 次重置",
+                    $"{_summary.RecordCount:N0} 条样本  ·  {_resetEvents.Count} 次重置"),
                 FontSize = 10.5,
                 FontWeight = FontWeight.SemiBold,
                 Foreground = Brush(_palette.Accent),
@@ -355,12 +352,27 @@ public sealed class UsageAnalysisWindow : Window
             ColumnSpacing = 10
         };
 
+        var quality = _summary.Quality;
+        var coverageAccent = quality.CoveragePercent >= 90
+            ? (_isLightTheme ? "#0F8A5F" : "#4AD894")
+            : quality.CoveragePercent >= 60
+                ? (_isLightTheme ? "#D97706" : "#FBBF24")
+                : (_isLightTheme ? "#C2410C" : "#FB923C");
         var rateCard = MetricCard(
-            L("5hr : week rate", "5 小時：每週比率", "5 小时：每周比率"),
-            ratio,
-            L("Consumed quota ratio", "已用額度比率", "已用额度比率"),
-            _palette.Blue,
-            "M9.01 14H2v2h7.01v3L13 15l-3.99-4v3zm5.98-1v-3H22V8h-7.01V5L11 9l3.99 4z");
+            L("Data coverage", "資料涵蓋率", "数据覆盖率"),
+            $"{quality.CoveragePercent:0}%",
+            quality.GapCount == 0
+                ? L("Recorded without gaps", "完整記錄、無中斷", "完整记录、无中断")
+                : L(
+                    $"{quality.GapCount} gap(s) · {FormatDuration(_summary.UnobservedPerProvider)} unobserved",
+                    $"{quality.GapCount} 處中斷 · {FormatDuration(_summary.UnobservedPerProvider)} 未記錄",
+                    $"{quality.GapCount} 处中断 · {FormatDuration(_summary.UnobservedPerProvider)} 未记录"),
+            coverageAccent,
+            "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z");
+        ToolTip.SetTip(rateCard, L(
+            "How much of the observed span is backed by samples. While the app is not running nothing is recorded, so quota can change unobserved; consumption and reset figures only reflect what was seen.",
+            "觀察期間中有多少時間有取樣記錄。程式未執行時不會記錄，額度可能在這段時間內變動；用量與重置數據只反映實際觀察到的部分。",
+            "观察期间中有多少时间有采样记录。程序未运行时不会记录，额度可能在这段时间内变动；用量与重置数据只反映实际观察到的部分。"));
         Grid.SetColumn(rateCard, 0);
         metricGrid.Children.Add(rateCard);
 
@@ -374,20 +386,22 @@ public sealed class UsageAnalysisWindow : Window
         metricGrid.Children.Add(spanCard);
 
         var fiveHourCard = MetricCard(
-            L("5-hour consumed", "5 小時用量", "5 小时用量"),
-            FormatPercent(_summary.FiveHour.ConsumedPercent),
-            L($"{_summary.FiveHour.ConsumptionPerHour:0.##}% per hour", $"每小時 {_summary.FiveHour.ConsumptionPerHour:0.##}%", $"每小时 {_summary.FiveHour.ConsumptionPerHour:0.##}%"),
+            L("5-hour quota used", "5 小時額度用量", "5 小时额度用量"),
+            FormatQuotaMultiple(_summary.FiveHour.EquivalentWindows),
+            RateDetail(_summary.FiveHour),
             _palette.Orange,
             "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z");
+        ToolTip.SetTip(fiveHourCard, ConsumptionTooltip(_summary.FiveHour, "5-hour", "5 小時", "5 小时"));
         Grid.SetColumn(fiveHourCard, 2);
         metricGrid.Children.Add(fiveHourCard);
 
         var weeklyMetricCard = MetricCard(
-            L("Weekly consumed", "每週用量", "每周用量"),
-            FormatPercent(_summary.Weekly.ConsumedPercent),
-            L($"{_summary.Weekly.ConsumptionPerHour:0.##}% per hour", $"每小時 {_summary.Weekly.ConsumptionPerHour:0.##}%", $"每小时 {_summary.Weekly.ConsumptionPerHour:0.##}%"),
+            L("Weekly quota used", "每週額度用量", "每周额度用量"),
+            FormatQuotaMultiple(_summary.Weekly.EquivalentWindows),
+            RateDetail(_summary.Weekly),
             _palette.Purple,
             "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z");
+        ToolTip.SetTip(weeklyMetricCard, ConsumptionTooltip(_summary.Weekly, "weekly", "每週", "每周"));
         Grid.SetColumn(weeklyMetricCard, 3);
         metricGrid.Children.Add(weeklyMetricCard);
 
@@ -397,9 +411,11 @@ public sealed class UsageAnalysisWindow : Window
             ColumnSpacing = 12
         };
         detailGrid.Children.Add(WindowDetailCard(
-            _summary.FiveHour, L("5-hour window", "5 小時時段", "5 小时时段"), "5 HR", _palette.Orange));
+            UsageHistoryQuotaWindow.FiveHour,
+            L("5-hour window", "5 小時時段", "5 小时时段"), "5 HR", _palette.Orange));
         var weeklyCard = WindowDetailCard(
-            _summary.Weekly, L("Weekly window", "每週時段", "每周时段"),
+            UsageHistoryQuotaWindow.Weekly,
+            L("Weekly window", "每週時段", "每周时段"),
             _text.UsageHistoryWeek.ToUpperInvariant(), _palette.Purple);
         Grid.SetColumn(weeklyCard, 1);
         detailGrid.Children.Add(weeklyCard);
@@ -440,10 +456,15 @@ public sealed class UsageAnalysisWindow : Window
                     },
                     new TextBlock
                     {
-                        Text = L(
-                            "Estimates use local observations. Activity between refreshes may not be represented.",
-                            "估算依據本機觀察資料，兩次更新之間的活動可能未被記錄。",
-                            "估算依据本地观察数据，两次刷新之间的活动可能未被记录。"),
+                        Text = _summary.Quality.GapCount > 0 && _summary.Quality.CoveragePercent < 95
+                            ? L(
+                                $"Based on the {_summary.Quality.CoveragePercent:0}% of this period that was recorded. Activity during gaps (when the app was not running) and between refreshes is not represented.",
+                                $"依據此期間中有記錄的 {_summary.Quality.CoveragePercent:0}%。程式未執行的中斷期間以及兩次更新之間的活動不會反映在內。",
+                                $"依据此期间中有记录的 {_summary.Quality.CoveragePercent:0}%。程序未运行的中断期间以及两次刷新之间的活动不会反映在内。")
+                            : L(
+                                "Estimates use local observations. Activity between refreshes may not be represented.",
+                                "估算依據本機觀察資料，兩次更新之間的活動可能未被記錄。",
+                                "估算依据本地观察数据，两次刷新之间的活动可能未被记录。"),
                         FontSize = 10.5,
                         Foreground = Brush(_palette.Secondary),
                         TextWrapping = TextWrapping.Wrap,
@@ -559,7 +580,7 @@ public sealed class UsageAnalysisWindow : Window
         }
 
         // Callout 1: Burn Rate & Pace
-        var (paceLabel, paceColor, paceDesc) = GetBurnRateDetails(_summary.FiveHour.ConsumptionPerHour);
+        var (paceLabel, paceColor, paceDesc) = GetBurnRateDetails(_summary.FiveHour.ConsumptionPerProviderHour);
         var callout1 = CreateInsightCallout(
             "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z",
             paceColor,
@@ -567,7 +588,8 @@ public sealed class UsageAnalysisWindow : Window
             paceLabel,
             Tint(paceColor, _isLightTheme ? (byte)24 : (byte)38),
             paceColor,
-            $"{_summary.FiveHour.ConsumptionPerHour:0.##}% / h",
+            $"{_summary.FiveHour.ConsumptionPerProviderHour:0.##}% / h" +
+                (_summary.ProviderCount > 1 ? " " + L("each", "每來源", "每来源") : string.Empty),
             paceDesc);
 
         // Callout 2: Quota Balance
@@ -587,9 +609,14 @@ public sealed class UsageAnalysisWindow : Window
 
         // Callout 3: Replenishment & Resets
         var resetAccent = _resetEvents.Count > 0 ? (_isLightTheme ? "#D97706" : "#FBBF24") : _palette.Secondary;
+        var measuredResets = _resetEvents.Count(item => item.Quality == UsageResetQuality.Measured);
+        var unverifiedResets = _resetEvents.Count - measuredResets;
         var resetDesc = _resetEvents.Count == 0
             ? L("No quota resets observed within this observation timeframe.", "此觀察期間內未偵測到額度重置事件。", "此观察期间内未检测到额度重置事件。")
-            : L($"{_resetEvents.Count} reset event(s) detected across {_summary.ProviderCount} provider(s).", $"在 {_summary.ProviderCount} 個來源中偵測到 {_resetEvents.Count} 次重置。", $"在 {_summary.ProviderCount} 个来源中检测到 {_resetEvents.Count} 次重置。");
+            : L(
+                $"{_resetEvents.Count} reset(s) across {_summary.ProviderCount} provider(s): {measuredResets} measured, {unverifiedResets} unverified (not sampled at the time, or never used).",
+                $"在 {_summary.ProviderCount} 個來源中偵測到 {_resetEvents.Count} 次重置：{measuredResets} 次已量測、{unverifiedResets} 次未驗證（當時未取樣或從未使用）。",
+                $"在 {_summary.ProviderCount} 个来源中检测到 {_resetEvents.Count} 次重置：{measuredResets} 次已测量、{unverifiedResets} 次未验证（当时未采样或从未使用）。");
         var callout3 = CreateInsightCallout(
             "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
             resetAccent,
@@ -872,32 +899,33 @@ public sealed class UsageAnalysisWindow : Window
         }
         sb.AppendLine();
         sb.AppendLine($"## Key Metrics");
-        sb.AppendLine($"- **5-Hour Consumed:** {FormatPercent(_summary.FiveHour.ConsumedPercent)} ({_summary.FiveHour.ConsumptionPerHour:0.##}%/h)");
-        sb.AppendLine($"- **Weekly Consumed:** {FormatPercent(_summary.Weekly.ConsumedPercent)} ({_summary.Weekly.ConsumptionPerHour:0.##}%/h)");
+        sb.AppendLine($"- **Data Coverage:** {_summary.Quality.CoveragePercent:0}% ({_summary.Quality.GapCount} gap(s), {FormatDuration(_summary.UnobservedPerProvider)} unobserved per provider)");
+        sb.AppendLine($"- **5-Hour Quota Used:** {FormatQuotaMultiple(_summary.FiveHour.EquivalentWindows)} full quotas ({FormatPercent(_summary.FiveHour.ConsumedPercent)} points across {_summary.ProviderCount} provider(s); {_summary.FiveHour.ConsumptionPerProviderHour:0.##}%/h each)");
+        sb.AppendLine($"- **Weekly Quota Used:** {FormatQuotaMultiple(_summary.Weekly.EquivalentWindows)} full quotas ({FormatPercent(_summary.Weekly.ConsumedPercent)} points across {_summary.ProviderCount} provider(s); {_summary.Weekly.ConsumptionPerProviderHour:0.##}%/h each)");
         sb.AppendLine($"- **5hr : Week Ratio:** {ratio}");
-        sb.AppendLine($"- **Detected Resets:** {_resetEvents.Count}");
+        sb.AppendLine($"- **Detected Resets:** {_resetEvents.Count} ({_resetEvents.Count(item => item.Quality == UsageResetQuality.Measured)} measured)");
         sb.AppendLine();
         sb.AppendLine($"## Analytical Insights");
-        sb.AppendLine($"- **Burn Rate & Pace:** {GetBurnRatePaceText()} ({_summary.FiveHour.ConsumptionPerHour:0.##}%/h)");
+        sb.AppendLine($"- **Burn Rate & Pace:** {GetBurnRatePaceText()} ({_summary.FiveHour.ConsumptionPerProviderHour:0.##}%/h per provider)");
         sb.AppendLine($"- **Quota Balance:** {GetQuotaBalanceText()}");
         sb.AppendLine($"- **Replenishment Activity:** {_resetEvents.Count} reset event(s) detected across {_summary.ProviderCount} provider(s).");
         sb.AppendLine();
         sb.AppendLine($"## Quota Runway Projections");
-        var projected5h = _summary.FiveHour.LastRemainingPercent is int rem5 && _summary.FiveHour.ConsumptionPerHour > 0
-            ? FormatDuration(TimeSpan.FromHours(rem5 / _summary.FiveHour.ConsumptionPerHour))
-            : "—";
-        var projectedWk = _summary.Weekly.LastRemainingPercent is int remW && _summary.Weekly.ConsumptionPerHour > 0
-            ? FormatDuration(TimeSpan.FromHours(remW / _summary.Weekly.ConsumptionPerHour))
-            : "—";
-        sb.AppendLine($"- **5-Hour Window:** Average remaining: {_summary.FiveHour.AverageRemainingPercent:0.#}% · Projected runway: {projected5h}");
-        sb.AppendLine($"- **Weekly Window:** Average remaining: {_summary.Weekly.AverageRemainingPercent:0.#}% · Projected runway: {projectedWk}");
+        sb.AppendLine($"- **5-Hour Window:** Average remaining: {_summary.FiveHour.AverageRemainingPercent:0.#}% · Soonest runway: {RunwayText(UsageHistoryQuotaWindow.FiveHour)}");
+        sb.AppendLine($"- **Weekly Window:** Average remaining: {_summary.Weekly.AverageRemainingPercent:0.#}% · Soonest runway: {RunwayText(UsageHistoryQuotaWindow.Weekly)}");
+        sb.AppendLine();
+        sb.AppendLine($"## By Provider");
+        foreach (var provider in _summary.Providers)
+        {
+            sb.AppendLine($"- **{DisplayProvider(provider.Provider)}:** 5-hour {FormatQuotaMultiple(provider.FiveHour.EquivalentWindows)} ({provider.FiveHour.ConsumptionPerHour:0.##}%/h), weekly {FormatQuotaMultiple(provider.Weekly.EquivalentWindows)}; {provider.Quality.CoveragePercent:0}% covered");
+        }
 
         return sb.ToString();
     }
 
     private string GetBurnRatePaceText()
     {
-        var rate = _summary.FiveHour.ConsumptionPerHour;
+        var rate = _summary.FiveHour.ConsumptionPerProviderHour;
         if (rate <= 0) return _text.UsageHistoryBurnRateIdle;
         if (rate < 2.0) return _text.UsageHistoryBurnRateLight;
         if (rate < 8.0) return _text.UsageHistoryBurnRateModerate;
@@ -927,7 +955,7 @@ public sealed class UsageAnalysisWindow : Window
                 $"{summary.FiveHour.ConsumedPercent / summary.Weekly.ConsumedPercent:0.##} units of 5-hour quota were observed for every unit of weekly quota",
                 $"每使用 1 單位每週額度，觀察到 {summary.FiveHour.ConsumedPercent / summary.Weekly.ConsumedPercent:0.##} 單位 5 小時額度",
                 $"每使用 1 单位每周额度，观察到 {summary.FiveHour.ConsumedPercent / summary.Weekly.ConsumedPercent:0.##} 单位 5 小时额度");
-        var pace = summary.FiveHour.ConsumptionPerHour switch
+        var pace = summary.FiveHour.ConsumptionPerProviderHour switch
         {
             <= 0 => L("No measurable 5-hour quota decrease", "未測得 5 小時額度下降", "未测得 5 小时额度下降"),
             < 2 => L("The observed 5-hour burn rate was light", "觀察到的 5 小時消耗速度偏低", "观察到的 5 小时消耗速度较低"),
@@ -935,19 +963,24 @@ public sealed class UsageAnalysisWindow : Window
             _ => L("The observed 5-hour burn rate was high", "觀察到的 5 小時消耗速度偏高", "观察到的 5 小时消耗速度较高")
         };
         return L(
-            $"The 5hr-to-week rate is {ratio}. {pace} ({summary.FiveHour.ConsumptionPerHour:0.##}%/h). {resets.Count} reset event(s) were detected across {summary.ProviderCount} provider(s).",
-            $"5 小時與每週比率：{ratio}。{pace}（{summary.FiveHour.ConsumptionPerHour:0.##}%/小時）。在 {summary.ProviderCount} 個來源中偵測到 {resets.Count} 次重置。",
-            $"5 小时与每周比率：{ratio}。{pace}（{summary.FiveHour.ConsumptionPerHour:0.##}%/小时）。在 {summary.ProviderCount} 个来源中检测到 {resets.Count} 次重置。");
+            $"The 5hr-to-week rate is {ratio}. {pace} ({summary.FiveHour.ConsumptionPerProviderHour:0.##}%/h per provider). {resets.Count} reset event(s) were detected across {summary.ProviderCount} provider(s).",
+            $"5 小時與每週比率：{ratio}。{pace}（每來源 {summary.FiveHour.ConsumptionPerProviderHour:0.##}%/小時）。在 {summary.ProviderCount} 個來源中偵測到 {resets.Count} 次重置。",
+            $"5 小时与每周比率：{ratio}。{pace}（每来源 {summary.FiveHour.ConsumptionPerProviderHour:0.##}%/小时）。在 {summary.ProviderCount} 个来源中检测到 {resets.Count} 次重置。");
     }
 
-    private Control WindowDetailCard(UsageWindowMetrics metrics, string title, string badge, string accent)
+    private Control WindowDetailCard(UsageHistoryQuotaWindow window, string title, string badge, string accent)
     {
-        var runwayHours = metrics.LastRemainingPercent is int remaining && metrics.ConsumptionPerHour > 0
-            ? remaining / metrics.ConsumptionPerHour
-            : (double?)null;
+        var metrics = _summary.For(window);
+        var multiProvider = _summary.ProviderCount > 1;
+        // The runway that matters is the first one to run out, judged against
+        // each provider's own remaining quota and burn - not one provider's
+        // remaining divided by everyone's combined consumption.
+        var soonest = _summary.SoonestRunway(window);
+        var runwayHours = soonest?.Hours;
 
         string projectedText = runwayHours is not null
-            ? FormatDuration(TimeSpan.FromHours(runwayHours.Value))
+            ? FormatDuration(TimeSpan.FromHours(runwayHours.Value)) +
+              (multiProvider ? $" · {DisplayProvider(soonest!.Provider)}" : string.Empty)
             : (metrics.ConsumptionPerHour <= 0 && metrics.LastRemainingPercent is not null && metrics.LastRemainingPercent > 0
                 ? _text.UsageAnalysisIndefinite
                 : "—");
@@ -1202,7 +1235,9 @@ public sealed class UsageAnalysisWindow : Window
                 new Border { Height = 1, Background = Brush(_palette.Border) },
                 average,
                 Progress(metrics.AverageRemainingPercent, accent),
-                DetailRow(L("Start → latest", "開始 → 最新", "开始 → 最新"), startLatestValue),
+                multiProvider
+                    ? DetailRow(L("Lowest now", "目前最低", "当前最低"), LowestNowValue(window))
+                    : DetailRow(L("Start → latest", "開始 → 最新", "开始 → 最新"), startLatestValue),
                 DetailRow(L("Detected resets", "偵測到重置", "检测到重置"), resetsValue),
                 DetailRow(L("Projected runway", "預估可用時間", "预计可用时间"), runwayValuePanel)
             }
@@ -1210,6 +1245,57 @@ public sealed class UsageAnalysisWindow : Window
         var card = Card(content, 14, new Thickness(15, 13));
         AddShadow(card, 10, 2);
         return card;
+    }
+
+    // Different providers' first and last samples are unrelated numbers, so a
+    // combined "start -> latest" says nothing. What does matter across them is
+    // which one has the least left right now.
+    private Control LowestNowValue(UsageHistoryQuotaWindow window)
+    {
+        var lowest = _summary.Providers
+            .Where(provider => provider.For(window).LastRemainingPercent is not null)
+            .OrderBy(provider => provider.For(window).LastRemainingPercent)
+            .FirstOrDefault();
+        if (lowest is null)
+        {
+            return new TextBlock
+            {
+                Text = "—",
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = Brush(_palette.Primary)
+            };
+        }
+
+        var remaining = lowest.For(window).LastRemainingPercent!.Value;
+        var color = remaining < 20
+            ? _palette.Error
+            : remaining < 50 ? (_isLightTheme ? "#D97706" : "#FBBF24") : (_isLightTheme ? "#0F8A5F" : "#4AD894");
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"{remaining}%",
+                    FontSize = 11,
+                    FontWeight = FontWeight.Bold,
+                    Foreground = Brush(color),
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                new TextBlock
+                {
+                    Text = DisplayProvider(lowest.Provider),
+                    FontSize = 10.5,
+                    Foreground = Brush(_palette.Secondary),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                }
+            }
+        };
     }
 
     private Control ProviderRow(string provider, UsageSelectionSummary summary)
@@ -1255,7 +1341,10 @@ public sealed class UsageAnalysisWindow : Window
                         },
                         new TextBlock
                         {
-                            Text = L($"{summary.RecordCount:#,##0} samples", $"{summary.RecordCount:#,##0} 筆樣本", $"{summary.RecordCount:#,##0} 条样本"),
+                            Text = L(
+                                $"{summary.RecordCount:#,##0} samples · {summary.Quality.CoveragePercent:0}% covered",
+                                $"{summary.RecordCount:#,##0} 筆樣本 · 涵蓋 {summary.Quality.CoveragePercent:0}%",
+                                $"{summary.RecordCount:#,##0} 条样本 · 覆盖 {summary.Quality.CoveragePercent:0}%"),
                             FontSize = 10,
                             Foreground = Brush(_palette.Secondary)
                         }
@@ -1270,8 +1359,8 @@ public sealed class UsageAnalysisWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                ValuePill("5 HR", FormatPercent(summary.FiveHour.ConsumedPercent), _palette.Orange),
-                ValuePill(_text.UsageHistoryWeek.ToUpperInvariant(), FormatPercent(summary.Weekly.ConsumedPercent), _palette.Purple)
+                ValuePill("5 HR", FormatQuotaMultiple(summary.FiveHour.EquivalentWindows), _palette.Orange),
+                ValuePill(_text.UsageHistoryWeek.ToUpperInvariant(), FormatQuotaMultiple(summary.Weekly.EquivalentWindows), _palette.Purple)
             }
         };
         var grid = new Grid
@@ -1739,6 +1828,38 @@ public sealed class UsageAnalysisWindow : Window
             : $"{Math.Max(0, duration.Minutes)}m";
 
     private static string FormatPercent(double value) => $"{value:#,##0.#}%";
+
+    private static string FormatQuotaMultiple(double windows) =>
+        windows >= 100 ? $"{windows:#,##0}×" : $"{windows:0.#}×";
+
+    // The rate is the average per provider so it does not scale with how many
+    // are tracked; with several providers the card says so.
+    private string RateDetail(UsageWindowMetrics metrics) => metrics.ProviderCount > 1
+        ? L(
+            $"{metrics.ConsumptionPerProviderHour:0.##}%/h per provider",
+            $"每來源每小時 {metrics.ConsumptionPerProviderHour:0.##}%",
+            $"每来源每小时 {metrics.ConsumptionPerProviderHour:0.##}%")
+        : L(
+            $"{metrics.ConsumptionPerProviderHour:0.##}% per hour",
+            $"每小時 {metrics.ConsumptionPerProviderHour:0.##}%",
+            $"每小时 {metrics.ConsumptionPerProviderHour:0.##}%");
+
+    private string ConsumptionTooltip(UsageWindowMetrics metrics, string english, string traditional, string simplified)
+    {
+        var points = metrics.ConsumedPercent.ToString("#,##0", CultureInfo.CurrentCulture);
+        return L(
+            $"{metrics.EquivalentWindows:0.#} full {english} quotas used: {points} percentage points added up across {metrics.ProviderCount} provider(s).",
+            $"共使用 {metrics.EquivalentWindows:0.#} 個完整{traditional}額度：{metrics.ProviderCount} 個來源合計 {points} 個百分點。",
+            $"共使用 {metrics.EquivalentWindows:0.#} 个完整{simplified}额度：{metrics.ProviderCount} 个来源合计 {points} 个百分点。");
+    }
+
+    private string RunwayText(UsageHistoryQuotaWindow window)
+    {
+        var soonest = _summary.SoonestRunway(window);
+        return soonest is null
+            ? "—"
+            : $"{FormatDuration(TimeSpan.FromHours(soonest.Hours))} ({DisplayProvider(soonest.Provider)})";
+    }
 
     private static string Percent(int? value) => value is null ? "—" : $"{value}%";
 

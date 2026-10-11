@@ -28,16 +28,25 @@ public sealed class UsageUpdateLog
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    // An outage would otherwise write the same failure on every refresh and
+    // bury the quota history in identical rows. A failure is recorded when it
+    // starts or changes, and again as a reminder at this interval while it lasts.
+    private static readonly TimeSpan FailureReminderInterval = TimeSpan.FromMinutes(30);
+    private static readonly TimeSpan PruneCheckInterval = TimeSpan.FromHours(6);
+
     private readonly object _sync = new();
+    private readonly Dictionary<string, FailureMemory> _failures = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, DateTimeOffset> _lastPruneCheck = new(StringComparer.Ordinal);
 
     public void WriteSuccess(
         string filePath,
         string format,
         UsageProvider provider,
         RateLimitState state,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt,
+        int retentionDays = UsageLogRetentionOptions.Forever)
     {
-        Write(filePath, format, CreateEntry(provider, "success", state, updatedAt, null));
+        Write(filePath, format, [CreateEntry(provider, "success", state, updatedAt, null)], retentionDays);
     }
 
     public void WriteFailure(
@@ -45,9 +54,10 @@ public sealed class UsageUpdateLog
         string format,
         UsageProvider provider,
         string error,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt,
+        int retentionDays = UsageLogRetentionOptions.Forever)
     {
-        Write(filePath, format, CreateEntry(provider, "error", null, updatedAt, error));
+        Write(filePath, format, [CreateEntry(provider, "error", null, updatedAt, error)], retentionDays);
     }
 
     /// <summary>
@@ -60,7 +70,8 @@ public sealed class UsageUpdateLog
         string format,
         AntigravityUsageState? state,
         string? error,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt,
+        int retentionDays = UsageLogRetentionOptions.Forever)
     {
         var status = string.IsNullOrWhiteSpace(error) ? "success" : "error";
         var entries = new List<UsageUpdateLogEntry>();
@@ -92,21 +103,26 @@ public sealed class UsageUpdateLog
             return;
         }
 
-        Write(filePath, format, entries);
+        Write(filePath, format, entries, retentionDays);
     }
 
-    private void Write(string filePath, string format, UsageUpdateLogEntry entry)
-    {
-        Write(filePath, format, [entry]);
-    }
-
-    private void Write(string filePath, string format, IReadOnlyList<UsageUpdateLogEntry> entries)
+    private void Write(
+        string filePath,
+        string format,
+        IReadOnlyList<UsageUpdateLogEntry> entries,
+        int retentionDays)
     {
         var normalizedFormat = UsageLogOptions.NormalizeFormat(format);
         var normalizedPath = UsageLogOptions.NormalizeFilePath(filePath, normalizedFormat);
 
         lock (_sync)
         {
+            entries = entries.Where(entry => ShouldRecord(normalizedPath, entry)).ToArray();
+            if (entries.Count == 0)
+            {
+                return;
+            }
+
             var directory = Path.GetDirectoryName(normalizedPath)
                 ?? throw new InvalidOperationException("The usage log directory is unavailable.");
             Directory.CreateDirectory(directory);
@@ -115,6 +131,8 @@ public sealed class UsageUpdateLog
             {
                 MigrateLegacyCsvIfNeeded(normalizedPath);
             }
+
+            PruneIfDue(normalizedPath, normalizedFormat, retentionDays);
 
             var addCsvHeader = normalizedFormat == UsageLogOptions.Csv &&
                 (!File.Exists(normalizedPath) || new FileInfo(normalizedPath).Length == 0);
@@ -140,6 +158,62 @@ public sealed class UsageUpdateLog
             }
         }
     }
+
+    // Decides, under the write lock, whether an entry adds information.
+    private bool ShouldRecord(string path, UsageUpdateLogEntry entry)
+    {
+        var key = $"{path}|{entry.Provider}";
+        if (!string.Equals(entry.Status, "error", StringComparison.OrdinalIgnoreCase))
+        {
+            // Recovery ends the outage: the next failure is a new one.
+            _failures.Remove(key);
+            return true;
+        }
+
+        var at = DateTimeOffset.TryParse(
+            entry.UpdatedAt,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.RoundtripKind,
+            out var parsed)
+            ? parsed
+            : DateTimeOffset.Now;
+        var error = entry.Error ?? string.Empty;
+        if (_failures.TryGetValue(key, out var previous) &&
+            string.Equals(previous.Error, error, StringComparison.Ordinal) &&
+            at - previous.RecordedAt < FailureReminderInterval)
+        {
+            return false;
+        }
+
+        _failures[key] = new FailureMemory(error, at);
+        return true;
+    }
+
+    private void PruneIfDue(string path, string format, int retentionDays)
+    {
+        if (retentionDays <= UsageLogRetentionOptions.Forever)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.Now;
+        if (_lastPruneCheck.TryGetValue(path, out var last) && now - last < PruneCheckInterval)
+        {
+            return;
+        }
+
+        _lastPruneCheck[path] = now;
+        try
+        {
+            UsageLogPruner.Prune(path, format, retentionDays, now);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Housekeeping must never cost a sample; it is retried next interval.
+        }
+    }
+
+    private readonly record struct FailureMemory(string Error, DateTimeOffset RecordedAt);
 
     private static UsageUpdateLogEntry CreateEntry(
         UsageProvider provider,

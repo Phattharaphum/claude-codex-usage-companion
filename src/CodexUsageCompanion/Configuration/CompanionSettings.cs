@@ -30,6 +30,7 @@ public sealed record CompanionSettings
     public bool EnableUsageLogging { get; init; }
     public string UsageLogFilePath { get; init; } = UsageLogOptions.DefaultFilePath();
     public string UsageLogFormat { get; init; } = UsageLogOptions.Csv;
+    public int UsageLogRetentionDays { get; init; } = UsageLogRetentionOptions.DefaultDays;
     public string Position { get; init; } = WindowPosition.RightBottom;
     public double Opacity { get; init; } = 1d;
     public int Margin { get; init; } = 16;

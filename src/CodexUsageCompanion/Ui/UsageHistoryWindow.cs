@@ -29,6 +29,16 @@ public sealed class UsageHistoryWindow : Window
     private readonly TextBlock _timelineCaption = new();
     private readonly Button _timelineToggleButton;
     private readonly TextBlock _message = new();
+    private readonly ProgressBar _loadingBar = new()
+    {
+        IsIndeterminate = true,
+        Height = 3,
+        MinHeight = 3,
+        VerticalAlignment = VerticalAlignment.Top,
+        IsVisible = false
+    };
+    private int _loadVersion;
+    private bool _closed;
     private readonly TextBlock _emptyStateText;
     private readonly Border _noPeriodData;
     private readonly ComboBox _rangeSelector;
@@ -405,6 +415,8 @@ public sealed class UsageHistoryWindow : Window
             RemainingLabel = text.UsageHistoryRemaining,
             ResetLabel = text.UsageHistoryReset,
             NoDataText = text.UsageHistoryNoChartData,
+            GapLabel = L("No data", "無資料", "无数据"),
+            GapDurationFormatter = FormatDuration,
             ProviderLabelFormatter = ChartProviderLabel,
             Height = 300,
             MinHeight = 280
@@ -754,9 +766,10 @@ public sealed class UsageHistoryWindow : Window
         var windowLayout = new Grid
         {
             RowDefinitions = new RowDefinitions("38,*"),
-            Children = { _windowTitleBar, bodyScroll }
+            Children = { _windowTitleBar, bodyScroll, _loadingBar }
         };
         Grid.SetRow(bodyScroll, 1);
+        Grid.SetRow(_loadingBar, 1);
         _root = new Border
         {
             Margin = new Thickness(8),
@@ -782,13 +795,47 @@ public sealed class UsageHistoryWindow : Window
             }
         };
         AddHandler(KeyDownEvent, HandleKeyDown, RoutingStrategies.Tunnel);
+        Closed += (_, _) => _closed = true;
         ApplyVisualTheme();
         Reload();
     }
 
-    public void Reload()
+    /// <summary>Re-reads the log in the background; the window stays responsive meanwhile.</summary>
+    public void Reload() => _ = ReloadAsync();
+
+    public async Task ReloadAsync()
     {
-        var result = _reader.Read(_settings.UsageLogFilePath, _settings.UsageLogFormat);
+        var version = ++_loadVersion;
+        var path = _settings.UsageLogFilePath;
+        var format = _settings.UsageLogFormat;
+        _loadingBar.IsVisible = true;
+        if (_entries.Count == 0)
+        {
+            _subtitle.Text = L("Loading history…", "正在載入記錄…", "正在加载记录…");
+        }
+
+        UsageHistoryReadResult result;
+        try
+        {
+            result = await Task.Run(() => _reader.Read(path, format));
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            result = new UsageHistoryReadResult([], $"Unable to read usage history: {exception.Message}");
+        }
+
+        // A newer reload superseded this one, or the window was closed.
+        if (version != _loadVersion || _closed)
+        {
+            return;
+        }
+
+        _loadingBar.IsVisible = false;
+        ApplyReadResult(result);
+    }
+
+    private void ApplyReadResult(UsageHistoryReadResult result)
+    {
         _message.IsVisible = !string.IsNullOrWhiteSpace(result.Error);
         _message.Text = result.Error ?? string.Empty;
         _entries = result.Entries;
@@ -914,12 +961,12 @@ public sealed class UsageHistoryWindow : Window
     {
         _summaryGrid.Children.Clear();
         var summary = UsageHistoryAnalytics.Summarize(entries);
-        var resets = UsageHistoryAnalytics.FindResetEvents(entries).Count;
+        var providerCount = Math.Max(1, summary.ProviderCount);
 
         // Card 1: Samples
         var samplesCard = CreateKpiCard(
             _text.UsageHistorySamples,
-            summary.RecordCount.ToString(CultureInfo.CurrentCulture),
+            summary.RecordCount.ToString("N0", CultureInfo.CurrentCulture),
             _text.FormatUsageHistoryProviders(summary.ProviderCount),
             _isLightTheme ? "#0F8A5F" : "#4AD894",
             "M4 9h4v11H4zm6-5h4v16h-4zm6 8h4v8h-4z",
@@ -927,51 +974,119 @@ public sealed class UsageHistoryWindow : Window
         Grid.SetColumn(samplesCard, 0);
         _summaryGrid.Children.Add(samplesCard);
 
-        // Card 2: Observed Time
+        // Card 2: Observed time, with how much of it was really recorded. The
+        // app is not always running, so quota moves unobserved; a number that
+        // hides that would look more certain than it is.
+        var quality = summary.Quality;
+        var (coverageText, coverageColor) = FormatCoverageStatus(quality);
         var observedCard = CreateKpiCard(
             _text.UsageHistoryObservedTime,
             FormatDuration(summary.ObservedDuration),
-            _text.UsageHistoryDataCoverage,
+            coverageText,
             _isLightTheme ? "#4E6FAE" : "#83A9F2",
             "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm.5-13H11v6l5.2 3.1.8-1.3-4.5-2.7z",
-            statusColor: _isLightTheme ? "#4E6FAE" : "#83A9F2");
+            statusColor: coverageColor,
+            tooltip: quality.GapCount == 0
+                ? L("Samples cover the whole observed span.", "樣本涵蓋整個觀察期間。", "样本覆盖整个观察期间。")
+                : L(
+                    $"Nothing was recorded for {FormatDuration(summary.UnobservedPerProvider)} of this span (the app was not running). Quota may have changed during those gaps.",
+                    $"此期間有 {FormatDuration(summary.UnobservedPerProvider)} 沒有記錄（程式未執行），這段時間內額度可能已變動。",
+                    $"此期间有 {FormatDuration(summary.UnobservedPerProvider)} 没有记录（程序未运行），这段时间内额度可能已变动。"));
         Grid.SetColumn(observedCard, 1);
         _summaryGrid.Children.Add(observedCard);
 
-        // Card 3: 5-Hour Consumed
-        var (fiveHourStatusText, fiveHourStatusColor) = FormatFiveHourBurnRateStatus(summary.FiveHour.ConsumptionPerHour);
+        // Card 3: 5-hour quota used, in whole quotas rather than a raw sum of
+        // percentage points that is meaningless above 100%.
+        var (fiveHourStatusText, fiveHourStatusColor) = FormatFiveHourBurnRateStatus(
+            summary.FiveHour.ConsumptionPerProviderHour, summary.ProviderCount > 1);
         var fiveHourCard = CreateKpiCard(
             _text.UsageHistoryFiveHourConsumed,
-            FormatPercent(summary.FiveHour.ConsumedPercent),
+            FormatQuotaMultiple(summary.FiveHour.EquivalentWindows),
             fiveHourStatusText,
             _isLightTheme ? "#D46A45" : "#F08A66",
             "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z",
-            statusColor: fiveHourStatusColor);
+            statusColor: fiveHourStatusColor,
+            tooltip: ConsumptionTooltip(summary.FiveHour, providerCount, "5-hour", "5 小時", "5 小时"));
         Grid.SetColumn(fiveHourCard, 2);
         _summaryGrid.Children.Add(fiveHourCard);
 
-        // Card 4: Weekly Consumed
-        var (weeklyStatusText, weeklyStatusColor) = FormatWeeklyBurnRateStatus(summary.Weekly.ConsumptionPerHour);
+        // Card 4: Weekly
+        var (weeklyStatusText, weeklyStatusColor) = FormatWeeklyBurnRateStatus(
+            summary.Weekly.ConsumptionPerProviderHour, summary.ProviderCount > 1);
         var weeklyCard = CreateKpiCard(
             _text.UsageHistoryWeeklyConsumed,
-            FormatPercent(summary.Weekly.ConsumedPercent),
+            FormatQuotaMultiple(summary.Weekly.EquivalentWindows),
             weeklyStatusText,
             _isLightTheme ? "#8A5CD7" : "#C38AF0",
             "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
-            statusColor: weeklyStatusColor);
+            statusColor: weeklyStatusColor,
+            tooltip: ConsumptionTooltip(summary.Weekly, providerCount, "weekly", "每週", "每周"));
         Grid.SetColumn(weeklyCard, 3);
         _summaryGrid.Children.Add(weeklyCard);
 
-        // Card 5: Resets Detected
+        // Card 5: Resets. Only some can be read as "how fully was this cycle used".
+        var events = summary.ResetEvents;
+        var measured = events.Count(item => item.Quality == UsageResetQuality.Measured);
+        var unverified = events.Count - measured;
         var resetsCard = CreateKpiCard(
             _text.UsageHistoryResetsDetected,
-            resets.ToString(CultureInfo.CurrentCulture),
-            _text.UsageHistoryResetMarkersHint,
+            events.Count.ToString("N0", CultureInfo.CurrentCulture),
+            events.Count == 0
+                ? _text.UsageHistoryResetMarkersHint
+                : L($"{measured:N0} measured · {unverified:N0} unverified",
+                    $"{measured:N0} 次已量測 · {unverified:N0} 次未驗證",
+                    $"{measured:N0} 次已测量 · {unverified:N0} 次未验证"),
             _isLightTheme ? "#D97706" : "#FFAD55",
             "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
-            statusColor: _isLightTheme ? "#D97706" : "#FFAD55");
+            statusColor: _isLightTheme ? "#D97706" : "#FFAD55",
+            tooltip: L(
+                "Measured: sampled closely enough around the reset to judge how much was used. Unverified: the app was not sampling at the time, or the window had never been used.",
+                "已量測：重置前後取樣緊密，可判斷使用程度。未驗證：重置時程式未取樣，或該時段從未使用。",
+                "已测量：重置前后采样紧密，可判断使用程度。未验证：重置时程序未采样，或该时段从未使用。"));
         Grid.SetColumn(resetsCard, 4);
         _summaryGrid.Children.Add(resetsCard);
+    }
+
+    private (string Text, string Color) FormatCoverageStatus(UsageDataQuality quality)
+    {
+        if (quality.GapCount == 0)
+        {
+            return (
+                L("Fully covered", "完整涵蓋", "完整覆盖"),
+                _isLightTheme ? "#0F8A5F" : "#4AD894");
+        }
+
+        var gaps = quality.GapCount == 1
+            ? L("1 gap", "1 處中斷", "1 处中断")
+            : L($"{quality.GapCount} gaps", $"{quality.GapCount} 處中斷", $"{quality.GapCount} 处中断");
+        var text = L(
+            $"{quality.CoveragePercent:0}% covered · {gaps}",
+            $"涵蓋 {quality.CoveragePercent:0}% · {gaps}",
+            $"覆盖 {quality.CoveragePercent:0}% · {gaps}");
+        var color = quality.CoveragePercent >= 90
+            ? _isLightTheme ? "#0F8A5F" : "#4AD894"
+            : quality.CoveragePercent >= 60
+                ? _isLightTheme ? "#D97706" : "#FBBF24"
+                : _isLightTheme ? "#C2410C" : "#FB923C";
+        return (text, color);
+    }
+
+    private static string FormatQuotaMultiple(double windows) =>
+        windows >= 100 ? $"{windows:#,##0}×" : $"{windows:0.#}×";
+
+    private string ConsumptionTooltip(
+        UsageWindowMetrics metrics,
+        int providerCount,
+        string english,
+        string traditional,
+        string simplified)
+    {
+        var points = metrics.ConsumedPercent.ToString("#,##0", CultureInfo.CurrentCulture);
+        var rate = metrics.ConsumptionPerProviderHour.ToString("0.##", CultureInfo.CurrentCulture);
+        return L(
+            $"{metrics.EquivalentWindows:0.#} full {english} quotas used: {points} percentage points added up across {providerCount} provider(s), averaging {rate}%/h each.",
+            $"共使用 {metrics.EquivalentWindows:0.#} 個完整{traditional}額度：{providerCount} 個來源合計 {points} 個百分點，平均每個來源每小時 {rate}%。",
+            $"共使用 {metrics.EquivalentWindows:0.#} 个完整{simplified}额度：{providerCount} 个来源合计 {points} 个百分点，平均每个来源每小时 {rate}%。");
     }
 
     private void UpdateTimeline(
@@ -1293,7 +1408,8 @@ public sealed class UsageHistoryWindow : Window
         string detail,
         string accent,
         string iconGeometry,
-        string statusColor)
+        string statusColor,
+        string? tooltip = null)
     {
         var card = new Border
         {
@@ -1412,6 +1528,10 @@ public sealed class UsageHistoryWindow : Window
             Spacing = 2,
             Children = { headerGrid, valueText, statusPill }
         };
+        if (tooltip is not null)
+        {
+            ToolTip.SetTip(card, tooltip);
+        }
 
         // Hover micro-interaction
         card.PointerEntered += (_, _) =>
@@ -1451,39 +1571,50 @@ public sealed class UsageHistoryWindow : Window
         return card;
     }
 
-    private (string Text, string Color) FormatFiveHourBurnRateStatus(double rate)
+    // The rate is the average per provider so it does not grow with how many
+    // providers are tracked; "each" says so when several are combined.
+    private (string Text, string Color) FormatFiveHourBurnRateStatus(double rate, bool perProvider)
     {
+        var each = perProvider ? $" {L("each", "每來源", "每来源")}" : string.Empty;
         if (rate <= 0)
         {
             return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", _isLightTheme ? "#64748B" : "#94A3B8");
         }
         if (rate < 2.0)
         {
-            return ($"{rate:0.#}%/h • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
+            return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
         }
         if (rate < 8.0)
         {
-            return ($"{rate:0.#}%/h • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
+            return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
         }
-        return ($"{rate:0.#}%/h • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
+        return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
     }
 
-    private (string Text, string Color) FormatWeeklyBurnRateStatus(double rate)
+    private (string Text, string Color) FormatWeeklyBurnRateStatus(double rate, bool perProvider)
     {
+        var each = perProvider ? $" {L("each", "每來源", "每来源")}" : string.Empty;
         if (rate <= 0)
         {
             return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", _isLightTheme ? "#64748B" : "#94A3B8");
         }
         if (rate < 0.6)
         {
-            return ($"{rate:0.##}%/h • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
+            return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
         }
         if (rate < 1.8)
         {
-            return ($"{rate:0.##}%/h • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
+            return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
         }
-        return ($"{rate:0.##}%/h • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
+        return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
     }
+
+    private string L(string english, string traditional, string simplified) => _text.Language switch
+    {
+        UiLanguage.TraditionalChinese => traditional,
+        UiLanguage.SimplifiedChinese => simplified,
+        _ => english
+    };
 
     private void ApplyVisualTheme()
     {
@@ -1523,6 +1654,9 @@ public sealed class UsageHistoryWindow : Window
             : default;
         _titleText.Foreground = Brush(_palette.Primary);
         _titleMark.Background = Brush(_palette.AccentSoft);
+        // Match the app's accent and let only the moving segment show.
+        _loadingBar.Foreground = Brush(_palette.Accent);
+        _loadingBar.Background = Brushes.Transparent;
         _titleMark.BorderBrush = Tint(_palette.Accent, _isLightTheme ? (byte)80 : (byte)120);
         _titleMark.BorderThickness = new Thickness(1);
         _titleClockRing.Stroke = Brush(_palette.Accent);

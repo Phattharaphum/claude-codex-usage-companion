@@ -17,12 +17,23 @@ public enum UsageHistoryTimeRange
 public sealed record UsageHistoryChartPoint(
     DateTimeOffset UpdatedAt,
     int RemainingPercent,
-    DateTimeOffset? ResetAt);
+    DateTimeOffset? ResetAt)
+{
+    /// <summary>
+    /// True when this provider went unobserved just before this sample. The
+    /// line must not claim to know what happened across such a hole.
+    /// </summary>
+    public bool BreaksBefore { get; init; }
+}
 
 public sealed record UsageHistoryChartSeries(
     string Provider,
     IReadOnlyList<UsageHistoryChartPoint> Points,
-    IReadOnlyList<DateTimeOffset> ResetMarkers);
+    IReadOnlyList<DateTimeOffset> ResetMarkers)
+{
+    /// <summary>The unobserved stretches of this provider that touch the viewed period.</summary>
+    public IReadOnlyList<UsageGap> Gaps { get; init; } = [];
+}
 
 /// <summary>
 /// Converts raw refresh records into the small, ordered series needed by the
@@ -179,13 +190,60 @@ public static class UsageHistorySeriesBuilder
             }
         }
 
+        // Find the holes on the full history, not just the viewed part, so the
+        // first visible sample still knows whether it follows a gap.
+        var gaps = UsageHistoryCoverage.FindGaps(points.Select(point => point.UpdatedAt).ToArray());
+        var gapEnds = gaps.Select(gap => gap.End).ToHashSet();
         var visiblePoints = points
             .Where(point => point.UpdatedAt >= start && point.UpdatedAt <= end)
+            .Select(point => gapEnds.Contains(point.UpdatedAt) ? point with { BreaksBefore = true } : point)
             .ToArray();
         return new UsageHistoryChartSeries(
             provider,
             Downsample(visiblePoints),
-            resetMarkers.Where(marker => marker >= start && marker <= end).ToArray());
+            resetMarkers.Where(marker => marker >= start && marker <= end).ToArray())
+        {
+            Gaps = gaps
+                .Where(gap => gap.End >= start && gap.Start <= end)
+                .Select(gap => new UsageGap(
+                    gap.Start < start ? start : gap.Start,
+                    gap.End > end ? end : gap.End))
+                .ToArray()
+        };
+    }
+
+    /// <summary>
+    /// The stretches during which no plotted provider was observed - typically
+    /// the app not running - so they can be shaded as "no data".
+    /// </summary>
+    public static IReadOnlyList<UsageGap> CommonGaps(IReadOnlyList<UsageHistoryChartSeries> series)
+    {
+        if (series.Count == 0)
+        {
+            return [];
+        }
+
+        var common = series[0].Gaps.ToList();
+        foreach (var next in series.Skip(1))
+        {
+            var intersection = new List<UsageGap>();
+            foreach (var left in common)
+            {
+                foreach (var right in next.Gaps)
+                {
+                    var start = left.Start > right.Start ? left.Start : right.Start;
+                    var end = left.End < right.End ? left.End : right.End;
+                    if (end > start)
+                    {
+                        intersection.Add(new UsageGap(start, end));
+                    }
+                }
+            }
+
+            common = intersection;
+        }
+
+        return common.OrderBy(gap => gap.Start).ToArray();
     }
 
     private static IReadOnlyList<UsageHistoryChartPoint> Downsample(
@@ -198,8 +256,13 @@ public static class UsageHistorySeriesBuilder
 
         var stride = (int)Math.Ceiling(
             points.Count / (double)MaximumChartPointsPerSeries);
+        // Keep both sides of every gap: dropping either would let the line
+        // stretch across the hole or end somewhere that was never observed.
         var sampled = points
-            .Where((_, index) => index % stride == 0)
+            .Where((point, index) =>
+                index % stride == 0 ||
+                point.BreaksBefore ||
+                (index + 1 < points.Count && points[index + 1].BreaksBefore))
             .ToList();
         if (sampled[^1] != points[^1])
         {

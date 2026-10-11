@@ -6,8 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Usage history now shows how much of a period was actually recorded. The app only samples while it runs, so the overview and analysis windows report data coverage and the number of gaps, the chart shades stretches with no samples as "No data" (and draws dotted connectors across them instead of a line that claims to know what happened), and hovering a gap shows its length.
+- `usageLogRetentionDays` (default 90, `0` keeps everything) with a **History retention** choice in Settings → Logging. Older records are pruned in the background, at most every six hours, by streaming the file and replacing it atomically.
+
 ### Fixed
 
+- Usage figures no longer inflate with the number of providers. "5-hour consumed 1,860%" is now "18.7×" (full quotas used) with the burn rate averaged per provider, so a combined rate is no longer compared with a per-provider "High" threshold. The projected runway is the first provider to run out judged on its own remaining quota, and "Lowest now" replaces a meaningless combined "start → latest".
+- Reset efficiency no longer counts cycles it cannot judge. Resets seen after the app was not sampling, or of windows that were never used, are marked unverified and excluded from the averages (about half of the 30-day cycles in a real log); they can be shown dimmed with a switch. Utilization now reads "higher is better" like the overlay, an idle or unsampled cycle is no longer coloured red, and a 5-hour reset no longer displays the weekly quota as if it had reset too.
+- The history log no longer fills with identical failure rows during an outage (one row when it starts or changes, a reminder every 30 minutes, and a new one after recovery).
+- Usage history and Reset efficiency no longer freeze the window while the log loads. The log is read in the background with a loading bar, and parsed rows are cached so a refresh only reads the bytes appended since the last read (opening took ~360-650 ms on a 12 MB log).
 - Antigravity no longer shows an old reading as if it were current when its local service stops answering. A snapshot kept after a failed refresh is now dimmed, labelled with the time it was read and marked "Stale" in the section summary, and a quota whose reset time has already passed says it is waiting for new data instead of counting down "0d 0h 0m".
 - Antigravity failures now say what went wrong (not running, still starting, request rejected, timed out, unexpected data, or unreachable) instead of one generic "unavailable" message. `status --watch` also prints the error beside a retained snapshot.
 - Antigravity refreshes no longer fail because one unresponsive port used up the whole time budget. The ports are probed concurrently, and the transport that answered last is tried first.

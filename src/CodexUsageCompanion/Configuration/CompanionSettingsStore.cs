@@ -186,6 +186,8 @@ public static class CompanionSettingsStore
                 settings.UsageLogFilePath,
                 usageLogFormat),
             UsageLogFormat = usageLogFormat,
+            UsageLogRetentionDays = UsageLogRetentionOptions.Normalize(
+                settings.UsageLogRetentionDays),
             Position = WindowPosition.Normalize(settings.Position),
             Opacity = double.IsFinite(settings.Opacity)
                 ? Math.Clamp(settings.Opacity, 0.5d, 1d)
