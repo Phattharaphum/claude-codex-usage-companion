@@ -1,5 +1,7 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -169,7 +171,7 @@ public sealed class InsightsWindow : Window
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
-            ToolTip.SetTip(pill, tooltip);
+            A11y.Tip(pill, tooltip);
             var pillIndex = index;
             pill.Click += (_, _) =>
             {
@@ -240,7 +242,7 @@ public sealed class InsightsWindow : Window
                 Children = { _todayIcon, _todayLabel }
             }
         };
-        ToolTip.SetTip(_todayButton, text.UsageHistoryToday);
+        A11y.Tip(_todayButton, text.UsageHistoryToday);
         _todayButton.Click += (_, _) =>
         {
             _anchorDate = DateTimeOffset.Now;
@@ -281,7 +283,7 @@ public sealed class InsightsWindow : Window
                 Children = { _allProvidersIcon, _allProvidersLabel }
             }
         };
-        ToolTip.SetTip(_allProvidersButton, text.UsageHistoryAllProviders);
+        A11y.Tip(_allProvidersButton, text.UsageHistoryAllProviders);
         _allProvidersButton.Click += (_, _) =>
         {
             var allChartProviders = _entries
@@ -355,7 +357,7 @@ public sealed class InsightsWindow : Window
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
-            ToolTip.SetTip(pill, tooltip);
+            A11y.Tip(pill, tooltip);
             var pillIndex = index;
             pill.Click += (_, _) =>
             {
@@ -427,6 +429,11 @@ public sealed class InsightsWindow : Window
             RemainingLabel = text.UsageHistoryRemaining,
             ResetLabel = text.UsageHistoryReset,
             NoDataText = text.UsageHistoryNoChartData,
+            Labels = text,
+            AccessibleLabel = L(
+                "Remaining quota chart. Use the arrow keys to read each sample: left and right move in time, up and down switch provider.",
+                "剩餘額度趨勢圖。使用方向鍵逐點讀取：左右移動時間，上下切換來源。",
+                "剩余额度趋势图。使用方向键逐点读取：左右移动时间，上下切换来源。"),
             GapLabel = L("No data", "無資料", "无数据"),
             GapDurationFormatter = FormatDuration,
             ProviderLabelFormatter = ChartProviderLabel,
@@ -575,8 +582,12 @@ public sealed class InsightsWindow : Window
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
-            ToolTip.SetTip(tabButton, $"{label} ({shortcut})");
+            A11y.Tip(tabButton, $"{label} ({shortcut})");
             var captured = tab;
+            // Announced as "tab 2 of 4", not as four unrelated buttons.
+            AutomationProperties.SetControlTypeOverride(tabButton, AutomationControlType.TabItem);
+            AutomationProperties.SetPositionInSet(tabButton, (int)tab + 1);
+            AutomationProperties.SetSizeOfSet(tabButton, 4);
             tabButton.Click += (_, _) => SelectTab(captured);
             tabButton.PointerEntered += (_, _) => ApplyTabTheme(captured, hovered: true);
             tabButton.PointerExited += (_, _) => ApplyTabTheme(captured, hovered: false);
@@ -764,6 +775,8 @@ public sealed class InsightsWindow : Window
         };
         _overviewScroll = new ScrollViewer
         {
+            Focusable = true,
+            IsTabStop = true,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = overviewContent
@@ -854,7 +867,7 @@ public sealed class InsightsWindow : Window
     private void ApplyReadResult(UsageHistoryReadResult result)
     {
         _message.IsVisible = !string.IsNullOrWhiteSpace(result.Error);
-        _message.Text = result.Error ?? string.Empty;
+        _message.Text = _text.LocalizeError(result.Error) ?? string.Empty;
         _entries = result.Entries;
         _subtitle.Text = _entries.Count == 0
             ? _text.UsageHistoryEmptySubtitle
@@ -986,9 +999,9 @@ public sealed class InsightsWindow : Window
             _text.UsageHistorySamples,
             summary.RecordCount.ToString("N0", CultureInfo.CurrentCulture),
             _text.FormatUsageHistoryProviders(summary.ProviderCount),
-            _isLightTheme ? "#0F8A5F" : "#4AD894",
+            StatusStyle.Good(_isLightTheme),
             "M4 9h4v11H4zm6-5h4v16h-4zm6 8h4v8h-4z",
-            statusColor: _isLightTheme ? "#0F8A5F" : "#4AD894");
+            statusColor: StatusStyle.Good(_isLightTheme));
         Grid.SetColumn(samplesCard, 0);
         _summaryGrid.Children.Add(samplesCard);
 
@@ -1002,7 +1015,7 @@ public sealed class InsightsWindow : Window
             _text.UsageHistoryObservedTime,
             FormatDuration(summary.ObservedDuration),
             coverageText,
-            _isLightTheme ? "#4E6FAE" : "#83A9F2",
+            StatusStyle.Info(_isLightTheme),
             "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm.5-13H11v6l5.2 3.1.8-1.3-4.5-2.7z",
             statusColor: coverageColor,
             tooltip: quality.GapCount == 0
@@ -1022,7 +1035,7 @@ public sealed class InsightsWindow : Window
             _text.UsageHistoryFiveHourConsumed,
             FormatQuotaMultiple(summary.FiveHour.EquivalentWindows),
             fiveHourStatusText,
-            _isLightTheme ? "#D46A45" : "#F08A66",
+            CadenceStyle.FiveHour(_isLightTheme),
             "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z",
             statusColor: fiveHourStatusColor,
             tooltip: ConsumptionTooltip(summary.FiveHour, providerCount, "5-hour", "5 小時", "5 小时"));
@@ -1036,7 +1049,7 @@ public sealed class InsightsWindow : Window
             _text.UsageHistoryWeeklyConsumed,
             FormatQuotaMultiple(summary.Weekly.EquivalentWindows),
             weeklyStatusText,
-            _isLightTheme ? "#8A5CD7" : "#C38AF0",
+            CadenceStyle.Weekly(_isLightTheme),
             "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
             statusColor: weeklyStatusColor,
             tooltip: ConsumptionTooltip(summary.Weekly, providerCount, "weekly", "每週", "每周"));
@@ -1055,9 +1068,9 @@ public sealed class InsightsWindow : Window
                 : L($"{measured:N0} measured · {unverified:N0} unverified",
                     $"{measured:N0} 次已量測 · {unverified:N0} 次未驗證",
                     $"{measured:N0} 次已测量 · {unverified:N0} 次未验证"),
-            _isLightTheme ? "#D97706" : "#FFAD55",
+            StatusStyle.Caution(_isLightTheme),
             "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z",
-            statusColor: _isLightTheme ? "#D97706" : "#FFAD55",
+            statusColor: StatusStyle.Caution(_isLightTheme),
             tooltip: L(
                 "Measured: sampled closely enough around the reset to judge how much was used. Unverified: the app was not sampling at the time, or the window had never been used.",
                 "已量測：重置前後取樣緊密，可判斷使用程度。未驗證：重置時程式未取樣，或該時段從未使用。",
@@ -1072,7 +1085,7 @@ public sealed class InsightsWindow : Window
         {
             return (
                 L("Fully covered", "完整涵蓋", "完整覆盖"),
-                _isLightTheme ? "#0F8A5F" : "#4AD894");
+                StatusStyle.Good(_isLightTheme));
         }
 
         var gaps = quality.GapCount == 1
@@ -1083,10 +1096,10 @@ public sealed class InsightsWindow : Window
             $"涵蓋 {quality.CoveragePercent:0}% · {gaps}",
             $"覆盖 {quality.CoveragePercent:0}% · {gaps}");
         var color = quality.CoveragePercent >= 90
-            ? _isLightTheme ? "#0F8A5F" : "#4AD894"
+            ? StatusStyle.Good(_isLightTheme)
             : quality.CoveragePercent >= 60
-                ? _isLightTheme ? "#D97706" : "#FBBF24"
-                : _isLightTheme ? "#C2410C" : "#FB923C";
+                ? StatusStyle.Caution(_isLightTheme)
+                : StatusStyle.Warn(_isLightTheme);
         return (text, color);
     }
 
@@ -1167,12 +1180,10 @@ public sealed class InsightsWindow : Window
         {
             _periodLabel.Text = _entries.Count == 0
                 ? _text.UsageHistoryAll
-                : $"{start.ToLocalTime():MMM d, yyyy} — {end.ToLocalTime():MMM d, yyyy}";
+                : _text.FormatPeriod(start.ToLocalTime(), end.ToLocalTime());
             return;
         }
-        _periodLabel.Text = start.ToLocalTime().Date == end.ToLocalTime().Date
-            ? start.ToLocalTime().ToString("dddd, MMM d, yyyy", CultureInfo.CurrentCulture)
-            : $"{start.ToLocalTime():MMM d, yyyy} — {end.ToLocalTime():MMM d, yyyy}";
+        _periodLabel.Text = _text.FormatPeriod(start.ToLocalTime(), end.ToLocalTime());
     }
 
     private IReadOnlySet<string> SelectedProviders() =>
@@ -1219,7 +1230,7 @@ public sealed class InsightsWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center
         };
-        ToolTip.SetTip(button, tooltip);
+        A11y.Tip(button, tooltip);
         return button;
     }
 
@@ -1245,7 +1256,7 @@ public sealed class InsightsWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center
         };
-        ToolTip.SetTip(button, tooltip);
+        A11y.Tip(button, tooltip);
         return button;
     }
 
@@ -1405,7 +1416,7 @@ public sealed class InsightsWindow : Window
         var labelText = new TextBlock
         {
             Text = label.ToUpperInvariant(),
-            FontSize = 9.5,
+            FontSize = 10,
             FontWeight = FontWeight.Bold,
             LetterSpacing = 0.4,
             Foreground = Brush(_palette.Secondary),
@@ -1500,7 +1511,7 @@ public sealed class InsightsWindow : Window
         };
         if (tooltip is not null)
         {
-            ToolTip.SetTip(card, tooltip);
+            A11y.Tip(card, tooltip);
         }
 
         // Hover micro-interaction
@@ -1538,6 +1549,7 @@ public sealed class InsightsWindow : Window
             }
         };
 
+        A11y.Name(card, $"{label}: {value}, {detail}");
         return card;
     }
 
@@ -1548,17 +1560,17 @@ public sealed class InsightsWindow : Window
         var each = perProvider ? $" {L("each", "每來源", "每来源")}" : string.Empty;
         if (rate <= 0)
         {
-            return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", _isLightTheme ? "#64748B" : "#94A3B8");
+            return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", StatusStyle.Neutral(_isLightTheme));
         }
         if (rate < 2.0)
         {
-            return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
+            return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateLight}", StatusStyle.Good(_isLightTheme));
         }
         if (rate < 8.0)
         {
-            return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
+            return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateModerate}", StatusStyle.Caution(_isLightTheme));
         }
-        return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
+        return ($"{rate:0.#}%/h{each} • {_text.UsageHistoryBurnRateHigh}", StatusStyle.Critical(_isLightTheme));
     }
 
     private (string Text, string Color) FormatWeeklyBurnRateStatus(double rate, bool perProvider)
@@ -1566,17 +1578,17 @@ public sealed class InsightsWindow : Window
         var each = perProvider ? $" {L("each", "每來源", "每来源")}" : string.Empty;
         if (rate <= 0)
         {
-            return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", _isLightTheme ? "#64748B" : "#94A3B8");
+            return ($"0%/h • {_text.UsageHistoryBurnRateIdle}", StatusStyle.Neutral(_isLightTheme));
         }
         if (rate < 0.6)
         {
-            return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateLight}", _isLightTheme ? "#0F8A5F" : "#4AD894");
+            return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateLight}", StatusStyle.Good(_isLightTheme));
         }
         if (rate < 1.8)
         {
-            return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateModerate}", _isLightTheme ? "#D97706" : "#FBBF24");
+            return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateModerate}", StatusStyle.Caution(_isLightTheme));
         }
-        return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateHigh}", _isLightTheme ? "#DC2626" : "#F87171");
+        return ($"{rate:0.##}%/h{each} • {_text.UsageHistoryBurnRateHigh}", StatusStyle.Critical(_isLightTheme));
     }
 
     private string L(string english, string traditional, string simplified) => _text.Language switch
@@ -1803,6 +1815,7 @@ public sealed class InsightsWindow : Window
     private void ApplyRangePillTheme(Button pill, int index, bool hovered)
     {
         var isSelected = _rangeSelector.SelectedIndex == index;
+        AutomationProperties.SetItemStatus(pill, isSelected ? L("selected", "已選取", "已选中") : string.Empty);
         if (isSelected)
         {
             pill.Background = Brush(_palette.Surface);
@@ -1830,6 +1843,7 @@ public sealed class InsightsWindow : Window
     private void ApplyQuotaPillTheme(Button pill, int index, bool hovered)
     {
         var isSelected = _windowSelector.SelectedIndex == index;
+        AutomationProperties.SetItemStatus(pill, isSelected ? L("selected", "已選取", "已选中") : string.Empty);
         if (isSelected)
         {
             pill.Background = Brush(_palette.Surface);
@@ -1876,6 +1890,7 @@ public sealed class InsightsWindow : Window
             .ToList();
 
         var isAllSelected = allChartProviders.Count > 0 && _selectedProviders.Count == allChartProviders.Count;
+        AutomationProperties.SetItemStatus(_allProvidersButton, isAllSelected ? L("selected", "已選取", "已选中") : string.Empty);
         var accent = _palette.Accent;
         _allProvidersButton.Background = isAllSelected
             ? Tint(accent, _isLightTheme
@@ -1914,6 +1929,8 @@ public sealed class InsightsWindow : Window
     {
         var provider = button.Tag as string ?? string.Empty;
         var selected = _selectedProviders.Contains(provider);
+        // Colour alone says "on"; say it in words too.
+        AutomationProperties.SetItemStatus(button, selected ? L("selected", "已選取", "已选中") : string.Empty);
         var accent = ProviderAccent(provider);
         button.Background = selected
             ? Tint(accent, _isLightTheme
@@ -1942,23 +1959,9 @@ public sealed class InsightsWindow : Window
         }
     }
 
-    private static string ProviderIconGeometry(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => "M12 2L13.8 8.7L20.5 7L16.2 12L21.8 15.2L15.3 16.5L16.8 23L12 18.5L7.2 23L8.7 16.5L2.2 15.2L7.8 12L3.5 7L10.2 8.7L12 2Z",
-        "codex" => "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM12 4C16.42 4 20 7.58 20 12C20 13.91 19.33 15.66 18.21 17.03L6.97 5.79C8.34 4.67 10.09 4 12 4ZM4 12C4 10.09 4.67 8.34 5.79 6.97L17.03 18.21C15.66 19.33 13.91 20 12 20C7.58 20 4 16.42 4 12Z",
-        "antigravity-gemini" => "M12 2L13.7 7.3L19 9L13.7 10.7L12 16L10.3 10.7L5 9L10.3 7.3ZM19 15L20 18L23 19L20 20L19 23L18 20L15 19L18 18Z",
-        "antigravity-claudeandchatgpt" => "M12 2L14.5 8.5L21 9.5L16 14L17.5 20.5L12 17L6.5 20.5L8 14L3 9.5L9.5 8.5L12 2Z",
-        _ => "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"
-    };
+    private static string ProviderIconGeometry(string provider) => ProviderStyle.IconGeometry(provider);
 
-    private string ProviderAccent(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => _isLightTheme ? "#C85F3D" : "#F08A66",
-        "codex" => _isLightTheme ? "#0F8A68" : "#4AD894",
-        "antigravity-gemini" => _isLightTheme ? "#3B82F6" : "#8794FF",
-        "antigravity-claudeandchatgpt" => _isLightTheme ? "#8955C5" : "#C38AF0",
-        _ => _palette.Secondary
-    };
+    private string ProviderAccent(string provider) => ProviderStyle.Accent(provider, _isLightTheme, _palette.Secondary);
 
     private static SolidColorBrush Tint(string color, byte alpha)
     {
@@ -2083,6 +2086,9 @@ public sealed class InsightsWindow : Window
     private void ApplyTabTheme(InsightsTab tab, bool hovered)
     {
         var pill = _tabButtons[tab];
+        AutomationProperties.SetItemStatus(
+            pill,
+            tab == _activeTab ? L("selected", "已選取", "已选中") : string.Empty);
         if (tab == _activeTab)
         {
             pill.Background = Brush(_palette.Surface);
@@ -2106,45 +2112,21 @@ public sealed class InsightsWindow : Window
         _coverageChipText.Foreground = Brush(color);
         _coverageChip.Background = Tint(color, _isLightTheme ? (byte)22 : (byte)35);
         _coverageChip.BorderBrush = Tint(color, _isLightTheme ? (byte)60 : (byte)80);
-        ToolTip.SetTip(_coverageChip, L(
+        A11y.Tip(_coverageChip, L(
             "How much of this period was actually recorded. The app only samples while it runs.",
             "此期間實際有記錄的比例。程式只會在執行時取樣。",
             "此期间实际有记录的比例。程序只会在运行时采样。"));
     }
 
-    private string DisplayProvider(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => "Claude",
-        "codex" => "Codex",
-        "antigravity-gemini" => "Antigravity · Gemini",
-        "antigravity-claudeandchatgpt" => "Antigravity · Claude + ChatGPT",
-        _ => provider
-    };
+    private string DisplayProvider(string provider) => ProviderStyle.DisplayName(provider);
 
-    private string ChartProviderLabel(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => "Claude",
-        "codex" => "Codex",
-        "antigravity-gemini" => "Antigravity · Gemini",
-        "antigravity-claudeandchatgpt" => "Antigravity · C+GPT",
-        _ => provider
-    };
+    private string ChartProviderLabel(string provider) => ProviderStyle.DisplayName(provider);
 
-    private static bool IsChartProvider(string provider) => provider.ToLowerInvariant() is
-        "claude" or "codex" or "antigravity-gemini" or "antigravity-claudeandchatgpt";
+    private static bool IsChartProvider(string provider) => ProviderStyle.IsKnown(provider);
 
-    private static int ProviderOrder(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => 0,
-        "codex" => 1,
-        "antigravity-gemini" => 2,
-        "antigravity-claudeandchatgpt" => 3,
-        _ => 4
-    };
+    private static int ProviderOrder(string provider) => ProviderStyle.Order(provider);
 
-    private static string FormatDuration(TimeSpan duration) => duration.TotalDays >= 1
-        ? $"{(int)duration.TotalDays}d {duration.Hours}h"
-        : duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}h {duration.Minutes}m" : $"{Math.Max(0, duration.Minutes)}m";
+    private string FormatDuration(TimeSpan duration) => _text.FormatDuration(duration);
 
     private static string FormatPercent(double value) =>
         $"{value:#,##0.#}%";
@@ -2176,7 +2158,7 @@ public sealed class InsightsWindow : Window
         var block = new TextBlock
         {
             Text = text.ToUpperInvariant(),
-            FontSize = 9.5,
+            FontSize = 10,
             FontWeight = FontWeight.Bold,
             LetterSpacing = 0.5,
             Foreground = Brush(_palette.Secondary),
@@ -2246,7 +2228,7 @@ public sealed class InsightsWindow : Window
 
         if (!success && !string.IsNullOrWhiteSpace(entry.Error))
         {
-            var error = CreateInlineErrorCell(entry.Error);
+            var error = CreateInlineErrorCell(_text.LocalizeError(entry.Error)!);
             Grid.SetColumn(error, 2);
             Grid.SetColumnSpan(error, 2);
             grid.Children.Add(error);
@@ -2276,7 +2258,7 @@ public sealed class InsightsWindow : Window
             {
                 new TextBlock
                 {
-                    Text = local.ToString("MMM d, yyyy", CultureInfo.CurrentCulture),
+                    Text = _text.FormatDate(local),
                     FontSize = 11.5,
                     FontWeight = FontWeight.SemiBold,
                     Foreground = Brush(_palette.Primary)
@@ -2364,7 +2346,7 @@ public sealed class InsightsWindow : Window
             Text = resetAt is null
                 ? _text.ResetUnavailable
                 : _text.FormatUsageHistoryReset(resetAt.Value.ToLocalTime()),
-            FontSize = 9.5,
+            FontSize = 10,
             Foreground = Brush(_palette.Secondary),
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextAlignment = TextAlignment.Right,
@@ -2443,7 +2425,7 @@ public sealed class InsightsWindow : Window
         _ => _palette.Green
     };
 
-    private sealed record HistoryPalette(
+    internal sealed record HistoryPalette(
         string Root,
         string Surface,
         string Soft,
@@ -2480,7 +2462,7 @@ public sealed class InsightsWindow : Window
             "#FFCAD6CE",
             "#FF1F2822",
             "#FF67736B",
-            "#FF0F8A68",
+            "#FF0B7A5A",
             "#FF0F7B5C",
             "#FF0D6E53",
             "#FFE5F5EE",

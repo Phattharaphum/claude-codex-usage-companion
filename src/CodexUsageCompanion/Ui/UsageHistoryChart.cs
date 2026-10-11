@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -22,6 +23,9 @@ public sealed class UsageHistoryChart : Control
     private IBrush _axisBrush = Brush("#69756E");
     private IBrush _resetBrush = Brush("#E48332");
     private IBrush _hoverGuideBrush = Brush("#8A9890");
+    private IBrush _focusBrush = Brush("#0B7A5A");
+    private ChartCursor? _cursor;
+    private bool _keyboardFocus;
     private IBrush _gapBrush = Brush("#0D000000");
     private IBrush _gapEdgeBrush = Brush("#30000000");
     private IBrush _tooltipBrush = Brush("#25332C");
@@ -48,12 +52,37 @@ public sealed class UsageHistoryChart : Control
         duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}h {duration.Minutes}m" : $"{duration.Minutes}m";
     public Func<string, string>? ProviderLabelFormatter { get; set; }
 
+    /// <summary>Formats axis and tooltip dates in the interface language.</summary>
+    public Localization.UiText? Labels { get; set; }
+
+    /// <summary>
+    /// What a screen reader announces for the chart as a whole; the arrow keys
+    /// then read out individual samples.
+    /// </summary>
+    public string AccessibleLabel { get; set; } =
+        "Remaining quota chart. Use the arrow keys to read each sample.";
+
     public UsageHistoryChart()
     {
         MinHeight = 270;
         Height = 292;
         ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Cross);
+        // A chart you can only read with a mouse is not readable to everyone.
+        Focusable = true;
+        IsTabStop = true;
+        KeyDown += HandleKeyDown;
+        // The ring marks keyboard focus; a mouse click should not leave one behind.
+        GotFocus += (_, eventArgs) =>
+        {
+            _keyboardFocus = eventArgs.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional;
+            InvalidateVisual();
+        };
+        LostFocus += (_, _) =>
+        {
+            _keyboardFocus = false;
+            InvalidateVisual();
+        };
         PointerMoved += HandlePointerMoved;
         PointerExited += (_, _) =>
         {
@@ -69,6 +98,9 @@ public sealed class UsageHistoryChart : Control
         _commonGaps = UsageHistorySeriesBuilder.CommonGaps(series);
         _hoveredPoint = null;
         _hoveredGap = null;
+        _cursor = null;
+        AutomationProperties.SetName(this, AccessibleLabel);
+        AutomationProperties.SetItemStatus(this, string.Empty);
         InvalidateVisual();
     }
 
@@ -89,6 +121,7 @@ public sealed class UsageHistoryChart : Control
         _axisBrush = Brush(isLight ? "#FF667169" : "#FFADB7AF");
         _resetBrush = Brush(isLight ? "#FFE47B2B" : "#FFFFA04F");
         _hoverGuideBrush = Brush(isLight ? "#FF8A9890" : "#FF758079");
+        _focusBrush = Brush(isLight ? "#FF0B7A5A" : "#FF4AD894");
         _gapBrush = Brush(isLight ? "#0D000000" : "#0DFFFFFF");
         _gapEdgeBrush = Brush(isLight ? "#26000000" : "#2EFFFFFF");
         _tooltipBrush = Brush(isLight ? "#FF24312A" : "#FFEEF3EF");
@@ -109,6 +142,10 @@ public sealed class UsageHistoryChart : Control
         }
 
         context.DrawRectangle(_plotBrush, null, plot, 10, 10);
+        if (IsFocused && _keyboardFocus)
+        {
+            context.DrawRectangle(null, new Pen(_focusBrush, 2), plot.Inflate(2), 11, 11);
+        }
         var points = _series.SelectMany(series => series.Points).ToArray();
         var (minimumTime, maximumTime) = ResolveTimeBounds(points);
         DrawGrid(context, plot, minimumTime, maximumTime);
@@ -187,9 +224,12 @@ public sealed class UsageHistoryChart : Control
             var x = plot.Left + plot.Width * tick / 4d;
             context.DrawLine(_gridPen, new Point(x, plot.Top), new Point(x, plot.Bottom));
             var time = minimumTime + TimeSpan.FromTicks(span.Ticks * tick / 4);
-            var label = time.ToLocalTime().ToString(
-                span > TimeSpan.FromDays(2) ? "MMM d" : span > TimeSpan.FromHours(26) ? "ddd HH:mm" : "HH:mm",
-                CultureInfo.CurrentCulture);
+            var local = time.ToLocalTime();
+            var label = span > TimeSpan.FromDays(2)
+                ? FormatDateShort(local)
+                : span > TimeSpan.FromHours(26)
+                    ? $"{FormatWeekdayShort(local)} {local:HH:mm}"
+                    : local.ToString("HH:mm", CultureInfo.InvariantCulture);
             var formatted = Text(label, 10, _axisBrush);
             context.DrawText(formatted, new Point(x - formatted.Width / 2, plot.Bottom + 9));
         }
@@ -333,10 +373,10 @@ public sealed class UsageHistoryChart : Control
         {
             ProviderLabelFormatter?.Invoke(hovered.Provider) ?? hovered.Provider,
             $"{hovered.Point.RemainingPercent}% {RemainingLabel.ToLowerInvariant()}",
-            hovered.Point.UpdatedAt.ToLocalTime().ToString("ddd, MMM d · HH:mm", CultureInfo.CurrentCulture),
+            FormatWeekdayDateTime(hovered.Point.UpdatedAt.ToLocalTime()),
             hovered.Point.ResetAt is null
                 ? string.Empty
-                : $"{ResetLabel}: {hovered.Point.ResetAt.Value.ToLocalTime():MMM d, HH:mm}"
+                : $"{ResetLabel}: {FormatDateTimeShort(hovered.Point.ResetAt.Value.ToLocalTime())}"
         }.Where(line => !string.IsNullOrWhiteSpace(line)).ToArray();
         var tooltipText = _isLight ? Brushes.White : Brush("#FF1F2822");
         var width = Math.Max(166, lines.Max(line => Text(line, 11, tooltipText).Width) + 22);
@@ -367,8 +407,8 @@ public sealed class UsageHistoryChart : Control
         {
             GapLabel,
             GapDurationFormatter(gap.Duration),
-            $"{gap.Start.ToLocalTime().ToString("MMM d · HH:mm", CultureInfo.CurrentCulture)} → " +
-            gap.End.ToLocalTime().ToString("HH:mm", CultureInfo.CurrentCulture)
+            $"{FormatDateTimeShort(gap.Start.ToLocalTime())} → " +
+            gap.End.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)
         };
         var tooltipText = _isLight ? Brushes.White : Brush("#FF1F2822");
         var width = Math.Max(150, lines.Max(line => Text(line, 11, tooltipText).Width) + 22);
@@ -449,8 +489,73 @@ public sealed class UsageHistoryChart : Control
             .OrderBy(candidate => candidate.DistanceSquared)
             .Select(candidate => candidate.Hovered)
             .FirstOrDefault();
+        _cursor = _hoveredPoint is null
+            ? null
+            : UsageChartCursor.Find(_series, _hoveredPoint.Provider, _hoveredPoint.Point);
         InvalidateVisual();
     }
+
+    private void HandleKeyDown(object? sender, KeyEventArgs eventArgs)
+    {
+        ChartMove? move = eventArgs.Key switch
+        {
+            Key.Left => ChartMove.PreviousPoint,
+            Key.Right => ChartMove.NextPoint,
+            Key.Up => ChartMove.PreviousSeries,
+            Key.Down => ChartMove.NextSeries,
+            Key.Home => ChartMove.FirstPoint,
+            Key.End => ChartMove.LastPoint,
+            _ => null
+        };
+        if (eventArgs.Key == Key.Escape && _hoveredPoint is not null)
+        {
+            _hoveredPoint = null;
+            _cursor = null;
+            AutomationProperties.SetItemStatus(this, string.Empty);
+            InvalidateVisual();
+            eventArgs.Handled = true;
+            return;
+        }
+
+        if (move is null)
+        {
+            return;
+        }
+
+        eventArgs.Handled = true;
+        _keyboardFocus = true;
+        var next = UsageChartCursor.Move(_series, _cursor, move.Value);
+        if (next is not { } cursor)
+        {
+            return;
+        }
+
+        _cursor = cursor;
+        var series = _series[cursor.Series];
+        var point = series.Points[cursor.Point];
+        _hoveredPoint = new HoveredPoint(series.Provider, point);
+        _hoveredGap = null;
+        // The announcement carries what the tooltip shows, in one sentence.
+        var provider = ProviderLabelFormatter?.Invoke(series.Provider) ?? series.Provider;
+        AutomationProperties.SetItemStatus(
+            this,
+            $"{provider}, {point.RemainingPercent}% {RemainingLabel.ToLowerInvariant()}, " +
+            FormatWeekdayDateTime(point.UpdatedAt.ToLocalTime()));
+        InvalidateVisual();
+    }
+
+    private string FormatDateShort(DateTimeOffset local) =>
+        Labels?.FormatDateShort(local) ?? local.ToString("MMM d", CultureInfo.InvariantCulture);
+
+    private string FormatWeekdayShort(DateTimeOffset local) =>
+        Labels?.FormatWeekday(local.DayOfWeek, abbreviated: true) ??
+        local.ToString("ddd", CultureInfo.InvariantCulture);
+
+    private string FormatDateTimeShort(DateTimeOffset local) =>
+        Labels?.FormatDateTimeShort(local) ?? local.ToString("MMM d · HH:mm", CultureInfo.InvariantCulture);
+
+    private string FormatWeekdayDateTime(DateTimeOffset local) =>
+        Labels?.FormatWeekdayDateTime(local) ?? local.ToString("ddd, MMM d · HH:mm", CultureInfo.InvariantCulture);
 
     private Rect GetPlotBounds() => new(
         48,
@@ -479,14 +584,8 @@ public sealed class UsageHistoryChart : Control
     private static void DrawText(DrawingContext context, string text, Point point, IBrush brush, double fontSize) =>
         context.DrawText(Text(text, fontSize, brush), point);
 
-    private IBrush ProviderColor(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => Brush(_isLight ? "#D46A45" : "#F08A66"),
-        "codex" => Brush(_isLight ? "#0F9B72" : "#4AD894"),
-        "antigravity-gemini" => Brush(_isLight ? "#5B6FEF" : "#8794FF"),
-        "antigravity-claudeandchatgpt" => Brush(_isLight ? "#9A62D7" : "#C38AF0"),
-        _ => Brush(_isLight ? "#66706A" : "#A8B1AA")
-    };
+    private IBrush ProviderColor(string provider) =>
+        ProviderStyle.AccentBrush(provider, _isLight, _isLight ? "#66706A" : "#A8B1AA");
 
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));
 

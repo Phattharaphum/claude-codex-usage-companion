@@ -468,19 +468,9 @@ public sealed record UiText(
         _ => "All"
     };
 
-    public string UsageHistoryWeeklyWindow => Language switch
-    {
-        UiLanguage.TraditionalChinese => "每週",
-        UiLanguage.SimplifiedChinese => "每周",
-        _ => "Weekly"
-    };
+    public string UsageHistoryWeeklyWindow => QuotaWeeklyLabel;
 
-    public string UsageHistoryFiveHourWindow => Language switch
-    {
-        UiLanguage.TraditionalChinese => "5 小時",
-        UiLanguage.SimplifiedChinese => "5 小时",
-        _ => "5-hour"
-    };
+    public string UsageHistoryFiveHourWindow => QuotaFiveHourLabel;
 
     public string UsageHistoryRemaining => Language switch
     {
@@ -517,14 +507,9 @@ public sealed record UiText(
         _ => "Provider"
     };
 
-    public string UsageHistoryFiveHour => "5hr";
+    public string UsageHistoryFiveHour => QuotaFiveHourLabel;
 
-    public string UsageHistoryWeek => Language switch
-    {
-        UiLanguage.TraditionalChinese => "每週",
-        UiLanguage.SimplifiedChinese => "每周",
-        _ => "Week"
-    };
+    public string UsageHistoryWeek => QuotaWeeklyLabel;
 
     public string UsageHistoryError => Language switch
     {
@@ -2317,6 +2302,192 @@ public sealed record UiText(
                 LanguageCulture())
         };
     }
+
+    // ---- Provider and history error messages -------------------------------
+    // The data clients are language-neutral and raise English text (it is also
+    // what the usage log stores). The interface translates the ones it knows at
+    // the moment it shows them, so a Chinese window does not carry English errors.
+
+    private static readonly (string English, string Traditional, string Simplified)[] KnownErrors =
+    [
+        ("Antigravity is not running. Open it to refresh usage.",
+            "Antigravity 未執行。開啟後即可更新用量。",
+            "Antigravity 未运行。打开后即可刷新用量。"),
+        ("Antigravity is still starting; its local service is not listening yet.",
+            "Antigravity 仍在啟動中，本機服務尚未開始監聽。",
+            "Antigravity 仍在启动中，本地服务尚未开始监听。"),
+        ("Antigravity rejected the local request. Restart Antigravity and try again.",
+            "Antigravity 拒絕了本機請求。請重新啟動 Antigravity 後再試。",
+            "Antigravity 拒绝了本地请求。请重新启动 Antigravity 后再试。"),
+        ("Antigravity's local service did not respond in time.",
+            "Antigravity 的本機服務未在時限內回應。",
+            "Antigravity 的本地服务未在时限内响应。"),
+        ("Antigravity's local service returned unexpected usage data.",
+            "Antigravity 的本機服務回傳了非預期的用量資料。",
+            "Antigravity 的本地服务返回了意外的用量数据。"),
+        ("Could not connect to Antigravity's local service.",
+            "無法連線到 Antigravity 的本機服務。",
+            "无法连接到 Antigravity 的本地服务。"),
+        ("Multiple Antigravity accounts are active.",
+            "有多個 Antigravity 帳號同時使用中。",
+            "有多个 Antigravity 账号同时使用中。"),
+        ("Antigravity local usage service was unavailable.",
+            "Antigravity 本機用量服務無法使用。",
+            "Antigravity 本地用量服务不可用。"),
+        ("The lsof utility is required for Antigravity local process discovery.",
+            "需要 lsof 工具才能偵測 Antigravity 本機程序。",
+            "需要 lsof 工具才能检测 Antigravity 本地进程。"),
+        ("Codex CLI was not found. Install Codex CLI or set CODEX_CLI_PATH.",
+            "找不到 Codex CLI。請安裝 Codex CLI 或設定 CODEX_CLI_PATH。",
+            "找不到 Codex CLI。请安装 Codex CLI 或设置 CODEX_CLI_PATH。"),
+        ("Codex CLI was not found. Install Codex Desktop or set CODEX_CLI_PATH.",
+            "找不到 Codex CLI。請安裝 Codex Desktop 或設定 CODEX_CLI_PATH。",
+            "找不到 Codex CLI。请安装 Codex Desktop 或设置 CODEX_CLI_PATH。"),
+        ("Codex app-server did not return rate limits.",
+            "Codex app-server 未回傳速率限制資料。",
+            "Codex app-server 未返回速率限制数据。"),
+        ("Codex app-server connection is closed.",
+            "Codex app-server 連線已關閉。",
+            "Codex app-server 连接已关闭。"),
+        ("Codex app-server output closed.",
+            "Codex app-server 輸出已關閉。",
+            "Codex app-server 输出已关闭。"),
+        ("Claude credentials not found. Run 'claude' to sign in.",
+            "找不到 Claude 憑證。請執行 'claude' 登入。",
+            "找不到 Claude 凭据。请运行 'claude' 登录。"),
+        ("Claude session expired. Run 'claude' to refresh your session.",
+            "Claude 工作階段已過期。請執行 'claude' 更新工作階段。",
+            "Claude 会话已过期。请运行 'claude' 刷新会话。"),
+        ("Claude session could not be renewed. Run 'claude' to sign in again.",
+            "無法更新 Claude 工作階段。請執行 'claude' 重新登入。",
+            "无法续期 Claude 会话。请运行 'claude' 重新登录。"),
+        ("Unable to parse Claude credentials file.",
+            "無法解析 Claude 憑證檔。",
+            "无法解析 Claude 凭据文件。"),
+        ("Claude usage is temporarily unavailable.",
+            "Claude 用量暫時無法取得。",
+            "Claude 用量暂时无法获取。"),
+        ("Usage history is available when logging format is CSV.",
+            "記錄格式為 CSV 時才能檢視用量歷史。",
+            "记录格式为 CSV 时才能查看用量历史。"),
+        ("The history file does not contain a recognized CSV header.",
+            "歷史檔案沒有可辨識的 CSV 標題列。",
+            "历史文件没有可识别的 CSV 标题行。")
+    ];
+
+    private static readonly (System.Text.RegularExpressions.Regex Pattern, string Traditional, string Simplified)[] KnownErrorPatterns =
+    [
+        (new System.Text.RegularExpressions.Regex(@"Codex app-server request (\d+) timed out after ([\d.]+) seconds\."),
+            "Codex app-server 請求 $1 在 $2 秒後逾時。",
+            "Codex app-server 请求 $1 在 $2 秒后超时。"),
+        (new System.Text.RegularExpressions.Regex(@"The request was canceled due to the configured HttpClient\.Timeout of ([\d.]+) seconds elapsing\."),
+            "請求因超過設定的逾時時間（$1 秒）而被取消。",
+            "请求因超过设定的超时时间（$1 秒）而被取消。"),
+        (new System.Text.RegularExpressions.Regex(@"Unable to read usage history: "),
+            "無法讀取用量歷史：",
+            "无法读取用量历史：")
+    ];
+
+    /// <summary>
+    /// Translates the provider and history errors the app knows into the
+    /// interface language. Anything else (a raw exception message, a server
+    /// reply) is shown as it came, since it cannot be translated reliably.
+    /// </summary>
+    public string? LocalizeError(string? message)
+    {
+        if (string.IsNullOrEmpty(message) || Language == UiLanguage.English)
+        {
+            return message;
+        }
+
+        var traditional = Language == UiLanguage.TraditionalChinese;
+        var result = message;
+        foreach (var (english, tw, cn) in KnownErrors)
+        {
+            result = result.Replace(english, traditional ? tw : cn, StringComparison.Ordinal);
+        }
+
+        foreach (var (pattern, tw, cn) in KnownErrorPatterns)
+        {
+            result = pattern.Replace(result, traditional ? tw : cn);
+        }
+
+        return result;
+    }
+
+    // ---- Dates and times in the interface language ------------------------
+    // Written by hand rather than through CultureInfo: month and weekday names
+    // come from the system's ICU data, which minimal installs do not have, and
+    // the windows would then show English names inside a Chinese interface.
+    // The callers pass local times.
+
+    private static readonly string[] EnglishWeekdays =
+        ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+    private static readonly string[] EnglishWeekdaysShort =
+        ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    private static readonly string[] ChineseDigits = ["日", "一", "二", "三", "四", "五", "六"];
+
+    public string FormatWeekday(DayOfWeek day, bool abbreviated) => Language switch
+    {
+        UiLanguage.TraditionalChinese =>
+            (abbreviated ? "週" : "星期") + ChineseDigits[(int)day],
+        UiLanguage.SimplifiedChinese =>
+            (abbreviated ? "周" : "星期") + ChineseDigits[(int)day],
+        _ => abbreviated ? EnglishWeekdaysShort[(int)day] : EnglishWeekdays[(int)day]
+    };
+
+    /// <summary>The calendar date with its year: "Oct 11, 2026" or "2026年10月11日".</summary>
+    public string FormatDate(DateTimeOffset value) => Language == UiLanguage.English
+        ? value.ToString("MMM d, yyyy", CultureInfo.GetCultureInfo("en-US"))
+        : $"{value.Year}年{value.Month}月{value.Day}日";
+
+    /// <summary>"Sunday, Oct 11, 2026" or "2026年10月11日 星期日".</summary>
+    public string FormatWeekdayDate(DateTimeOffset value) => Language == UiLanguage.English
+        ? $"{FormatWeekday(value.DayOfWeek, abbreviated: false)}, {FormatDate(value)}"
+        : $"{FormatDate(value)} {FormatWeekday(value.DayOfWeek, abbreviated: false)}";
+
+    /// <summary>"Oct 11 · 16:02" or "10月11日 16:02".</summary>
+    public string FormatDateTimeShort(DateTimeOffset value) => Language == UiLanguage.English
+        ? $"{FormatMonthDay(value)} · {value.ToString("HH:mm", CultureInfo.InvariantCulture)}"
+        : $"{FormatMonthDay(value)} {value.ToString("HH:mm", CultureInfo.InvariantCulture)}";
+
+    /// <summary>"Sun, Oct 11 · 16:02" or "10月11日 週日 16:02".</summary>
+    public string FormatWeekdayDateTime(DateTimeOffset value) => Language == UiLanguage.English
+        ? $"{FormatWeekday(value.DayOfWeek, abbreviated: true)}, {FormatMonthDay(value)} · {value.ToString("HH:mm", CultureInfo.InvariantCulture)}"
+        : $"{FormatMonthDay(value)} {FormatWeekday(value.DayOfWeek, abbreviated: true)} {value.ToString("HH:mm", CultureInfo.InvariantCulture)}";
+
+    /// <summary>Public form of the month-and-day text used on chart axes.</summary>
+    public string FormatDateShort(DateTimeOffset value) => FormatMonthDay(value);
+
+    /// <summary>A length of time in the interface language: "2d 5h" or "2天 5小時".</summary>
+    public string FormatDuration(TimeSpan duration)
+    {
+        var days = (int)duration.TotalDays;
+        var hours = duration.Hours;
+        var minutes = Math.Max(0, duration.Minutes);
+        return Language switch
+        {
+            UiLanguage.TraditionalChinese =>
+                days >= 1 ? $"{days}天 {hours}小時"
+                : duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}小時 {minutes}分"
+                : $"{minutes}分",
+            UiLanguage.SimplifiedChinese =>
+                days >= 1 ? $"{days}天 {hours}小时"
+                : duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}小时 {minutes}分"
+                : $"{minutes}分",
+            _ => days >= 1 ? $"{days}d {hours}h"
+                : duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}h {minutes}m"
+                : $"{minutes}m"
+        };
+    }
+
+    /// <summary>One day reads as a weekday date; a span reads as "start — end".</summary>
+    public string FormatPeriod(DateTimeOffset start, DateTimeOffset end) =>
+        start.Date == end.Date
+            ? FormatWeekdayDate(start)
+            : $"{FormatDate(start)} — {FormatDate(end)}";
 
     private string FormatMonthDay(DateTimeOffset value)
     {

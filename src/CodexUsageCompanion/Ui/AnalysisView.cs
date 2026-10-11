@@ -36,6 +36,8 @@ public sealed class AnalysisView : UserControl
         _bodyHost = new Border();
         Content = new ScrollViewer
         {
+            Focusable = true,
+            IsTabStop = true,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = _bodyHost
@@ -62,8 +64,8 @@ public sealed class AnalysisView : UserControl
     private void RebuildBody()
     {
         var period = _start.ToLocalTime().Date == _end.ToLocalTime().Date
-            ? $"{_start.ToLocalTime():dddd, MMM d, yyyy}  ·  {_start.ToLocalTime():HH:mm}–{_end.ToLocalTime():HH:mm}"
-            : $"{_start.ToLocalTime():MMM d, yyyy HH:mm} — {_end.ToLocalTime():MMM d, yyyy HH:mm}";
+            ? $"{_text.FormatWeekdayDate(_start.ToLocalTime())}  ·  {_start.ToLocalTime():HH:mm}–{_end.ToLocalTime():HH:mm}"
+            : $"{_text.FormatDate(_start.ToLocalTime())} {_start.ToLocalTime():HH:mm} — {_text.FormatDate(_end.ToLocalTime())} {_end.ToLocalTime():HH:mm}";
 
         var overviewPill = new Border
         {
@@ -124,7 +126,7 @@ public sealed class AnalysisView : UserControl
                 }
             }
         };
-        ToolTip.SetTip(copyButton, _text.UsageAnalysisCopyReport);
+        A11y.Tip(copyButton, _text.UsageAnalysisCopyReport);
         copyButton.Click += async (_, _) => await CopyReportToClipboardAsync(copyButton);
 
         var heroActions = new StackPanel
@@ -169,10 +171,10 @@ public sealed class AnalysisView : UserControl
 
         var quality = _summary.Quality;
         var coverageAccent = quality.CoveragePercent >= 90
-            ? (_isLightTheme ? "#0F8A5F" : "#4AD894")
+            ? (StatusStyle.Good(_isLightTheme))
             : quality.CoveragePercent >= 60
-                ? (_isLightTheme ? "#D97706" : "#FBBF24")
-                : (_isLightTheme ? "#C2410C" : "#FB923C");
+                ? (StatusStyle.Caution(_isLightTheme))
+                : (StatusStyle.Warn(_isLightTheme));
         var rateCard = MetricCard(
             L("Data coverage", "資料涵蓋率", "数据覆盖率"),
             $"{quality.CoveragePercent:0}%",
@@ -184,7 +186,7 @@ public sealed class AnalysisView : UserControl
                     $"{quality.GapCount} 处中断 · {FormatDuration(_summary.UnobservedPerProvider)} 未记录"),
             coverageAccent,
             "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z");
-        ToolTip.SetTip(rateCard, L(
+        A11y.Tip(rateCard, L(
             "How much of the observed span is backed by samples. While the app is not running nothing is recorded, so quota can change unobserved; consumption and reset figures only reflect what was seen.",
             "觀察期間中有多少時間有取樣記錄。程式未執行時不會記錄，額度可能在這段時間內變動；用量與重置數據只反映實際觀察到的部分。",
             "观察期间中有多少时间有采样记录。程序未运行时不会记录，额度可能在这段时间内变动；用量与重置数据只反映实际观察到的部分。"));
@@ -206,7 +208,7 @@ public sealed class AnalysisView : UserControl
             RateDetail(_summary.FiveHour),
             _palette.Orange,
             "M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z");
-        ToolTip.SetTip(fiveHourCard, ConsumptionTooltip(_summary.FiveHour, "5-hour", "5 小時", "5 小时"));
+        A11y.Tip(fiveHourCard, ConsumptionTooltip(_summary.FiveHour, "5-hour", "5 小時", "5 小时"));
         Grid.SetColumn(fiveHourCard, 2);
         metricGrid.Children.Add(fiveHourCard);
 
@@ -216,7 +218,7 @@ public sealed class AnalysisView : UserControl
             RateDetail(_summary.Weekly),
             _palette.Purple,
             "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z");
-        ToolTip.SetTip(weeklyMetricCard, ConsumptionTooltip(_summary.Weekly, "weekly", "每週", "每周"));
+        A11y.Tip(weeklyMetricCard, ConsumptionTooltip(_summary.Weekly, "weekly", "每週", "每周"));
         Grid.SetColumn(weeklyMetricCard, 3);
         metricGrid.Children.Add(weeklyMetricCard);
 
@@ -227,7 +229,7 @@ public sealed class AnalysisView : UserControl
         };
         detailGrid.Children.Add(WindowDetailCard(
             UsageHistoryQuotaWindow.FiveHour,
-            L("5-hour window", "5 小時時段", "5 小时时段"), "5 HR", _palette.Orange));
+            L("5-hour window", "5 小時時段", "5 小时时段"), _text.QuotaFiveHourLabel.ToUpperInvariant(), _palette.Orange));
         var weeklyCard = WindowDetailCard(
             UsageHistoryQuotaWindow.Weekly,
             L("Weekly window", "每週時段", "每周时段"),
@@ -423,7 +425,7 @@ public sealed class AnalysisView : UserControl
             ratioDesc);
 
         // Callout 3: Replenishment & Resets
-        var resetAccent = _resetEvents.Count > 0 ? (_isLightTheme ? "#D97706" : "#FBBF24") : _palette.Secondary;
+        var resetAccent = _resetEvents.Count > 0 ? (StatusStyle.Caution(_isLightTheme)) : _palette.Secondary;
         var measuredResets = _resetEvents.Count(item => item.Quality == UsageResetQuality.Measured);
         var unverifiedResets = _resetEvents.Count - measuredResets;
         var resetDesc = _resetEvents.Count == 0
@@ -515,7 +517,7 @@ public sealed class AnalysisView : UserControl
             Child = new TextBlock
             {
                 Text = badgeText,
-                FontSize = 9.5,
+                FontSize = 10,
                 FontWeight = FontWeight.Bold,
                 Foreground = Brush(badgeFg),
                 VerticalAlignment = VerticalAlignment.Center
@@ -594,26 +596,26 @@ public sealed class AnalysisView : UserControl
         {
             return (
                 _text.UsageHistoryBurnRateIdle,
-                _isLightTheme ? "#64748B" : "#94A3B8",
+                StatusStyle.Neutral(_isLightTheme),
                 L("No measurable 5-hour quota decrease in this observation span.", "在此觀察期間未測得 5 小時額度下降。", "在此观察期间未测得 5 小时额度下降。"));
         }
         if (rate < 2.0)
         {
             return (
                 _text.UsageHistoryBurnRateLight,
-                _isLightTheme ? "#0F8A5F" : "#4AD894",
+                StatusStyle.Good(_isLightTheme),
                 L("Light burn rate; quota is conserved and sustainable for prolonged sessions.", "用量消耗偏低；額度節省且適合長時間持續開發。", "用量消耗较低；额度节省且适合长时间持续开发。"));
         }
         if (rate < 8.0)
         {
             return (
                 _text.UsageHistoryBurnRateModerate,
-                _isLightTheme ? "#D97706" : "#FBBF24",
+                StatusStyle.Caution(_isLightTheme),
                 L("Moderate steady pace; active development with balanced quota usage.", "穩健中等的消耗速度；處於活躍開發且額度使用均衡。", "稳健中等的消耗速度；处于活跃开发且额度使用均衡。"));
         }
         return (
             _text.UsageHistoryBurnRateHigh,
-            _isLightTheme ? "#DC2626" : "#F87171",
+            StatusStyle.Critical(_isLightTheme),
             L("High quota consumption velocity; consider pacing heavy prompt executions.", "額度消耗速度偏高；建議留意高負載呼叫以防過早耗盡。", "额度消耗速度较高；建议留意高负载调用以防过早耗尽。"));
     }
 
@@ -692,8 +694,8 @@ public sealed class AnalysisView : UserControl
     private string BuildMarkdownReport()
     {
         var period = _start.ToLocalTime().Date == _end.ToLocalTime().Date
-            ? $"{_start.ToLocalTime():dddd, MMM d, yyyy} · {_start.ToLocalTime():HH:mm}–{_end.ToLocalTime():HH:mm}"
-            : $"{_start.ToLocalTime():MMM d, yyyy HH:mm} — {_end.ToLocalTime():MMM d, yyyy HH:mm}";
+            ? $"{_text.FormatWeekdayDate(_start.ToLocalTime())} · {_start.ToLocalTime():HH:mm}–{_end.ToLocalTime():HH:mm}"
+            : $"{_text.FormatDate(_start.ToLocalTime())} {_start.ToLocalTime():HH:mm} — {_text.FormatDate(_end.ToLocalTime())} {_end.ToLocalTime():HH:mm}";
 
         var ratio = _summary.Weekly.ConsumedPercent <= 0
             ? "—"
@@ -805,13 +807,13 @@ public sealed class AnalysisView : UserControl
             null when metrics.LastRemainingPercent == 0 =>
                 (_text.UsageAnalysisRunwayExhausted, _palette.Error),
             null when metrics.ConsumptionPerHour <= 0 && metrics.LastRemainingPercent > 0 =>
-                (_text.UsageAnalysisRunwayStable, _isLightTheme ? "#0F8A5F" : "#4AD894"),
+                (_text.UsageAnalysisRunwayStable, StatusStyle.Good(_isLightTheme)),
             null =>
                 (_text.UsageAnalysisRunwayNoData, _palette.Secondary),
             >= 12 =>
-                (_text.UsageAnalysisRunwaySafe, _isLightTheme ? "#0F8A5F" : "#4AD894"),
+                (_text.UsageAnalysisRunwaySafe, StatusStyle.Good(_isLightTheme)),
             >= 4 =>
-                (_text.UsageAnalysisRunwayModerate, _isLightTheme ? "#D97706" : "#FBBF24"),
+                (_text.UsageAnalysisRunwayModerate, StatusStyle.Caution(_isLightTheme)),
             _ =>
                 (_text.UsageAnalysisRunwayUrgent, _palette.Error)
         };
@@ -842,7 +844,7 @@ public sealed class AnalysisView : UserControl
                     new TextBlock
                     {
                         Text = runwayStatusText,
-                        FontSize = 9.5,
+                        FontSize = 10,
                         FontWeight = FontWeight.Bold,
                         Foreground = Brush(runwayStatusColor),
                         VerticalAlignment = VerticalAlignment.Center
@@ -884,12 +886,12 @@ public sealed class AnalysisView : UserControl
             if (delta < 0)
             {
                 deltaText = $"↓ {Math.Abs(delta)}% {_text.UsageAnalysisDeltaUsed}";
-                deltaColor = Math.Abs(delta) >= 20 ? _palette.Error : (_isLightTheme ? "#D97706" : "#FBBF24");
+                deltaColor = Math.Abs(delta) >= 20 ? _palette.Error : (StatusStyle.Caution(_isLightTheme));
             }
             else if (delta > 0)
             {
                 deltaText = $"↑ +{delta}% {_text.UsageAnalysisDeltaRestored}";
-                deltaColor = _isLightTheme ? "#0F8A5F" : "#4AD894";
+                deltaColor = StatusStyle.Good(_isLightTheme);
             }
             else
             {
@@ -908,7 +910,7 @@ public sealed class AnalysisView : UserControl
                 Child = new TextBlock
                 {
                     Text = deltaText,
-                    FontSize = 9,
+                    FontSize = 10,
                     FontWeight = FontWeight.Bold,
                     Foreground = Brush(deltaColor),
                     VerticalAlignment = VerticalAlignment.Center
@@ -976,7 +978,7 @@ public sealed class AnalysisView : UserControl
                 Child = new TextBlock
                 {
                     Text = _text.UsageAnalysisCycleReset,
-                    FontSize = 8.5,
+                    FontSize = 10,
                     FontWeight = FontWeight.Bold,
                     Foreground = Brush(accent),
                     VerticalAlignment = VerticalAlignment.Center
@@ -995,7 +997,7 @@ public sealed class AnalysisView : UserControl
             Child = new TextBlock
             {
                 Text = badge,
-                FontSize = 9,
+                FontSize = 10,
                 FontWeight = FontWeight.Bold,
                 LetterSpacing = 0.4,
                 Foreground = Brush(accent),
@@ -1085,7 +1087,7 @@ public sealed class AnalysisView : UserControl
         var remaining = lowest.For(window).LastRemainingPercent!.Value;
         var color = remaining < 20
             ? _palette.Error
-            : remaining < 50 ? (_isLightTheme ? "#D97706" : "#FBBF24") : (_isLightTheme ? "#0F8A5F" : "#4AD894");
+            : remaining < 50 ? (StatusStyle.Caution(_isLightTheme)) : (StatusStyle.Good(_isLightTheme));
         return new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1174,7 +1176,7 @@ public sealed class AnalysisView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                ValuePill("5 HR", FormatQuotaMultiple(summary.FiveHour.EquivalentWindows), _palette.Orange),
+                ValuePill(_text.QuotaFiveHourLabel.ToUpperInvariant(), FormatQuotaMultiple(summary.FiveHour.EquivalentWindows), _palette.Orange),
                 ValuePill(_text.UsageHistoryWeek.ToUpperInvariant(), FormatQuotaMultiple(summary.Weekly.EquivalentWindows), _palette.Purple)
             }
         };
@@ -1208,7 +1210,7 @@ public sealed class AnalysisView : UserControl
                 new TextBlock
                 {
                     Text = label,
-                    FontSize = 8.5,
+                    FontSize = 10,
                     FontWeight = FontWeight.Bold,
                     Foreground = Brush(accent),
                     VerticalAlignment = VerticalAlignment.Center
@@ -1230,7 +1232,7 @@ public sealed class AnalysisView : UserControl
         var labelText = new TextBlock
         {
             Text = label.ToUpperInvariant(),
-            FontSize = 9.5,
+            FontSize = 10,
             FontWeight = FontWeight.Bold,
             LetterSpacing = 0.4,
             Foreground = Brush(_palette.Secondary),
@@ -1291,7 +1293,7 @@ public sealed class AnalysisView : UserControl
         var detailText = new TextBlock
         {
             Text = detail,
-            FontSize = 9.5,
+            FontSize = 10,
             FontWeight = FontWeight.Medium,
             Foreground = Brush(_palette.Secondary),
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1354,6 +1356,7 @@ public sealed class AnalysisView : UserControl
             }
         };
 
+        A11y.Name(card, $"{label}: {value}, {detail}");
         return card;
     }
 
@@ -1419,14 +1422,14 @@ public sealed class AnalysisView : UserControl
                 new TextBlock
                 {
                     Text = "0%",
-                    FontSize = 8.5,
+                    FontSize = 10,
                     Foreground = Brush(_palette.Secondary),
                     HorizontalAlignment = HorizontalAlignment.Left
                 },
                 new TextBlock
                 {
                     Text = "100%",
-                    FontSize = 8.5,
+                    FontSize = 10,
                     Foreground = Brush(_palette.Secondary),
                     HorizontalAlignment = HorizontalAlignment.Right
                 }
@@ -1528,11 +1531,7 @@ public sealed class AnalysisView : UserControl
         _ => english
     };
 
-    private static string FormatDuration(TimeSpan duration) => duration.TotalDays >= 1
-        ? $"{(int)duration.TotalDays}d {duration.Hours}h"
-        : duration.TotalHours >= 1
-            ? $"{(int)duration.TotalHours}h {duration.Minutes}m"
-            : $"{Math.Max(0, duration.Minutes)}m";
+    private string FormatDuration(TimeSpan duration) => _text.FormatDuration(duration);
 
     private static string FormatPercent(double value) => $"{value:#,##0.#}%";
 
@@ -1570,41 +1569,13 @@ public sealed class AnalysisView : UserControl
 
     private static string Percent(int? value) => value is null ? "—" : $"{value}%";
 
-    private static string DisplayProvider(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => "Claude",
-        "codex" => "Codex",
-        "antigravity-gemini" => "Antigravity · Gemini",
-        "antigravity-claudeandchatgpt" => "Antigravity · Claude + ChatGPT",
-        _ => provider
-    };
+    private static string DisplayProvider(string provider) => ProviderStyle.DisplayName(provider);
 
-    private static int ProviderOrder(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => 0,
-        "codex" => 1,
-        "antigravity-gemini" => 2,
-        "antigravity-claudeandchatgpt" => 3,
-        _ => 4
-    };
+    private static int ProviderOrder(string provider) => ProviderStyle.Order(provider);
 
-    private static string ProviderIconGeometry(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => "M12 2L13.8 8.7L20.5 7L16.2 12L21.8 15.2L15.3 16.5L16.8 23L12 18.5L7.2 23L8.7 16.5L2.2 15.2L7.8 12L3.5 7L10.2 8.7L12 2Z",
-        "codex" => "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM12 4C16.42 4 20 7.58 20 12C20 13.91 19.33 15.66 18.21 17.03L6.97 5.79C8.34 4.67 10.09 4 12 4ZM4 12C4 10.09 4.67 8.34 5.79 6.97L17.03 18.21C15.66 19.33 13.91 20 12 20C7.58 20 4 16.42 4 12Z",
-        "antigravity-gemini" => "M12 2L13.7 7.3L19 9L13.7 10.7L12 16L10.3 10.7L5 9L10.3 7.3ZM19 15L20 18L23 19L20 20L19 23L18 20L15 19L18 18Z",
-        "antigravity-claudeandchatgpt" => "M12 2L14.5 8.5L21 9.5L16 14L17.5 20.5L12 17L6.5 20.5L8 14L3 9.5L9.5 8.5L12 2Z",
-        _ => "M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"
-    };
+    private static string ProviderIconGeometry(string provider) => ProviderStyle.IconGeometry(provider);
 
-    private string ProviderColor(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => _isLightTheme ? "#C65D3B" : "#F08A66",
-        "codex" => _isLightTheme ? "#0F8A68" : "#4AD894",
-        "antigravity-gemini" => _isLightTheme ? "#5368DC" : "#8794FF",
-        "antigravity-claudeandchatgpt" => _isLightTheme ? "#8955C5" : "#C38AF0",
-        _ => _palette.Secondary
-    };
+    private string ProviderColor(string provider) => ProviderStyle.Accent(provider, _isLightTheme, _palette.Secondary);
 
     private static SolidColorBrush Tint(string color, byte alpha)
     {
@@ -1614,7 +1585,7 @@ public sealed class AnalysisView : UserControl
 
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));
 
-    private sealed record AnalysisPalette(
+    internal sealed record AnalysisPalette(
         string Root,
         string Surface,
         string SurfaceHover,
@@ -1642,10 +1613,10 @@ public sealed class AnalysisView : UserControl
         public static AnalysisPalette Light { get; } = new(
             "#FFF2F5F3", "#FFFFFFFF", "#FFF4F8F6", "#FFF7F9F7",
             "#FFFFFFFF", "#FFEDF8F3", "#FFDCE4DF", "#FFCAD6CE",
-            "#FF1F2822", "#FF67736B", "#FF0F8A68", "#FFE5F5EE",
+            "#FF1F2822", "#FF67736B", "#FF0B7A5A", "#FFE5F5EE",
             "#FFA8D8C5", "#FFEEF7F2", "#FFC8E3D5", "#FF176345",
             "#FF385447", "#FFDDE4DF", "#FFB13A32", "#FF0F8A5F",
-            "#FF5368DC", "#FFD46A45", "#FF8A5CD7");
+            "#FF5368DC", CadenceStyle.FiveHourArgb(true), CadenceStyle.WeeklyArgb(true));
 
         public static AnalysisPalette Dark { get; } = new(
             "#FF151816", "#FF202421", "#FF29352F", "#FF292E2A",
@@ -1653,6 +1624,6 @@ public sealed class AnalysisView : UserControl
             "#FFF0F4F1", "#FFA9B3AB", "#FF4AD894", "#FF1D392E",
             "#FF376D58", "#FF1C3028", "#FF315C49", "#FF72E0A9",
             "#FFC0D4C7", "#FF3A413B", "#FFFF8A80", "#FF4AD894",
-            "#FF8794FF", "#FFFF9847", "#FFC38AF0");
+            "#FF8794FF", CadenceStyle.FiveHourArgb(false), CadenceStyle.WeeklyArgb(false));
     }
 }

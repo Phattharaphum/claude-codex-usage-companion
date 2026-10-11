@@ -75,7 +75,7 @@ public sealed class ShortcutsWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center
         };
-        ToolTip.SetTip(_closeButton, text.CloseAction);
+        A11y.Tip(_closeButton, text.CloseAction);
         _closeButton.Click += (_, _) => Close();
         _closeButton.PointerEntered += (_, _) => ApplyCloseTheme(hovered: true);
         _closeButton.PointerExited += (_, _) => ApplyCloseTheme(hovered: false);
@@ -299,7 +299,7 @@ public sealed class ShortcutsWindow : Window
 
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));
 
-    private sealed record ShortcutsPalette(
+    internal sealed record ShortcutsPalette(
         string Root,
         string Surface,
         string Border,
@@ -315,7 +315,7 @@ public sealed class ShortcutsWindow : Window
     {
         public static ShortcutsPalette Light { get; } = new(
             "#FFF2F5F3", "#FFFFFFFF", "#FFDCE4DF", "#FFCAD6CE",
-            "#FF1F2822", "#FF67736B", "#FF0F8A68",
+            "#FF1F2822", "#FF67736B", "#FF0B7A5A",
             "#FFF3F6F4", "#FFC4D0C8", "#FFB13A32", "#FFFFE9E7", "#FFFFC8C3");
 
         public static ShortcutsPalette Dark { get; } = new(

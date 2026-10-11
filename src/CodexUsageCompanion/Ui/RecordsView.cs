@@ -73,7 +73,7 @@ public sealed class RecordsView : UserControl
         };
         _changedOnly.IsCheckedChanged += (_, _) => ApplyFilters();
         _errorsOnly.IsCheckedChanged += (_, _) => ApplyFilters();
-        ToolTip.SetTip(
+        A11y.Tip(
             _changedOnly,
             L("Hide samples identical to the provider's previous one", "隱藏與該來源上一筆相同的樣本", "隐藏与该来源上一条相同的样本"));
 
@@ -152,6 +152,9 @@ public sealed class RecordsView : UserControl
         _showMoreButton.Click += (_, _) => ShowMore();
         var rowsScroll = new ScrollViewer
         {
+            // Focusable so PageUp/PageDown and the arrow keys scroll the table.
+            Focusable = true,
+            IsTabStop = true,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = new StackPanel
@@ -404,7 +407,7 @@ public sealed class RecordsView : UserControl
             var text = new TextBlock
             {
                 Text = label.ToUpperInvariant(),
-                FontSize = 9,
+                FontSize = 10,
                 FontWeight = FontWeight.Bold,
                 LetterSpacing = 0.35,
                 VerticalAlignment = VerticalAlignment.Center
@@ -489,7 +492,7 @@ public sealed class RecordsView : UserControl
         var block = new TextBlock
         {
             Text = text.ToUpperInvariant(),
-            FontSize = 9.5,
+            FontSize = 10,
             FontWeight = FontWeight.Bold,
             LetterSpacing = 0.5,
             Foreground = Brush(_palette.Secondary),
@@ -535,7 +538,7 @@ public sealed class RecordsView : UserControl
                 Margin = new Thickness(0, 0, 8, 0),
                 Child = new TextBlock
                 {
-                    Text = entry.Error,
+                    Text = _text.LocalizeError(entry.Error),
                     Foreground = Brush(_palette.Error),
                     FontSize = 11,
                     TextTrimming = TextTrimming.CharacterEllipsis,
@@ -557,7 +560,23 @@ public sealed class RecordsView : UserControl
         }
 
         row.Child = grid;
+        A11y.Name(row, RowSummary(entry, success));
         return row;
+    }
+
+    // One sentence per row, so a screen reader does not read cell by cell.
+    private string RowSummary(UsageHistoryEntry entry, bool success)
+    {
+        var when = $"{_text.FormatDate(entry.UpdatedAt.ToLocalTime())} {entry.UpdatedAt.ToLocalTime():HH:mm:ss}";
+        var provider = DisplayProvider(entry.Provider);
+        if (!success)
+        {
+            return $"{when}, {provider}, {_text.UsageHistoryError}: {_text.LocalizeError(entry.Error)}";
+        }
+
+        string Percent(int? value) => value is null ? "—" : $"{value}%";
+        return $"{when}, {provider}, {_text.QuotaFiveHourLabel} {Percent(entry.FiveHourRemainingPercent)}, " +
+               $"{_text.QuotaWeeklyLabel} {Percent(entry.WeeklyRemainingPercent)}";
     }
 
     private Control CreateTimestampCell(DateTimeOffset updatedAt)
@@ -571,7 +590,7 @@ public sealed class RecordsView : UserControl
             {
                 new TextBlock
                 {
-                    Text = local.ToString("MMM d, yyyy", CultureInfo.CurrentCulture),
+                    Text = _text.FormatDate(local),
                     FontSize = 11.5,
                     FontWeight = FontWeight.SemiBold,
                     Foreground = Brush(_palette.Primary)
@@ -631,7 +650,7 @@ public sealed class RecordsView : UserControl
             Text = resetAt is null
                 ? _text.ResetUnavailable
                 : _text.FormatUsageHistoryReset(resetAt.Value.ToLocalTime()),
-            FontSize = 9.5,
+            FontSize = 10,
             Foreground = Brush(_palette.Secondary),
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextAlignment = TextAlignment.Right,
@@ -673,14 +692,7 @@ public sealed class RecordsView : UserControl
 
     private static ColumnDefinitions TableColumns() => new("170,220,*,*");
 
-    private static string DisplayProvider(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => "Claude",
-        "codex" => "Codex",
-        "antigravity-gemini" => "Antigravity · Gemini",
-        "antigravity-claudeandchatgpt" => "Antigravity · Claude + ChatGPT",
-        _ => provider
-    };
+    private static string DisplayProvider(string provider) => ProviderStyle.DisplayName(provider);
 
     private string SignalColor(int? remainingPercent) => (remainingPercent ?? 0) switch
     {
@@ -690,14 +702,7 @@ public sealed class RecordsView : UserControl
         _ => _palette.Green
     };
 
-    private string ProviderColor(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => _isLightTheme ? "#C65D3B" : "#F08A66",
-        "codex" => _isLightTheme ? "#0F8A68" : "#4AD894",
-        "antigravity-gemini" => _isLightTheme ? "#5368DC" : "#8794FF",
-        "antigravity-claudeandchatgpt" => _isLightTheme ? "#8955C5" : "#C38AF0",
-        _ => _palette.Secondary
-    };
+    private string ProviderColor(string provider) => ProviderStyle.Accent(provider, _isLightTheme, _palette.Secondary);
 
     private static SolidColorBrush Tint(string color, byte alpha)
     {
@@ -707,7 +712,7 @@ public sealed class RecordsView : UserControl
 
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));
 
-    private sealed record TimelinePalette(
+    internal sealed record TimelinePalette(
         string Root,
         string Surface,
         string Soft,
@@ -736,7 +741,7 @@ public sealed class RecordsView : UserControl
         public static TimelinePalette Light { get; } = new(
             "#FFF2F5F3", "#FFFFFFFF", "#FFF7F9F7", "#FFFFFFFF", "#FFEDF8F3",
             "#FFFFFFFF", "#FFFAFBFA", "#FFF1F7F4", "#FFDCE4DF", "#FFCAD6CE",
-            "#FF1F2822", "#FF67736B", "#FF0F8A68", "#FFE5F5EE", "#FFA8D8C5",
+            "#FF1F2822", "#FF67736B", "#FF0B7A5A", "#FFE5F5EE", "#FFA8D8C5",
             "#FFDDE4DF", "#FFB13A32", "#FFFFF3F1", "#FFFFE8E5", "#FFF1C4BF",
             "#FF0F8A5F", "#FFA98700", "#FFD97706", "#FFD84A42");
 

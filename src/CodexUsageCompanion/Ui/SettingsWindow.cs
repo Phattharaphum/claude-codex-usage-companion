@@ -51,7 +51,7 @@ public sealed class SettingsWindow : Window
 
     private sealed record SettingRowInfo(string Text);
 
-    private sealed record SettingsPalette(
+    internal sealed record SettingsPalette(
         IBrush Window,
         IBrush Sidebar,
         IBrush SidebarBorder,
@@ -83,7 +83,7 @@ public sealed class SettingsWindow : Window
             Brush("#FFF6F7F9"), Brush("#FFEEF1F4"), Brush("#FFE1E5EA"),
             Brush("#FFFFFFFF"), Brush("#FFE1E5EA"), Brush("#FFEDF0F3"),
             Brush("#FF1B1F23"), Brush("#FF5B646D"),
-            Brush("#FF12805A"), Brush("#FFDDF1E9"), Brush("#FF14865F"),
+            Brush("#FF0E7452"), Brush("#FFDDF1E9"), Brush("#FF14865F"),
             Brush("#FFFFFFFF"), Brush("#FFD3D9DF"),
             Color.Parse("#FFFFF8E1"), Color.Parse("#FFF3DC8A"), Brush("#FF8A6500"));
 
@@ -1044,7 +1044,7 @@ public sealed class SettingsWindow : Window
         {
             var link = CreateSecondaryButton(label + "  ↗");
             link.Margin = new Thickness(0, 0, 8, 8);
-            ToolTip.SetTip(link, url);
+            A11y.Tip(link, url);
             link.Click += async (_, _) => await OpenUrlAsync(url);
             linksWrap.Children.Add(link);
         }
@@ -1182,7 +1182,7 @@ public sealed class SettingsWindow : Window
                     Tag = pos
                 };
 
-                ToolTip.SetTip(tile, _text.FormatWindowPosition(pos));
+                A11y.Tip(tile, _text.FormatWindowPosition(pos));
                 AutomationProperties.SetName(tile, _text.FormatWindowPosition(pos));
                 tile.Click += (_, _) =>
                 {
@@ -1391,7 +1391,7 @@ public sealed class SettingsWindow : Window
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
             _presetChips.Add(chip);
-            ToolTip.SetTip(chip, preset);
+            A11y.Tip(chip, preset);
             chip.Click += (_, _) =>
             {
                 targetComboBox.SelectedItem = preset;
@@ -2474,7 +2474,7 @@ public sealed class SettingsWindow : Window
         _clearHistoryButton.IsEnabled = info is not null;
         var directory = System.IO.Path.GetDirectoryName(path);
         _openFolderButton.IsEnabled = !string.IsNullOrEmpty(directory) && System.IO.Directory.Exists(directory);
-        ToolTip.SetTip(_historyFileInfo, path);
+        A11y.Tip(_historyFileInfo, path);
     }
 
     // Size and record count without parsing: records are lines, less the CSV header.

@@ -51,7 +51,7 @@ public sealed class EfficiencyView : UserControl
     {
         _text = text;
         _kindSelector = Selector(
-            new[] { L("All resets", "所有重置", "所有重置"), L("5-hour", "5 小時", "5 小时"), text.UsageHistoryWeek },
+            new[] { L("All resets", "所有重置", "所有重置"), text.QuotaFiveHourLabel, text.QuotaWeeklyLabel },
             0, 140);
 
         var helpIcon = new PathIcon
@@ -327,14 +327,14 @@ public sealed class EfficiencyView : UserControl
             L($"of {events.Count:N0} detected", $"共偵測到 {events.Count:N0} 次", $"共检测到 {events.Count:N0} 次"),
             _palette.Blue));
         _summary.Children.Add(SummaryCard(
-            L("5hr utilization", "5 小時使用率", "5 小时使用率"),
+            L("5-hour utilization", "5 小時使用率", "5 小时使用率"),
             AveragePercent(fiveHourUsed),
             fiveHourUsed.Length == 0
                 ? L("No measured cycles", "沒有已量測週期", "没有已测量周期")
                 : L("Higher means less wasted", "越高代表浪費越少", "越高代表浪费越少"),
             _palette.Orange));
         _summary.Children.Add(SummaryCard(
-            L("Week utilization", "每週使用率", "每周使用率"),
+            L("Weekly utilization", "每週使用率", "每周使用率"),
             AveragePercent(weeklyUsed),
             weeklyUsed.Length == 0
                 ? L("No measured cycles", "沒有已量測週期", "没有已测量周期")
@@ -398,14 +398,20 @@ public sealed class EfficiencyView : UserControl
     {
         var providerAccent = ProviderColor(item.Provider);
         var provider = Pill(DisplayProvider(item.Provider), providerAccent);
+        // The kind pill wears its window's colour: amber for 5-hour, blue for weekly.
         var kind = Pill(
             item.Kind switch
             {
-                UsageResetKind.FiveHour => L("5hr reset", "5 小時重置", "5 小时重置"),
-                UsageResetKind.Weekly => L("Week reset", "每週重置", "每周重置"),
-                _ => L("5hr + week reset", "5 小時 + 每週重置", "5 小时 + 每周重置")
+                UsageResetKind.FiveHour => L("5-hour reset", "5 小時重置", "5 小时重置"),
+                UsageResetKind.Weekly => L("Weekly reset", "每週重置", "每周重置"),
+                _ => L("5-hour + weekly reset", "5 小時 + 每週重置", "5 小时 + 每周重置")
             },
-            _palette.KindAccent);
+            item.Kind switch
+            {
+                UsageResetKind.FiveHour => _palette.Orange,
+                UsageResetKind.Weekly => _palette.Purple,
+                _ => _palette.Accent
+            });
         var quality = QualityPill(item);
         var badges = new StackPanel
         {
@@ -416,7 +422,7 @@ public sealed class EfficiencyView : UserControl
         };
         var time = new TextBlock
         {
-            Text = item.ObservedAt.ToLocalTime().ToString("ddd, MMM d · HH:mm", CultureInfo.CurrentCulture),
+            Text = _text.FormatWeekdayDateTime(item.ObservedAt.ToLocalTime()),
             FontSize = 13,
             FontWeight = FontWeight.Bold,
             Foreground = Brush(_palette.Primary)
@@ -424,9 +430,9 @@ public sealed class EfficiencyView : UserControl
         var subtime = new TextBlock
         {
             Text = L(
-                $"Expected {item.ExpectedAt.ToLocalTime():MMM d HH:mm}  ·  Observation gap {FormatDuration(item.ObservationGap)}",
-                $"預計 {item.ExpectedAt.ToLocalTime():MMM d HH:mm}  ·  觀察間隔 {FormatDuration(item.ObservationGap)}",
-                $"预计 {item.ExpectedAt.ToLocalTime():MMM d HH:mm}  ·  观察间隔 {FormatDuration(item.ObservationGap)}"),
+                $"Expected {_text.FormatDateTimeShort(item.ExpectedAt.ToLocalTime())}  ·  Observation gap {FormatDuration(item.ObservationGap)}",
+                $"預計 {_text.FormatDateTimeShort(item.ExpectedAt.ToLocalTime())}  ·  觀察間隔 {FormatDuration(item.ObservationGap)}",
+                $"预计 {_text.FormatDateTimeShort(item.ExpectedAt.ToLocalTime())}  ·  观察间隔 {FormatDuration(item.ObservationGap)}"),
             FontSize = 10,
             Foreground = Brush(_palette.Secondary),
             TextTrimming = TextTrimming.CharacterEllipsis
@@ -479,7 +485,7 @@ public sealed class EfficiencyView : UserControl
             Opacity = item.Quality == UsageResetQuality.Measured ? 1 : 0.72,
             Child = new StackPanel { Spacing = 11, Children = { header, quotaGrid } }
         };
-        ToolTip.SetTip(card, QualityExplanation(item));
+        A11y.Tip(card, QualityExplanation(item));
         card.PointerEntered += (_, _) => card.Background = Brush(_palette.SurfaceHover);
         card.PointerExited += (_, _) => card.Background = Brush(_palette.Surface);
         return card;
@@ -581,7 +587,7 @@ public sealed class EfficiencyView : UserControl
                         new TextBlock
                         {
                             Text = caption,
-                            FontSize = 9.5,
+                            FontSize = 10,
                             Foreground = Brush(_palette.Secondary)
                         }
                     }
@@ -598,13 +604,13 @@ public sealed class EfficiencyView : UserControl
                 new TextBlock
                 {
                     Text = L("Unused", "未使用", "未使用"),
-                    FontSize = 9.5,
+                    FontSize = 10,
                     Foreground = Brush(_palette.Secondary)
                 },
                 new TextBlock
                 {
                     Text = unused is null ? "—" : $"{unused}%",
-                    FontSize = 9.5,
+                    FontSize = 10,
                     FontWeight = FontWeight.SemiBold,
                     Foreground = Brush(_palette.Secondary)
                 }
@@ -681,7 +687,7 @@ public sealed class EfficiencyView : UserControl
                             new TextBlock
                             {
                                 Text = label.ToUpperInvariant(),
-                                FontSize = 9.5,
+                                FontSize = 10,
                                 FontWeight = FontWeight.Bold,
                                 LetterSpacing = 0.35,
                                 Foreground = Brush(_palette.Secondary),
@@ -707,6 +713,7 @@ public sealed class EfficiencyView : UserControl
             }
         };
         AddShadow(card, 10, 2);
+        A11y.Name(card, $"{label}: {value}, {detail}");
         return card;
     }
 
@@ -773,7 +780,7 @@ public sealed class EfficiencyView : UserControl
         Child = new TextBlock
         {
             Text = text,
-            FontSize = 9.5,
+            FontSize = 10,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush(accent),
             VerticalAlignment = VerticalAlignment.Center
@@ -785,7 +792,7 @@ public sealed class EfficiencyView : UserControl
         var labelText = new TextBlock
         {
             Text = label.ToUpperInvariant(),
-            FontSize = 9,
+            FontSize = 10,
             FontWeight = FontWeight.Bold,
             LetterSpacing = 0.35,
             VerticalAlignment = VerticalAlignment.Center
@@ -830,9 +837,7 @@ public sealed class EfficiencyView : UserControl
     private static string AveragePercent(IReadOnlyList<int> values) =>
         values.Count == 0 ? "—" : $"{values.Average():0.#}%";
 
-    private static string FormatDuration(TimeSpan duration) => duration.TotalHours >= 1
-        ? $"{(int)duration.TotalHours}h {duration.Minutes}m"
-        : $"{Math.Max(0, duration.Minutes)}m";
+    private string FormatDuration(TimeSpan duration) => _text.FormatDuration(duration);
 
     private string L(string english, string traditional, string simplified) => _text.Language switch
     {
@@ -841,36 +846,11 @@ public sealed class EfficiencyView : UserControl
         _ => english
     };
 
-    private static string DisplayProvider(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => "Claude",
-        "codex" => "Codex",
-        "antigravity-gemini" => "Antigravity · Gemini",
-        "antigravity-claudeandchatgpt" => "Antigravity · Claude + ChatGPT",
-        _ => provider
-    };
+    private static string DisplayProvider(string provider) => ProviderStyle.DisplayName(provider);
 
-    private static int ProviderOrder(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => 0,
-        "codex" => 1,
-        "antigravity-gemini" => 2,
-        "antigravity-claudeandchatgpt" => 3,
-        _ => 4
-    };
+    private static int ProviderOrder(string provider) => ProviderStyle.Order(provider);
 
-    private string ProviderColor(string provider) => provider.ToLowerInvariant() switch
-    {
-        "claude" => _isLightTheme ? "#C65D3B" : "#F08A66",
-        "codex" => _isLightTheme ? "#0F8A68" : "#4AD894",
-        "antigravity-gemini" => _isLightTheme ? "#5368DC" : "#8794FF",
-        "antigravity-claudeandchatgpt" => _isLightTheme ? "#8955C5" : "#C38AF0",
-        _ => _palette.Secondary
-    };
-
-    // Utilization is "higher is better", matching the overlay where more
-    // remaining reads as healthy. Low utilization is wasted capacity, not an
-    // emergency, so it is amber rather than red.
+    private string ProviderColor(string provider) => ProviderStyle.Accent(provider, _isLightTheme, _palette.Secondary);
 
     private string UtilizationColor(int? used) => used switch
     {
@@ -888,7 +868,7 @@ public sealed class EfficiencyView : UserControl
 
     private static IBrush Brush(string color) => new SolidColorBrush(Color.Parse(color));
 
-    private sealed record EfficiencyPalette(
+    internal sealed record EfficiencyPalette(
         string Root,
         string Surface,
         string SurfaceHover,
@@ -920,11 +900,11 @@ public sealed class EfficiencyView : UserControl
         public static EfficiencyPalette Light { get; } = new(
             "#FFF2F5F3", "#FFFFFFFF", "#FFF4F8F6", "#FFF7F9F7",
             "#FFFFFFFF", "#FFEDF8F3", "#FFDCE4DF", "#FFCAD6CE",
-            "#FF1F2822", "#FF67736B", "#FF0F8A68", "#FF0B765A",
+            "#FF1F2822", "#FF67736B", "#FF0B7A5A", "#FF0B765A",
             "#FFE5F5EE", "#FFA8D8C5", "#FFEEF7F2", "#FFC8E3D5",
             "#FF176345", "#FF385447", "#FFDDE4DF", "#FFB13A32",
             "#FF0F8A5F", "#FFA98700", "#FFD84A42", "#FF5368DC",
-            "#FFD46A45", "#FF8A5CD7", "#FFA95818");
+            CadenceStyle.FiveHourArgb(true), CadenceStyle.WeeklyArgb(true), CadenceStyle.FiveHourArgb(true));
 
         public static EfficiencyPalette Dark { get; } = new(
             "#FF151816", "#FF202421", "#FF29352F", "#FF292E2A",
@@ -933,6 +913,6 @@ public sealed class EfficiencyView : UserControl
             "#FF1D392E", "#FF376D58", "#FF1C3028", "#FF315C49",
             "#FF72E0A9", "#FFC0D4C7", "#FF3A413B", "#FFFF8A80",
             "#FF4AD894", "#FFF2CF5B", "#FFFF6666", "#FF8794FF",
-            "#FFFF9847", "#FFC38AF0", "#FFFFB36B");
+            CadenceStyle.FiveHourArgb(false), CadenceStyle.WeeklyArgb(false), CadenceStyle.FiveHourArgb(false));
     }
 }

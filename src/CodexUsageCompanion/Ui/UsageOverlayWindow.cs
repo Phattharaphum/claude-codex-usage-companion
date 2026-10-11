@@ -421,10 +421,12 @@ public sealed class UsageOverlayWindow : Window
     {
         _lastUpdatedAt = updatedAt;
         _lastError = error;
-        ToolTip.SetTip(_status, error);
+        // Known provider errors are shown in the interface language.
+        var shownError = _text.LocalizeError(error);
+        A11y.Tip(_status, shownError);
         if (!string.IsNullOrWhiteSpace(error))
         {
-            _status.Text = error;
+            _status.Text = shownError;
             _status.Foreground = Brush(_palette.ErrorText);
             _statusDot.Fill = Brush(_palette.ErrorText);
             return;
@@ -467,14 +469,14 @@ public sealed class UsageOverlayWindow : Window
             // preserve a position chosen by dragging the window.
             ApplyComputedHeight();
         }
-        ToolTip.SetTip(_refreshButton, $"{text.RefreshAction} (Ctrl+R)");
-        ToolTip.SetTip(_settingsButton, $"{text.SettingsAction} (S)");
-        ToolTip.SetTip(_moreButton, MoreActionsTooltip());
+        A11y.Tip(_refreshButton, $"{text.RefreshAction} (Ctrl+R)");
+        A11y.Tip(_settingsButton, $"{text.SettingsAction} (S)");
+        A11y.Tip(_moreButton, MoreActionsTooltip());
         _moreButton.Flyout = CreateMoreMenuFlyout();
-        ToolTip.SetTip(_resetPositionButton, ResetPositionTooltip());
+        A11y.Tip(_resetPositionButton, ResetPositionTooltip());
         UpdatePinButton();
-        ToolTip.SetTip(_minimizeButton, text.MinimizeAction);
-        ToolTip.SetTip(_closeButton, CloseTooltip());
+        A11y.Tip(_minimizeButton, text.MinimizeAction);
+        A11y.Tip(_closeButton, CloseTooltip());
         ApplyThemePalette();
         UpdateUsage(UsageProvider.Codex, _lastCodexState);
         UpdateUsage(UsageProvider.Claude, _lastClaudeState);
@@ -727,14 +729,14 @@ public sealed class UsageOverlayWindow : Window
                     AddAntigravityHeading(CompactPoolName(pool.Name), sectionTitle: false);
                     foreach (var window in pool.Windows)
                     {
-                        AddAntigravityWindow(window, presentation.IsStale);
+                        AddAntigravityWindow(pool.Name, window, presentation.IsStale);
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(presentation.Error))
                 {
                     AddAntigravityMessage(
-                        presentation.Error,
+                        _text.LocalizeError(presentation.Error)!,
                         error: true,
                         AntigravityErrorHeight(presentation),
                         AntigravityStaleNote(presentation));
@@ -745,7 +747,7 @@ public sealed class UsageOverlayWindow : Window
                 var message = presentation.Kind switch
                 {
                     AntigravityPresentationKind.ObservedModelFallback => _text.AntigravityObservedFallback,
-                    AntigravityPresentationKind.Error => presentation.Error ?? _text.WaitingForData,
+                    AntigravityPresentationKind.Error => _text.LocalizeError(presentation.Error) ?? _text.WaitingForData,
                     _ => _text.WaitingForData
                 };
                 AddAntigravityMessage(message, presentation.Kind == AntigravityPresentationKind.Error);
@@ -753,7 +755,7 @@ public sealed class UsageOverlayWindow : Window
                     !string.IsNullOrWhiteSpace(presentation.Error))
                 {
                     AddAntigravityMessage(
-                        presentation.Error,
+                        _text.LocalizeError(presentation.Error)!,
                         error: true,
                         AntigravityErrorHeight(presentation),
                         AntigravityStaleNote(presentation));
@@ -884,7 +886,7 @@ public sealed class UsageOverlayWindow : Window
             }
         };
 
-        ToolTip.SetTip(headerSurface, CollapseSectionTooltip(false));
+        A11y.Tip(headerSurface, CollapseSectionTooltip(false));
         return headerSurface;
     }
 
@@ -948,7 +950,7 @@ public sealed class UsageOverlayWindow : Window
         _claudeCardsContainer.IsVisible = !_claudeCollapsed && hasCards;
         _claudeChevron.Data = Geometry.Parse(_claudeCollapsed ? ChevronRightPath : ChevronDownPath);
         _claudeSummaryPill.IsVisible = _claudeCollapsed;
-        ToolTip.SetTip(_claudeHeaderSurface, CollapseSectionTooltip(_claudeCollapsed));
+        A11y.Tip(_claudeHeaderSurface, CollapseSectionTooltip(_claudeCollapsed));
         if (_claudeCollapsed)
         {
             UpdateClaudeSummary();
@@ -966,7 +968,7 @@ public sealed class UsageOverlayWindow : Window
         _codexCardsContainer.IsVisible = !_codexCollapsed && hasCards;
         _codexChevron.Data = Geometry.Parse(_codexCollapsed ? ChevronRightPath : ChevronDownPath);
         _codexSummaryPill.IsVisible = _codexCollapsed;
-        ToolTip.SetTip(_codexHeaderSurface, CollapseSectionTooltip(_codexCollapsed));
+        A11y.Tip(_codexHeaderSurface, CollapseSectionTooltip(_codexCollapsed));
         if (_codexCollapsed)
         {
             UpdateCodexSummary();
@@ -978,7 +980,7 @@ public sealed class UsageOverlayWindow : Window
         _antigravityContentContainer.IsVisible = !_antigravityCollapsed && _antigravitySection.IsVisible;
         _antigravityChevron.Data = Geometry.Parse(_antigravityCollapsed ? ChevronRightPath : ChevronDownPath);
         _antigravitySummaryPill.IsVisible = _antigravityCollapsed;
-        ToolTip.SetTip(_antigravityHeaderSurface, CollapseSectionTooltip(_antigravityCollapsed));
+        A11y.Tip(_antigravityHeaderSurface, CollapseSectionTooltip(_antigravityCollapsed));
         if (_antigravityCollapsed)
         {
             UpdateAntigravitySummary();
@@ -1147,21 +1149,19 @@ public sealed class UsageOverlayWindow : Window
         _antigravityContentContainer.Children.Add(groupHeader);
     }
 
-    private void AddAntigravityWindow(AntigravityQuotaWindowState window, bool stale)
+    private void AddAntigravityWindow(string poolName, AntigravityQuotaWindowState window, bool stale)
     {
         var badge = window.Cadence == AntigravityQuotaCadence.Weekly
             ? LimitBadge.Week
             : LimitBadge.FiveHour;
         var card = CreateCard(badge, "Gemini");
         UpdateAntigravityCard(card, window, stale);
+        NameCard(card, $"Antigravity {ProviderStyle.PoolName(poolName)}");
         _antigravityCards.Add(card);
         _antigravityContentContainer.Children.Add(card.Container);
     }
 
-    private static string CompactPoolName(string name) =>
-        string.Equals(name, "Gemini Models", StringComparison.OrdinalIgnoreCase)
-            ? "Gemini"
-            : name;
+    private static string CompactPoolName(string name) => ProviderStyle.PoolName(name);
 
     private void AddAntigravityMessage(
         string message,
@@ -1235,7 +1235,7 @@ public sealed class UsageOverlayWindow : Window
             _antigravityMessageCards.Add(card);
         }
 
-        ToolTip.SetTip(card, message);
+        A11y.Tip(card, message);
         _antigravityContentContainer.Children.Add(card);
     }
 
@@ -1617,7 +1617,7 @@ public sealed class UsageOverlayWindow : Window
             Cursor = new Cursor(StandardCursorType.Hand),
             UseLayoutRounding = true
         };
-        ToolTip.SetTip(button, tooltip);
+        A11y.Tip(button, tooltip);
         return button;
     }
 
@@ -1637,7 +1637,7 @@ public sealed class UsageOverlayWindow : Window
             Cursor = new Cursor(StandardCursorType.Hand),
             UseLayoutRounding = true
         };
-        ToolTip.SetTip(button, tooltip);
+        A11y.Tip(button, tooltip);
         return button;
     }
 
@@ -1670,7 +1670,7 @@ public sealed class UsageOverlayWindow : Window
         _pinButton.BorderBrush = Brush(pinned
             ? isLight ? "#FFFFC69D" : "#FF81502C"
             : isLight ? "#FFDDE2E7" : "#FF343B43");
-        ToolTip.SetTip(
+        A11y.Tip(
             _pinButton,
             pinned ? _text.UnpinFromTopAction : _text.PinOnTopAction);
     }
@@ -1726,7 +1726,7 @@ public sealed class UsageOverlayWindow : Window
         var canvas = new Canvas { Width = 24, Height = 24 };
         canvas.Children.Add(sparkle);
         var icon = new Viewbox { Width = IconSize, Height = IconSize, Child = canvas };
-        ToolTip.SetTip(icon, "Gemini");
+        A11y.Tip(icon, "Gemini");
         return icon;
     }
 
@@ -1888,9 +1888,10 @@ public sealed class UsageOverlayWindow : Window
             card.Remaining.Text = "--";
             card.Reset.Text = dataAvailable ? _text.LimitUnavailable : _text.WaitingForData;
             card.ResetDetail.Text = string.Empty;
-            ToolTip.SetTip(card.Container, null);
+            A11y.Tip(card.Container, null);
             card.ProgressTrack.IsVisible = false;
             ApplyBar(card, 0, UsageSignal.Gray);
+            NameCard(card, card.ProviderKey);
             return;
         }
 
@@ -1901,6 +1902,16 @@ public sealed class UsageOverlayWindow : Window
             state.ResetsAt is long unixSeconds ? DateTimeOffset.FromUnixTimeSeconds(unixSeconds) : null,
             state.RemainingPercent);
         ApplyBar(card, state.RemainingPercent, UsagePresentation.GetSignal(state.RemainingPercent));
+        NameCard(card, card.ProviderKey);
+    }
+
+    // A card is read as one sentence: "Claude 5-hour: 100% left. Resets in 46m".
+    private static void NameCard(UsageCardControls card, string provider)
+    {
+        var value = card.RemainingCaption.Text is { Length: > 0 } caption
+            ? $"{card.Remaining.Text} {caption}"
+            : card.Remaining.Text;
+        A11y.Name(card.Container, $"{provider} {card.Label.Text}: {value}. {card.Reset.Text}");
     }
 
     private void UpdateAntigravityCard(
@@ -1949,7 +1960,7 @@ public sealed class UsageOverlayWindow : Window
 
         card.Reset.Text = text;
         card.ResetDetail.Text = detail ?? string.Empty;
-        ToolTip.SetTip(card.Container, tooltip);
+        A11y.Tip(card.Container, tooltip);
     }
 
     private string CadenceLabel(LimitBadge badgeKind) =>
@@ -2213,14 +2224,13 @@ public sealed class UsageOverlayWindow : Window
     }
 
     // Accent dot for a quota's cadence; only the foreground is used.
-    private static BadgePalette BadgeColors(LimitBadge badgeKind, bool isLight) =>
-        (badgeKind, isLight) switch
-        {
-            (LimitBadge.FiveHour, true) => new BadgePalette("#FFF1E5", "#D66700", "#F5C997"),
-            (LimitBadge.Week, true) => new BadgePalette("#EAF0FF", "#3867CE", "#B9CBF8"),
-            (LimitBadge.FiveHour, false) => new BadgePalette("#54320F", "#FFB45E", "#976323"),
-            _ => new BadgePalette("#222D5E", "#8FA8FF", "#5268B6")
-        };
+    private static BadgePalette BadgeColors(LimitBadge badgeKind, bool isLight)
+    {
+        var color = badgeKind == LimitBadge.FiveHour
+            ? CadenceStyle.FiveHour(isLight)
+            : CadenceStyle.Weekly(isLight);
+        return new BadgePalette(color, color, color);
+    }
 
     private IEnumerable<Button> HeaderButtons()
     {
