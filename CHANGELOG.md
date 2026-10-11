@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Settings: search now finds individual settings across every page (not just page names) and Ctrl+F focuses it; overlay opacity and screen margin are adjustable, previewed live on the overlay and restored if you cancel; a Notifications "Send test" button (with a warning when `notify-send` is missing); the Logging page shows the history file's size and record count and offers Open folder and a confirmed Clear history; About has links (project, what's new, issues, license, original project) and a Copy diagnostics summary that contains no credentials.
 - Usage history now shows how much of a period was actually recorded. The app only samples while it runs, so the overview and analysis windows report data coverage and the number of gaps, the chart shades stretches with no samples as "No data" (and draws dotted connectors across them instead of a line that claims to know what happened), and hovering a gap shows its length.
 - `usageLogRetentionDays` (default 90, `0` keeps everything) with a **History retention** choice in Settings → Logging. Older records are pruned in the background, at most every six hours, by streaming the file and replacing it atomically.
 
@@ -25,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- Redesigned Settings. It now shares the overlay's neutral palette and green accent (toggles, sliders, focus rings and the selected page), every label is translated (several cards and hints were English-only), window positions read "Bottom right" instead of `right-bottom`, duplicated titles (page title repeated as the card title, "Update interval" twice) are gone, provider cards describe what they track instead of outdated model names ("Claude 3.5 / 3.7", "GPT-4o", "Gemini 2.5"), and date formats show real examples and a live preview ("Resets in 2d 3h · Oct 13 19:47") instead of raw tokens and a fixed August 6 sample. The log path now has a full-width field instead of being cut off.
 - Redesigned the usage overlay. Quota cards now use one neutral surface for every provider (colour is reserved for the quota level), a clear "left" caption next to the percentage, a "Resets in 46m" countdown with the reset time beside it, and a bar that glides to new values. The coloured "5 HR" / "WEEK" chips became plain labels with a small cadence dot.
 - A full window with no reset time now says "Starts on next use" instead of "Reset time unavailable".
 - Antigravity groups are separated by a labelled divider instead of a grey pill, and its errors appear as a banner with a retry button beside the data they affect. Its error no longer repeats in the header, which now shows when it last updated successfully.

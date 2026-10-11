@@ -473,6 +473,20 @@ public sealed class UsageOverlayWindow : Window
         SetStatus(_lastUpdatedAt, _lastError);
     }
 
+    /// <summary>
+    /// Shows an opacity/margin choice from Settings immediately, without saving
+    /// it. Cancelling calls this again with the saved values.
+    /// </summary>
+    public void PreviewAppearance(double opacity, int margin)
+    {
+        Opacity = Math.Clamp(opacity, 0.5d, 1d);
+        if (margin != _margin)
+        {
+            _margin = margin;
+            ApplySizeAndPosition(_position);
+        }
+    }
+
     public void ApplyAlwaysOnTop(bool enabled)
     {
         Topmost = enabled;

@@ -501,6 +501,11 @@ public sealed class App : Application
 
         var dialog = new SettingsWindow(_settings, _text);
         dialog.PositionPreviewRequested += _window.ApplyPosition;
+        dialog.AppearancePreviewRequested += _window.PreviewAppearance;
+        dialog.TestNotificationRequested += () => _notificationService.Show(
+            _text.TestNotificationTitle,
+            _text.TestNotificationBody,
+            critical: false);
         dialog.ApplyRequested += TryApplySettings;
         _settingsWindow = dialog;
         try
@@ -508,7 +513,10 @@ public sealed class App : Application
             var updated = await dialog.ShowDialog<CompanionSettings?>(_window);
             if (updated is null)
             {
+                // Settings previews position, opacity and margin live; put the
+                // saved values back when the dialog is cancelled.
                 _window.ApplyPosition(_settings.Position);
+                _window.PreviewAppearance(_settings.Opacity, _settings.Margin);
                 return;
             }
 

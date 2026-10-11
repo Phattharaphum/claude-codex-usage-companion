@@ -103,7 +103,7 @@ The `.deb` creates the KDE/GNOME application-menu entry at `/usr/share/applicati
 
 Enabling login autostart reveals a **Minimize the window** option (hidden otherwise). When both are enabled, the app launches at login without showing its window — usage still refreshes in the background — and reopening the app (from the application menu, the tray icon if enabled, or by running it again) brings the window back.
 
-Use the **⚙ Settings** button to configure the taskbar icon, system tray, tray icon style, login autostart, language, theme, window position, low-usage alerts, reset notifications, usage logging, and always-on-top behavior. **OK** applies changes and closes the window, **Cancel** discards unapplied changes, and **Apply** saves changes without closing it.
+Use the **⚙ Settings** button to configure the taskbar icon, system tray, tray icon style, login autostart, language, theme, window position, low-usage alerts, reset notifications, usage logging, and always-on-top behavior. **OK** applies changes and closes the window, **Cancel** discards unapplied changes, and **Apply** saves changes without closing it. Press **Ctrl+F** to search individual settings across all pages. Position, opacity and screen margin are previewed live on the overlay and restored on Cancel.
 
 ## Plasma 6 widget
 

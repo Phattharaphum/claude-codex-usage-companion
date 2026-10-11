@@ -6,6 +6,32 @@ namespace CodexUsageCompanion.Platform;
 
 public sealed class LinuxDesktopNotificationService
 {
+    /// <summary>
+    /// True when the notify-send helper this service relies on is on PATH.
+    /// Without it notifications silently go nowhere, so settings can say so.
+    /// </summary>
+    public static bool IsAvailable() => IsAvailable(
+        Environment.GetEnvironmentVariable("PATH"),
+        File.Exists);
+
+    internal static bool IsAvailable(string? path, Func<string, bool> fileExists)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        foreach (var directory in path.Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (fileExists(System.IO.Path.Combine(directory, "notify-send")))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void Show(string title, string body, bool critical)
     {
         if (!OperatingSystem.IsLinux())

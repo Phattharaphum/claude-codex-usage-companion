@@ -1,5 +1,9 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
@@ -9,8 +13,11 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using CodexUsageCompanion.Configuration;
+using CodexUsageCompanion.Diagnostics;
 using CodexUsageCompanion.Localization;
+using CodexUsageCompanion.Platform;
 using AvaloniaPath = Avalonia.Controls.Shapes.Path;
 
 namespace CodexUsageCompanion.Ui;
@@ -42,6 +49,60 @@ public sealed class SettingsWindow : Window
         public StackPanel ContentPanel { get; set; } = null!;
     }
 
+    private sealed record SettingRowInfo(string Text);
+
+    private sealed record SettingsPalette(
+        IBrush Window,
+        IBrush Sidebar,
+        IBrush SidebarBorder,
+        IBrush Card,
+        IBrush CardBorder,
+        IBrush Divider,
+        IBrush TextPrimary,
+        IBrush TextSecondary,
+        IBrush Accent,
+        IBrush AccentSoft,
+        IBrush PrimaryButton,
+        IBrush Control,
+        IBrush ControlBorder,
+        Color NoticeBackground,
+        Color NoticeBorder,
+        IBrush NoticeText)
+    {
+        // One neutral palette and one accent shared with the overlay and the
+        // history windows, so Settings no longer looks like a different app.
+        public static SettingsPalette Dark { get; } = new(
+            Brush("#FF14171A"), Brush("#FF181C20"), Brush("#FF262C33"),
+            Brush("#FF1D2227"), Brush("#FF2A3139"), Brush("#FF272E35"),
+            Brush("#FFEDEFF1"), Brush("#FF9AA4AD"),
+            Brush("#FF3DD598"), Brush("#FF1B3A30"), Brush("#FF14865F"),
+            Brush("#FF242B32"), Brush("#FF343C45"),
+            Color.Parse("#26F2C94C"), Color.Parse("#59F2C94C"), Brush("#FFF2C94C"));
+
+        public static SettingsPalette Light { get; } = new(
+            Brush("#FFF6F7F9"), Brush("#FFEEF1F4"), Brush("#FFE1E5EA"),
+            Brush("#FFFFFFFF"), Brush("#FFE1E5EA"), Brush("#FFEDF0F3"),
+            Brush("#FF1B1F23"), Brush("#FF5B646D"),
+            Brush("#FF12805A"), Brush("#FFDDF1E9"), Brush("#FF14865F"),
+            Brush("#FFFFFFFF"), Brush("#FFD3D9DF"),
+            Color.Parse("#FFFFF8E1"), Color.Parse("#FFF3DC8A"), Brush("#FF8A6500"));
+
+        private static SolidColorBrush Brush(string color) => SolidColorBrush.Parse(color);
+    }
+
+    private sealed class CardInfo
+    {
+        public string Text { get; init; } = string.Empty;
+        public string Keywords { get; set; } = string.Empty;
+        public List<Border> Rows { get; } = [];
+        public List<Control> Items { get; } = [];
+    }
+
+    private sealed record PositionChoice(string Value, string DisplayName)
+    {
+        public override string ToString() => DisplayName;
+    }
+
     private readonly CompanionSettings _settings;
     private readonly UiText _text;
 
@@ -70,6 +131,10 @@ public sealed class SettingsWindow : Window
     private readonly ComboBox _language;
     private readonly ComboBox _theme;
     private readonly ComboBox _position;
+    private readonly PositionChoice[] _positionChoices;
+    private readonly Slider _opacity;
+    private readonly TextBlock _opacityValue;
+    private readonly NumericUpDown _margin;
     private readonly Dictionary<string, Button> _positionGridButtons = new();
     private Border _screenBorder = null!;
     private Border _screenStandStem = null!;
@@ -80,6 +145,8 @@ public sealed class SettingsWindow : Window
     private readonly NumericUpDown _lowUsageAlertThreshold;
     private readonly ToggleSwitch _notifyOnReset;
     private Border _lowUsageThresholdRow = null!;
+    private Border _notifySendWarning = null!;
+    private Button _testNotificationButton = null!;
 
     // DateTime controls
     private readonly ComboBox _resetDateTimeFormat;
@@ -98,6 +165,16 @@ public sealed class SettingsWindow : Window
     private Border _usageLogRetentionRow = null!;
     private Border _usageLogFilePathRow = null!;
     private Border _usageLogFormatRow = null!;
+    private Border _aboutLogoBadge = null!;
+    private Border _aboutVersionChip = null!;
+    private TextBlock _historyFileInfo = null!;
+    private Button _openFolderButton = null!;
+    private Button _clearHistoryButton = null!;
+    private int _historyInfoVersion;
+
+    // About
+    private TextBox _diagnosticsBox = null!;
+    private Button _copyDiagnosticsButton = null!;
 
     // Action buttons & state
     private readonly Button _save;
@@ -119,6 +196,14 @@ public sealed class SettingsWindow : Window
     private readonly List<TextBlock> _textPrimaryElements = new();
     private readonly List<TextBlock> _textSecondaryElements = new();
     private readonly List<CategoryNavItem> _categoryNavItems = new();
+    private readonly Dictionary<Border, SettingRowInfo> _rowInfo = new();
+    private readonly Dictionary<Border, CardInfo> _cardInfo = new();
+    private readonly List<(StackPanel Panel, Border Card, int Index)> _searchOrigin = new();
+    private readonly StackPanel _searchResults = new() { Spacing = 0 };
+    private readonly List<Border> _notices = new();
+    private readonly List<Button> _secondaryButtons = new();
+    private SettingsPalette _palette = SettingsPalette.Dark;
+    private bool _searching;
     private SettingsCategory _currentCategory = SettingsCategory.General;
 
     private CompanionSettings _initialSettings = null!;
@@ -130,10 +215,10 @@ public sealed class SettingsWindow : Window
         _settings = settings;
         _text = text;
         Title = text.SettingsTitle;
-        Width = 740;
-        Height = 580;
-        MinWidth = 640;
-        MinHeight = 480;
+        Width = 780;
+        Height = 640;
+        MinWidth = 660;
+        MinHeight = 500;
         CanResize = true;
         ShowInTaskbar = settings.ShowTaskbarIcon;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -152,7 +237,7 @@ public sealed class SettingsWindow : Window
         {
             ItemsSource = trayIconStyles,
             SelectedItem = trayIconStyles.First(choice => choice.Value == selectedTrayIconStyle),
-            MinWidth = 180,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
         _showTaskbarIcon = CreateToggleSwitch(settings.ShowTaskbarIcon);
@@ -184,7 +269,7 @@ public sealed class SettingsWindow : Window
         {
             ItemsSource = updateIntervals,
             SelectedItem = updateIntervals.First(choice => choice.Seconds == selectedUpdateInterval),
-            MinWidth = 160,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
 
@@ -207,7 +292,7 @@ public sealed class SettingsWindow : Window
         {
             ItemsSource = languages,
             SelectedItem = languages.First(choice => choice.Value == selectedLanguage),
-            MinWidth = 180,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
         var themes = new[]
@@ -221,24 +306,67 @@ public sealed class SettingsWindow : Window
         {
             ItemsSource = themes,
             SelectedItem = themes.First(choice => choice.Value == selectedTheme),
-            MinWidth = 180,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
+        _positionChoices = WindowPosition.Values
+            .Select(value => new PositionChoice(value, text.FormatWindowPosition(value)))
+            .ToArray();
         _position = new ComboBox
         {
-            ItemsSource = WindowPosition.Values,
-            SelectedItem = WindowPosition.Normalize(settings.Position),
-            MinWidth = 180,
+            ItemsSource = _positionChoices,
+            SelectedItem = _positionChoices.First(choice =>
+                choice.Value == WindowPosition.Normalize(settings.Position)),
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
         _position.SelectionChanged += (_, _) =>
         {
-            if (_position.SelectedItem is string position)
+            if (_position.SelectedItem is PositionChoice choice)
             {
-                UpdatePositionGridSelection(position);
-                PositionPreviewRequested?.Invoke(position);
+                UpdatePositionGridSelection(choice.Value);
+                PositionPreviewRequested?.Invoke(choice.Value);
             }
         };
+        _opacity = new Slider
+        {
+            Minimum = 50,
+            Maximum = 100,
+            SmallChange = 1,
+            LargeChange = 5,
+            TickFrequency = 5,
+            IsSnapToTickEnabled = true,
+            Value = Math.Round(Math.Clamp(settings.Opacity, 0.5, 1) * 100),
+            Width = 170,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _opacityValue = new TextBlock
+        {
+            Text = $"{_opacity.Value:0}%",
+            Width = 40,
+            TextAlignment = TextAlignment.Right,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        _opacity.PropertyChanged += (_, eventArgs) =>
+        {
+            if (eventArgs.Property == RangeBase.ValueProperty)
+            {
+                _opacityValue.Text = $"{_opacity.Value:0}%";
+                PreviewAppearanceFromControls();
+            }
+        };
+        _margin = new NumericUpDown
+        {
+            Minimum = 0,
+            Maximum = 64,
+            Increment = 4,
+            FormatString = "0",
+            Value = Math.Clamp(settings.Margin, 0, 64),
+            MinWidth = 120,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        _margin.ValueChanged += (_, _) => PreviewAppearanceFromControls();
 
         // Notification controls
         _lowUsageAlert = CreateToggleSwitch(settings.EnableLowUsageAlert);
@@ -266,7 +394,7 @@ public sealed class SettingsWindow : Window
             SelectedItem = resetDateTimeFormat,
             Text = resetDateTimeFormat,
             IsEditable = true,
-            MinWidth = 200,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
         var lastUpdatedDateTimeFormat = DateTimeFormatOptions.NormalizeLastUpdated(settings.LastUpdatedDateTimeFormat);
@@ -280,7 +408,7 @@ public sealed class SettingsWindow : Window
             SelectedItem = lastUpdatedDateTimeFormat,
             Text = lastUpdatedDateTimeFormat,
             IsEditable = true,
-            MinWidth = 200,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
         _resetDateTimeFormatStatus = new TextBlock
@@ -308,7 +436,7 @@ public sealed class SettingsWindow : Window
         {
             ItemsSource = UsageLogOptions.Formats,
             SelectedItem = UsageLogOptions.NormalizeFormat(settings.UsageLogFormat),
-            MinWidth = 120,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
         _usageLogFormat.SelectionChanged += (_, _) =>
@@ -331,7 +459,7 @@ public sealed class SettingsWindow : Window
         {
             ItemsSource = retentionChoices,
             SelectedItem = retentionChoices.First(choice => choice.Days == selectedRetention),
-            MinWidth = 160,
+            Width = 200,
             HorizontalAlignment = HorizontalAlignment.Right
         };
         _usageLogging.IsCheckedChanged += (_, _) => UpdateUsageLoggingControls();
@@ -368,6 +496,8 @@ public sealed class SettingsWindow : Window
             CornerRadius = new CornerRadius(6)
         };
         _apply.Click += (_, _) => ApplyWithoutClosing();
+        _secondaryButtons.Add(cancel);
+        _secondaryButtons.Add(_apply);
 
         // Unsaved changes indicator
         var unsavedDot = new Ellipse
@@ -429,7 +559,7 @@ public sealed class SettingsWindow : Window
         };
         _noSearchResults = new TextBlock
         {
-            Text = "No settings match your search.",
+            Text = text.NoSettingsMatch,
             FontSize = 14,
             Opacity = 0.6,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -494,7 +624,7 @@ public sealed class SettingsWindow : Window
 
         var topBodyGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("210,*")
+            ColumnDefinitions = new ColumnDefinitions("220,*")
         };
         topBodyGrid.Children.Add(_sidebarBorder);
         Grid.SetColumn(mainContentGrid, 1);
@@ -547,6 +677,18 @@ public sealed class SettingsWindow : Window
 
         _initialSettings = CaptureSettings();
 
+        _usageLogFilePath.PropertyChanged += (_, eventArgs) =>
+        {
+            if (eventArgs.Property == TextBox.TextProperty)
+            {
+                ScheduleHistoryFileInfoRefresh();
+            }
+        };
+        _usageLogFormat.SelectionChanged += (_, _) => ScheduleHistoryFileInfoRefresh();
+        _ = RefreshHistoryFileInfoAsync();
+        RefreshDiagnostics();
+        AddHandler(KeyDownEvent, HandleSearchShortcut, RoutingStrategies.Tunnel);
+
         SelectCategory(SettingsCategory.General);
         UpdatePositionGridSelection(WindowPosition.Normalize(settings.Position));
         ApplyThemePalette();
@@ -557,6 +699,11 @@ public sealed class SettingsWindow : Window
     }
 
     public event Action<string>? PositionPreviewRequested;
+
+    /// <summary>Opacity (0.5-1) and margin (px) chosen so far, shown live on the overlay.</summary>
+    public event Action<double, int>? AppearancePreviewRequested;
+
+    public event Action? TestNotificationRequested;
 
     public event Func<CompanionSettings, bool>? ApplyRequested;
 
@@ -575,38 +722,34 @@ public sealed class SettingsWindow : Window
 
     private void BuildCategoryPanels()
     {
-        // 1. General Panel
+        // 1. General
         _minimizeOnStartRow = CreateSettingRow(
             _text.MinimizeOnStartOption,
             _text.MinimizeOnStartDescription,
             _minimizeOnStart);
 
         var generalCard1 = CreateCardGroup(
-            _text.WindowSettingsGroup,
-            "Manage system tray integration and taskbar visibility.",
+            _text.TrayTaskbarGroup,
+            _text.TrayTaskbarGroupDescription,
             CreateSettingRow(_text.SystemTrayOption, _text.SystemTrayDescription, _systemTray),
             CreateSettingRow(_text.TrayIconStyleOption, _text.TrayIconStyleDescription, _trayIconStyle),
             CreateSettingRow(_text.ShowTaskbarIconOption, _text.ShowTaskbarIconDescription, _showTaskbarIcon, showDivider: false));
 
         var generalCard2 = CreateCardGroup(
-            "Startup & Placement",
-            "Configure how the application launches and behaves on the desktop.",
+            _text.StartupBehaviorGroup,
+            _text.StartupBehaviorGroupDescription,
             CreateSettingRow(_text.StartOnBootOption, _text.StartOnBootDescription, _startOnBoot),
             _minimizeOnStartRow,
             CreateSettingRow(_text.AlwaysOnTopOption, _text.AlwaysOnTopDescription, _alwaysOnTop, showDivider: false));
 
-        var generalPanel = new StackPanel
-        {
-            Spacing = 12,
-            Children = { generalCard1, generalCard2 }
-        };
+        var generalPanel = new StackPanel { Spacing = 12, Children = { generalCard1, generalCard2 } };
 
-        // 2. Providers Panel (Branded Provider Cards)
+        // 2. Providers
         var claudeCard = CreateBrandedProviderCard(
             brandName: "Anthropic Claude",
             brandColorHex: "#EA580C",
             iconData: "M12 2L13.8 8.7L20.5 7L16.2 12L21.8 15.2L15.3 16.5L16.8 23L12 18.5L7.2 23L8.7 16.5L2.2 15.2L7.8 12L3.5 7L10.2 8.7L12 2Z",
-            badgeText: "Claude 3.5 / 3.7 Sonnet & Opus",
+            badgeText: _text.ProviderTagClaude,
             masterSwitch: _enableClaudeUsage,
             description: _text.ClaudeProviderDescription,
             out _claudeSubOptionsContainer,
@@ -617,7 +760,7 @@ public sealed class SettingsWindow : Window
             brandName: "OpenAI Codex",
             brandColorHex: "#10B981",
             iconData: "M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2ZM12 4C16.42 4 20 7.58 20 12C20 13.91 19.33 15.66 18.21 17.03L6.97 5.79C8.34 4.67 10.09 4 12 4ZM4 12C4 10.09 4.67 8.34 5.79 6.97L17.03 18.21C15.66 19.33 13.91 20 12 20C7.58 20 4 16.42 4 12Z",
-            badgeText: "Codex & GPT-4o",
+            badgeText: _text.ProviderTagCodex,
             masterSwitch: _enableCodexUsage,
             description: _text.CodexProviderDescription,
             out _codexSubOptionsContainer,
@@ -628,15 +771,15 @@ public sealed class SettingsWindow : Window
             brandName: "Google Antigravity",
             brandColorHex: "#3B82F6",
             iconData: "M12 2L13.7 7.3L19 9L13.7 10.7L12 16L10.3 10.7L5 9L10.3 7.3ZM19 15L20 18L23 19L20 20L19 23L18 20L15 19L18 18Z",
-            badgeText: "Gemini 2.5 & Flash",
+            badgeText: _text.ProviderTagAntigravity,
             masterSwitch: _enableAntigravityUsage,
             description: _text.AntigravityProviderDescription,
             out _,
             null);
 
         var pollingCard = CreateCardGroup(
-            _text.UpdateIntervalOption,
-            _text.RefreshIntervalDescription,
+            _text.RefreshGroup,
+            null,
             CreateSettingRow(_text.UpdateIntervalOption, _text.RefreshIntervalDescription, _updateInterval, showDivider: false));
 
         var providersPanel = new StackPanel
@@ -645,51 +788,68 @@ public sealed class SettingsWindow : Window
             Children = { claudeCard, codexCard, antigravityCard, pollingCard }
         };
 
-        // 3. Appearance Panel (Option C: Interactive 3x3 Screen Position Grid Widget)
+        // 3. Appearance
         var appearanceCard1 = CreateCardGroup(
-            _text.AppearanceSettingsGroup,
-            "Personalize visual presentation, active language, and color theme.",
+            _text.LanguageThemeGroup,
+            _text.LanguageThemeGroupDescription,
             CreateSettingRow(_text.LanguageOption, _text.LanguageOptionDescription, _language),
             CreateSettingRow(_text.ThemeOption, _text.ThemeOptionDescription, _theme, showDivider: false));
 
-        var positionGridWidget = CreatePositionGridWidget();
-        var appearanceCard2 = CreateCardGroup(
-            _text.PositionOption,
-            _text.PositionOptionDescription,
-            CreateSettingRow(_text.PositionOption, "Select or click a position below to dock the companion overlay.", _position, showDivider: true),
-            positionGridWidget);
-
-        var appearancePanel = new StackPanel
+        var opacityControl = new StackPanel
         {
-            Spacing = 12,
-            Children = { appearanceCard1, appearanceCard2 }
+            Orientation = Orientation.Horizontal,
+            Spacing = 10,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { _opacity, _opacityValue }
         };
+        var appearanceCard2 = CreateCardGroup(
+            _text.OverlayPlacementGroup,
+            _text.OverlayPlacementGroupDescription,
+            CreateSettingRow(_text.PositionOption, _text.PositionHint, _position),
+            CreatePositionGridWidget(),
+            CreateSettingRow(_text.OpacityOption, _text.OpacityDescription, opacityControl),
+            CreateSettingRow(_text.MarginOption, _text.MarginDescription, _margin, showDivider: false));
 
-        // 4. Notifications Panel
+        var appearancePanel = new StackPanel { Spacing = 12, Children = { appearanceCard1, appearanceCard2 } };
+
+        // 4. Notifications
         _lowUsageThresholdRow = CreateSettingRow(
             _text.LowUsageAlertThresholdOption,
             _text.LowUsageThresholdDescription,
             _lowUsageAlertThreshold);
 
+        var notifyAvailable = LinuxDesktopNotificationService.IsAvailable();
+        _testNotificationButton = CreateSecondaryButton(_text.TestNotificationAction);
+        _testNotificationButton.IsEnabled = notifyAvailable;
+        _testNotificationButton.Click += async (_, _) =>
+        {
+            TestNotificationRequested?.Invoke();
+            _testNotificationButton.Content = $"✓ {_text.TestNotificationSentNotice}";
+            await Task.Delay(1800);
+            _testNotificationButton.Content = _text.TestNotificationAction;
+        };
+
         var notificationsCard = CreateCardGroup(
-            _text.NotificationSettingsGroup,
-            "Manage quota alerts, threshold levels, and reset notifications.",
+            _text.NotificationAlertsGroup,
+            _text.NotificationAlertsGroupDescription,
             CreateSettingRow(_text.LowUsageAlertOption, _text.LowUsageAlertDescription, _lowUsageAlert),
             _lowUsageThresholdRow,
-            CreateSettingRow(_text.NotifyOnResetOption, _text.NotifyOnResetDescription, _notifyOnReset, showDivider: false));
+            CreateSettingRow(_text.NotifyOnResetOption, _text.NotifyOnResetDescription, _notifyOnReset),
+            CreateSettingRow(_text.TestNotificationOption, _text.TestNotificationDescription, _testNotificationButton, showDivider: false));
 
+        _notifySendWarning = CreateNotice(_text.NotifySendMissingNotice);
+        _notifySendWarning.IsVisible = !notifyAvailable;
         var notificationsPanel = new StackPanel
         {
             Spacing = 12,
-            Children = { notificationsCard }
+            Children = { _notifySendWarning, notificationsCard }
         };
 
-        // 5. Date & Time Panel (Option C: Badges & Quick Preset Chips)
+        // 5. Date & time
         var resetFormatRow = CreateSettingRow(
             _text.ResetDateTimeFormatOption,
             _text.ResetDateTimeFormatDescription,
             _resetDateTimeFormat);
-
         _resetFormatBadge = CreateFormatBadge(_resetDateTimeFormatStatus);
         var resetPresets = CreatePresetChipsPanel(
             _resetDateTimeFormat,
@@ -704,7 +864,6 @@ public sealed class SettingsWindow : Window
             _text.LastUpdatedDateTimeFormatOption,
             _text.LastUpdatedDateTimeFormatDescription,
             _lastUpdatedDateTimeFormat);
-
         _lastUpdatedFormatBadge = CreateFormatBadge(_lastUpdatedDateTimeFormatStatus);
         var lastUpdatedPresets = CreatePresetChipsPanel(
             _lastUpdatedDateTimeFormat,
@@ -716,53 +875,63 @@ public sealed class SettingsWindow : Window
             ]);
 
         var dateTimeCard1 = CreateCardGroup(
-            "Rate Limit Reset Format",
-            "Formatting string for when session or weekly rate limits expire.",
+            _text.ResetFormatGroup,
+            _text.ResetFormatGroupDescription,
             resetFormatRow,
             resetPresets,
             _resetFormatBadge);
-
         var dateTimeCard2 = CreateCardGroup(
-            "Last Refresh Format",
-            "Formatting string for when usage statistics were last retrieved.",
+            _text.LastUpdatedFormatGroup,
+            _text.LastUpdatedFormatGroupDescription,
             lastUpdatedFormatRow,
             lastUpdatedPresets,
             _lastUpdatedFormatBadge);
 
-        var dateTimePanel = new StackPanel
-        {
-            Spacing = 12,
-            Children = { dateTimeCard1, dateTimeCard2 }
-        };
+        var dateTimePanel = new StackPanel { Spacing = 12, Children = { dateTimeCard1, dateTimeCard2 } };
 
-        // 6. Logging Panel (Option C: File Browse Button)
-        var browseButton = new Button
-        {
-            Content = _text.BrowseFileAction,
-            Height = 32,
-            Padding = new Thickness(12, 0),
-            Margin = new Thickness(6, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-            CornerRadius = new CornerRadius(6)
-        };
+        // 6. Logging
+        var browseButton = CreateSecondaryButton(_text.BrowseFileAction);
+        browseButton.Margin = new Thickness(8, 0, 0, 0);
         browseButton.Click += async (_, _) => await BrowseLogFilePathAsync();
 
-        var pathBoxGrid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            MinWidth = 280,
-            HorizontalAlignment = HorizontalAlignment.Right
-        };
+        _usageLogFilePath.HorizontalAlignment = HorizontalAlignment.Stretch;
+        var pathBoxGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         pathBoxGrid.Children.Add(_usageLogFilePath);
         Grid.SetColumn(browseButton, 1);
         pathBoxGrid.Children.Add(browseButton);
 
-        _usageLogFilePathRow = CreateSettingRow(
+        _historyFileInfo = new TextBlock
+        {
+            FontSize = 11.5,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        _textSecondaryElements.Add(_historyFileInfo);
+        _openFolderButton = CreateSecondaryButton(_text.OpenFolderAction);
+        _openFolderButton.Click += (_, _) => OpenHistoryFolder();
+        _clearHistoryButton = CreateSecondaryButton(_text.ClearHistoryAction);
+        _clearHistoryButton.Click += async (_, _) => await ClearHistoryAsync();
+        var historyActions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Children = { _openFolderButton, _clearHistoryButton }
+        };
+        var historyFooter = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 12,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
+        Grid.SetColumn(historyActions, 1);
+        historyFooter.Children.Add(_historyFileInfo);
+        historyFooter.Children.Add(historyActions);
+
+        _usageLogFilePathRow = CreateStackedRow(
             _text.UsageLogFilePathOption,
             _text.UsageLogFilePathDescription,
-            pathBoxGrid);
+            new StackPanel { Spacing = 0, Children = { pathBoxGrid, historyFooter } });
 
         _usageLogFormatRow = CreateSettingRow(
             _text.UsageLogFormatOption,
@@ -776,62 +945,141 @@ public sealed class SettingsWindow : Window
             showDivider: false);
 
         var loggingCard = CreateCardGroup(
-            _text.LoggingSettingsGroup,
-            "Audit and record historical rate limit usage samples to local storage.",
+            _text.HistoryFileGroup,
+            _text.HistoryFileGroupDescription,
             CreateSettingRow(_text.UsageLoggingOption, _text.UsageLoggingDescription, _usageLogging),
             _usageLogFilePathRow,
             _usageLogFormatRow,
             _usageLogRetentionRow);
 
-        var loggingPanel = new StackPanel
-        {
-            Spacing = 12,
-            Children = { loggingCard }
-        };
+        var loggingPanel = new StackPanel { Spacing = 12, Children = { loggingCard } };
 
-        // 7. About Panel
+        // 7. About
         var appVersion = typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
-        var appHeader = new StackPanel
+        var logoBadge = new Border
         {
-            Spacing = 6,
-            Margin = new Thickness(0, 4, 0, 12),
-            Children =
+            Width = 52,
+            Height = 52,
+            CornerRadius = new CornerRadius(14),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new Image
             {
-                new TextBlock
-                {
-                    Text = $"Claude Codex Usage Companion v{appVersion}",
-                    FontSize = 16,
-                    FontWeight = FontWeight.Bold
-                },
-                new TextBlock
-                {
-                    Text = "Desktop companion for real-time monitoring and quota tracking of Claude, Codex, and Antigravity.",
-                    FontSize = 12,
-                    Opacity = 0.75,
-                    TextWrapping = TextWrapping.Wrap
-                }
+                Source = AppBranding.CreateLogoImage().Source,
+                Width = 34,
+                Height = 34,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             }
         };
+        _aboutLogoBadge = logoBadge;
+        var productName = new TextBlock
+        {
+            Text = AppBranding.ProductName,
+            FontSize = 18,
+            FontWeight = FontWeight.Bold
+        };
+        _textPrimaryElements.Add(productName);
+        var versionChip = new Border
+        {
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8, 2),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = new TextBlock
+            {
+                Text = $"v{appVersion}",
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold
+            }
+        };
+        _aboutVersionChip = versionChip;
+        var aboutDescription = new TextBlock
+        {
+            Text = _text.AboutDescription,
+            FontSize = 12.5,
+            TextWrapping = TextWrapping.Wrap
+        };
+        _textSecondaryElements.Add(aboutDescription);
         var authorText = new TextBlock
         {
             Text = _text.AuthorInfo,
-            FontSize = 12,
-            Opacity = 0.75,
-            TextWrapping = TextWrapping.Wrap
+            FontSize = 11.5,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
         };
+        _textSecondaryElements.Add(authorText);
+        var aboutIdentity = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 14,
+            Children =
+            {
+                logoBadge,
+                new StackPanel
+                {
+                    Spacing = 4,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children = { productName, versionChip }
+                }
+            }
+        };
+        Grid.SetColumn(aboutIdentity.Children[1], 1);
         var aboutCard = CreateCardGroup(
-            _text.AboutSettingsGroup,
             null,
-            appHeader,
+            null,
+            aboutIdentity,
+            new Border { Height = 10 },
+            aboutDescription,
             authorText);
+
+        var linksWrap = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (var (label, url) in new[]
+                 {
+                     (_text.ProjectPageAction, AppBranding.ProjectUrl),
+                     (_text.ChangelogAction, AppBranding.ChangelogUrl),
+                     (_text.ReportIssueAction, AppBranding.IssuesUrl),
+                     (_text.LicenseAction, AppBranding.LicenseUrl),
+                     (_text.OriginalProjectAction, AppBranding.OriginalProjectUrl)
+                 })
+        {
+            var link = CreateSecondaryButton(label + "  ↗");
+            link.Margin = new Thickness(0, 0, 8, 8);
+            ToolTip.SetTip(link, url);
+            link.Click += async (_, _) => await OpenUrlAsync(url);
+            linksWrap.Children.Add(link);
+        }
+        var linksCard = CreateCardGroup(null, null, linksWrap);
+
+        _diagnosticsBox = new TextBox
+        {
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            FontFamily = new FontFamily("monospace"),
+            FontSize = 11,
+            MinHeight = 178,
+            CornerRadius = new CornerRadius(8),
+            HorizontalAlignment = HorizontalAlignment.Stretch
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(_diagnosticsBox, ScrollBarVisibility.Auto);
+        _copyDiagnosticsButton = CreateSecondaryButton(_text.CopyDiagnosticsAction);
+        _copyDiagnosticsButton.HorizontalAlignment = HorizontalAlignment.Left;
+        _copyDiagnosticsButton.Margin = new Thickness(0, 10, 0, 0);
+        _copyDiagnosticsButton.Click += async (_, _) => await CopyDiagnosticsAsync();
+        var diagnosticsCard = CreateCardGroup(
+            _text.DiagnosticsGroup,
+            _text.DiagnosticsDescription,
+            _diagnosticsBox,
+            _copyDiagnosticsButton);
 
         var aboutPanel = new StackPanel
         {
             Spacing = 12,
-            Children = { aboutCard }
+            Children = { aboutCard, linksCard, diagnosticsCard }
         };
 
-        // Register Category Nav Items
+        // Register category nav items. Their keywords also make every card on
+        // the page findable from the search box.
         _categoryNavItems.Clear();
         _categoryNavItems.Add(CreateCategoryNavItem(
             SettingsCategory.General,
@@ -854,7 +1102,7 @@ public sealed class SettingsWindow : Window
             _text.AppearanceSettingsGroup,
             _text.AppearanceSettingsDescription,
             "M12 3C6.5 3 2 6.5 2 12C2 17.5 6.5 21 12 21C12.8 21 13.5 20.3 13.5 19.5C13.5 19.1 13.3 18.8 13.1 18.5C12.9 18.2 12.7 17.9 12.7 17.5C12.7 16.7 13.4 16 14.2 16H16C19.3 16 22 13.3 22 10C22 5.5 17.5 3 12 3ZM6.5 12C5.7 12 5 11.3 5 10.5C5 9.7 5.7 9 6.5 9C7.3 9 8 9.7 8 10.5C8 11.3 7.3 12 6.5 12ZM9.5 8C8.7 8 8 7.3 8 6.5C8 5.7 8.7 5 9.5 5C10.3 5 11 5.7 11 6.5C11 7.3 10.3 8 9.5 8ZM14.5 8C13.7 8 13 7.3 13 6.5C13 5.7 13.7 5 14.5 5C15.3 5 16 5.7 16 6.5C16 7.3 15.3 8 14.5 8ZM17.5 12C16.7 12 16 11.3 16 10.5C16 9.7 16.7 9 17.5 9C18.3 9 19 9.7 19 10.5C19 11.3 18.3 12 17.5 12Z",
-            ["language", "theme", "dark", "light", "position", "overlay", "screen", "corner", "interface"],
+            ["language", "theme", "dark", "light", "position", "overlay", "screen", "corner", "interface", "opacity", "margin", "transparent"],
             appearancePanel));
 
         _categoryNavItems.Add(CreateCategoryNavItem(
@@ -862,7 +1110,7 @@ public sealed class SettingsWindow : Window
             _text.NotificationSettingsGroup,
             _text.NotificationSettingsDescription,
             "M12 22C13.1 22 14 21.1 14 20H10C10 21.1 10.9 22 12 22ZM18 16V11C18 7.93 16.37 5.36 13.5 4.68V4C13.5 3.17 12.83 2.5 12 2.5C11.17 2.5 10.5 3.17 10.5 4V4.68C7.64 5.36 6 7.92 6 11V16L4 18V19H20V18L18 16ZM16 17H8V11C8 8.52 9.51 6.5 12 6.5C14.49 6.5 16 8.52 16 11V17Z",
-            ["alert", "notify", "reset", "threshold", "quota", "warning", "sound", "notification"],
+            ["alert", "notify", "reset", "threshold", "quota", "warning", "sound", "notification", "test"],
             notificationsPanel));
 
         _categoryNavItems.Add(CreateCategoryNavItem(
@@ -878,7 +1126,7 @@ public sealed class SettingsWindow : Window
             _text.LoggingSettingsGroup,
             _text.LoggingSettingsDescription,
             "M14 2H6C4.9 2 4.01 2.9 4.01 4L4 20C4 21.1 4.89 22 5.99 22H18C19.1 22 20 21.1 20 20V8L14 2ZM16 18H8V16H16V18ZM16 14H8V12H16V14ZM13 9V3.5L18.5 9H13Z",
-            ["log", "logging", "csv", "jsonl", "history", "export", "file", "path"],
+            ["log", "logging", "csv", "jsonl", "history", "export", "file", "path", "retention", "delete", "clear"],
             loggingPanel));
 
         _categoryNavItems.Add(CreateCategoryNavItem(
@@ -886,8 +1134,19 @@ public sealed class SettingsWindow : Window
             _text.AboutSettingsGroup,
             _text.AboutSettingsDescription,
             "M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V11H13V17ZM13 9H11V7H13V9Z",
-            ["version", "author", "about", "license", "info", "github", "release"],
+            ["version", "author", "about", "license", "info", "github", "release", "diagnostics", "support", "issue"],
             aboutPanel));
+
+        foreach (var item in _categoryNavItems)
+        {
+            foreach (var card in item.ContentPanel.Children.OfType<Border>())
+            {
+                if (_cardInfo.TryGetValue(card, out var info))
+                {
+                    info.Keywords = string.Join(' ', item.Keywords);
+                }
+            }
+        }
     }
 
     private Control CreatePositionGridWidget()
@@ -923,16 +1182,17 @@ public sealed class SettingsWindow : Window
                     Tag = pos
                 };
 
-                ToolTip.SetTip(tile, pos);
+                ToolTip.SetTip(tile, _text.FormatWindowPosition(pos));
+                AutomationProperties.SetName(tile, _text.FormatWindowPosition(pos));
                 tile.Click += (_, _) =>
                 {
-                    if (Equals(_position.SelectedItem, pos))
+                    if ((_position.SelectedItem as PositionChoice)?.Value == pos)
                     {
                         PositionPreviewRequested?.Invoke(pos);
                     }
                     else
                     {
-                        _position.SelectedItem = pos;
+                        _position.SelectedItem = _positionChoices.First(choice => choice.Value == pos);
                     }
                     UpdatePositionGridSelection(pos);
                     UpdateDirtyState();
@@ -1001,7 +1261,7 @@ public sealed class SettingsWindow : Window
     {
         var normalized = WindowPosition.Normalize(selectedPosition);
         var isLight = ActualThemeVariant == ThemeVariant.Light;
-        var accentBrush = SolidColorBrush.Parse(isLight ? "#0284C7" : "#38BDF8");
+        var accentBrush = _palette.Accent;
         var activeText = Brushes.White;
 
         foreach (var (pos, btn) in _positionGridButtons)
@@ -1021,8 +1281,8 @@ public sealed class SettingsWindow : Window
             }
             else
             {
-                btn.Background = SolidColorBrush.Parse(isLight ? "#F1F5F9" : "#24242A");
-                btn.BorderBrush = SolidColorBrush.Parse(isLight ? "#CBD5E1" : "#3F3F46");
+                btn.Background = _palette.Control;
+                btn.BorderBrush = _palette.ControlBorder;
                 btn.Content = new Border
                 {
                     Width = 8,
@@ -1089,10 +1349,10 @@ public sealed class SettingsWindow : Window
     {
         return new Border
         {
-            CornerRadius = new CornerRadius(6),
+            CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(12, 8),
-            Margin = new Thickness(0, 4, 0, 4),
+            Padding = new Thickness(14, 10),
+            Margin = new Thickness(0, 6, 0, 4),
             Child = statusBlock
         };
     }
@@ -1120,7 +1380,7 @@ public sealed class SettingsWindow : Window
         {
             var chip = new Button
             {
-                Content = preset,
+                Content = _text.PreviewDateTime(preset, DateTimeOffset.Now),
                 FontSize = 11,
                 FontWeight = FontWeight.Medium,
                 Padding = new Thickness(8, 3),
@@ -1131,6 +1391,7 @@ public sealed class SettingsWindow : Window
                 Cursor = new Cursor(StandardCursorType.Hand)
             };
             _presetChips.Add(chip);
+            ToolTip.SetTip(chip, preset);
             chip.Click += (_, _) =>
             {
                 targetComboBox.SelectedItem = preset;
@@ -1145,6 +1406,39 @@ public sealed class SettingsWindow : Window
     }
 
     private Border CreateSettingRow(string title, string? subtitle, Control control, bool showDivider = true)
+    {
+        var labelPanel = CreateRowLabel(title, subtitle);
+        // A switch or slider has no visible text of its own; name it for
+        // screen readers after the row it sits in.
+        AutomationProperties.SetName(control, title);
+
+        var grid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 16,
+            Margin = new Thickness(0, 8, 0, 8)
+        };
+        grid.Children.Add(labelPanel);
+        Grid.SetColumn(control, 1);
+        grid.Children.Add(control);
+
+        return FinishRow(grid, title, subtitle, showDivider);
+    }
+
+    // Label on top, the control using the full width underneath. For wide
+    // controls such as a file path that would be cramped beside the label.
+    private Border CreateStackedRow(string title, string? subtitle, Control content, bool showDivider = true)
+    {
+        var panel = new StackPanel
+        {
+            Spacing = 8,
+            Margin = new Thickness(0, 8, 0, 8),
+            Children = { CreateRowLabel(title, subtitle), content }
+        };
+        return FinishRow(panel, title, subtitle, showDivider);
+    }
+
+    private StackPanel CreateRowLabel(string title, string? subtitle)
     {
         var titleBlock = new TextBlock
         {
@@ -1169,46 +1463,92 @@ public sealed class SettingsWindow : Window
             {
                 Text = subtitle,
                 FontSize = 11.5,
-                Opacity = 0.65,
                 TextWrapping = TextWrapping.Wrap
             };
             _textSecondaryElements.Add(subBlock);
             labelPanel.Children.Add(subBlock);
         }
 
-        var grid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            ColumnSpacing = 12,
-            Margin = new Thickness(0, 6, 0, 6)
-        };
-        grid.Children.Add(labelPanel);
-        Grid.SetColumn(control, 1);
-        grid.Children.Add(control);
+        return labelPanel;
+    }
 
+    private Border FinishRow(Control content, string title, string? subtitle, bool showDivider)
+    {
         var rowContainer = new StackPanel();
-        rowContainer.Children.Add(grid);
-
+        rowContainer.Children.Add(content);
         if (showDivider)
         {
-            var divider = new Border
-            {
-                Height = 1,
-                Margin = new Thickness(0, 4, 0, 0)
-            };
+            var divider = new Border { Height = 1 };
             _dividers.Add(divider);
             rowContainer.Children.Add(divider);
         }
 
-        return new Border { Child = rowContainer };
+        var row = new Border { Child = rowContainer };
+        _rowInfo[row] = new SettingRowInfo($"{title} {subtitle}");
+        return row;
     }
+
+    private Button CreateSecondaryButton(string text)
+    {
+        var button = CreateSecondaryButtonCore(text);
+        _secondaryButtons.Add(button);
+        return button;
+    }
+
+    private static Button CreateSecondaryButtonCore(string text) => new()
+    {
+        Content = text,
+        Height = 32,
+        Padding = new Thickness(14, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+        HorizontalContentAlignment = HorizontalAlignment.Center,
+        VerticalContentAlignment = VerticalAlignment.Center,
+        CornerRadius = new CornerRadius(8),
+        Cursor = new Cursor(StandardCursorType.Hand)
+    };
+
+    private Border CreateNotice(string message)
+    {
+        var text = new TextBlock
+        {
+            Text = message,
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        var icon = new TextBlock
+        {
+            Text = "⚠",
+            FontSize = 14,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 1, 0, 0)
+        };
+        var notice = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14, 10),
+            Tag = (icon, text),
+            Child = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+                ColumnSpacing = 10,
+                Children = { icon, text }
+            }
+        };
+        Grid.SetColumn(text, 1);
+        _notices.Add(notice);
+        return notice;
+    }
+
+    private void PreviewAppearanceFromControls() =>
+        AppearancePreviewRequested?.Invoke(
+            Math.Round(_opacity.Value / 100d, 2),
+            (int)(_margin.Value ?? _settings.Margin));
 
     private Border CreateCardGroup(string? title, string? subtitle, params Control[] items)
     {
-        var panel = new StackPanel
-        {
-            Spacing = 2
-        };
+        var panel = new StackPanel { Spacing = 2 };
 
         if (!string.IsNullOrEmpty(title))
         {
@@ -1217,7 +1557,7 @@ public sealed class SettingsWindow : Window
                 Text = title,
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 14,
-                Margin = new Thickness(0, 0, 0, string.IsNullOrEmpty(subtitle) ? 8 : 2)
+                Margin = new Thickness(0, 0, 0, string.IsNullOrEmpty(subtitle) ? 6 : 2)
             };
             _textPrimaryElements.Add(titleBlock);
             panel.Children.Add(titleBlock);
@@ -1229,28 +1569,34 @@ public sealed class SettingsWindow : Window
             {
                 Text = subtitle,
                 FontSize = 11.5,
-                Opacity = 0.65,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 10)
+                Margin = new Thickness(0, 0, 0, 8)
             };
             _textSecondaryElements.Add(subBlock);
             panel.Children.Add(subBlock);
         }
 
+        var info = new CardInfo { Text = $"{title} {subtitle}" };
         foreach (var item in items)
         {
             panel.Children.Add(item);
+            info.Items.Add(item);
+            if (item is Border row && _rowInfo.ContainsKey(row))
+            {
+                info.Rows.Add(row);
+            }
         }
 
         var card = new Border
         {
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(12),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(16, 14),
-            Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(18, 14),
+            Margin = new Thickness(0, 0, 0, 2),
             Child = panel
         };
         _cards.Add(card);
+        _cardInfo[card] = info;
         return card;
     }
 
@@ -1284,21 +1630,23 @@ public sealed class SettingsWindow : Window
         };
         _textPrimaryElements.Add(titleBlock);
 
+        var brandColor = Color.Parse(brandColorHex);
         var badge = new Border
         {
-            Background = SolidColorBrush.Parse(brandColorHex),
-            Opacity = 0.85,
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6, 2),
-            Margin = new Thickness(0, 4, 0, 0),
+            Background = new SolidColorBrush(brandColor, 0.16),
+            BorderBrush = new SolidColorBrush(brandColor, 0.45),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8, 2),
+            Margin = new Thickness(0, 5, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
             Child = new TextBlock
             {
                 Text = badgeText,
-                FontSize = 10,
-                FontWeight = FontWeight.Medium,
+                FontSize = 10.5,
+                FontWeight = FontWeight.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = Brushes.White
+                Foreground = new SolidColorBrush(brandColor)
             }
         };
 
@@ -1355,7 +1703,7 @@ public sealed class SettingsWindow : Window
             {
                 BorderBrush = SolidColorBrush.Parse(brandColorHex),
                 BorderThickness = new Thickness(2, 0, 0, 0),
-                Padding = new Thickness(12, 4, 0, 4),
+                Padding = new Thickness(14, 2, 0, 2),
                 Margin = new Thickness(4, 4, 0, 0),
                 Child = subRowsPanel
             };
@@ -1368,13 +1716,20 @@ public sealed class SettingsWindow : Window
 
         var card = new Border
         {
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(12),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(16, 14),
-            Margin = new Thickness(0, 0, 0, 10),
+            Padding = new Thickness(18, 14),
+            Margin = new Thickness(0, 0, 0, 2),
             Child = cardPanel
         };
         _cards.Add(card);
+        var info = new CardInfo { Text = $"{brandName} {badgeText} {description}" };
+        if (subOptionRows is { Length: > 0 })
+        {
+            info.Rows.AddRange(subOptionRows);
+        }
+
+        _cardInfo[card] = info;
         return card;
     }
 
@@ -1391,7 +1746,7 @@ public sealed class SettingsWindow : Window
             Width = 3,
             Height = 16,
             CornerRadius = new CornerRadius(1.5),
-            Background = SolidColorBrush.Parse("#0284C7"),
+            Background = SolidColorBrush.Parse("#FF3DD598"),
             Margin = new Thickness(0, 0, 8, 0),
             IsVisible = false
         };
@@ -1468,130 +1823,248 @@ public sealed class SettingsWindow : Window
 
     private void UpdateNavSelectionStyles()
     {
-        var isLight = ActualThemeVariant == ThemeVariant.Light;
-        var activeBg = isLight ? SolidColorBrush.Parse("#E2E8F0") : SolidColorBrush.Parse("#2D2D35");
-        var activeAccent = isLight ? SolidColorBrush.Parse("#0284C7") : SolidColorBrush.Parse("#38BDF8");
-        var normalText = isLight ? SolidColorBrush.Parse("#0F172A") : SolidColorBrush.Parse("#F4F4F5");
-        var normalIcon = isLight ? SolidColorBrush.Parse("#64748B") : SolidColorBrush.Parse("#A1A1AA");
-
+        var normalIcon = _palette.TextSecondary;
         foreach (var item in _categoryNavItems)
         {
-            var isSelected = item.Category == _currentCategory;
+            // While searching, results from every page are shown together, so
+            // no single page is "selected".
+            var isSelected = !_searching && item.Category == _currentCategory;
             item.Indicator.IsVisible = isSelected;
-            item.Indicator.Background = activeAccent;
-            item.Button.Background = isSelected ? activeBg : Brushes.Transparent;
+            item.Indicator.Background = _palette.Accent;
+            item.Button.Background = isSelected ? _palette.AccentSoft : Brushes.Transparent;
             item.TitleBlock.FontWeight = isSelected ? FontWeight.SemiBold : FontWeight.Normal;
-            item.TitleBlock.Foreground = isSelected ? activeAccent : normalText;
-            item.IconPath.Fill = isSelected ? activeAccent : normalIcon;
+            item.TitleBlock.Foreground = isSelected ? _palette.Accent : _palette.TextPrimary;
+            item.IconPath.Fill = isSelected ? _palette.Accent : normalIcon;
         }
     }
 
     private void HandleSearchChanged()
     {
         var query = (_searchBox.Text ?? string.Empty).Trim();
+        RestoreSearchedCards();
         if (string.IsNullOrEmpty(query))
         {
-            foreach (var item in _categoryNavItems)
-            {
-                item.Button.IsVisible = true;
-            }
+            _searching = false;
             _noSearchResults.IsVisible = false;
             _contentScrollViewer.IsVisible = true;
+            SelectCategory(_currentCategory);
             return;
         }
 
+        _searching = true;
         var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        var visibleCount = 0;
+        var matches = 0;
         foreach (var item in _categoryNavItems)
         {
-            var searchableText = string.Join(" ", new[] { item.Title, item.Description }.Concat(item.Keywords));
-            var match = terms.All(term => searchableText.Contains(term, StringComparison.OrdinalIgnoreCase));
-
-            item.Button.IsVisible = match;
-            if (match)
+            var cards = item.ContentPanel.Children.OfType<Border>().ToList();
+            var shown = new List<Border>();
+            for (var index = 0; index < cards.Count; index++)
             {
-                visibleCount++;
+                var card = cards[index];
+                if (!_cardInfo.TryGetValue(card, out var info))
+                {
+                    continue;
+                }
+
+                var cardMatches = Matches(info.Text, terms) || Matches(info.Keywords, terms);
+                var visibleRows = 0;
+                foreach (var row in info.Rows)
+                {
+                    var rowMatches = cardMatches ||
+                        (_rowInfo.TryGetValue(row, out var rowInfo) && Matches(rowInfo.Text, terms));
+                    row.IsVisible = rowMatches;
+                    visibleRows += rowMatches ? 1 : 0;
+                }
+
+                var cardShown = info.Rows.Count == 0 ? cardMatches : visibleRows > 0;
+                if (!cardShown)
+                {
+                    continue;
+                }
+
+                // Controls that are not rows (a preview widget, format chips)
+                // belong to the card and stay with it.
+                foreach (var extra in info.Items.Where(extra => extra is not Border b || !info.Rows.Contains(b)))
+                {
+                    extra.IsVisible = true;
+                }
+
+                matches += info.Rows.Count == 0 ? 1 : visibleRows;
+                shown.Add(card);
+                _searchOrigin.Add((item.ContentPanel, card, index));
+            }
+
+            if (shown.Count == 0)
+            {
+                continue;
+            }
+
+            var heading = new TextBlock
+            {
+                Text = item.Title,
+                FontSize = 11,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(2, _searchResults.Children.Count == 0 ? 0 : 14, 0, 6)
+            };
+            _textSecondaryElements.Add(heading);
+            heading.Foreground = _palette.TextSecondary;
+            _searchResults.Children.Add(heading);
+            foreach (var card in shown)
+            {
+                item.ContentPanel.Children.Remove(card);
+                card.Margin = new Thickness(0, 0, 0, 10);
+                _searchResults.Children.Add(card);
             }
         }
 
-        var currentVisible = _categoryNavItems.FirstOrDefault(c => c.Category == _currentCategory)?.Button.IsVisible == true;
-        if (!currentVisible && visibleCount > 0)
+        _categoryTitle.Text = _text.SearchResultsHeading;
+        _categoryDescription.Text = $"“{query}”";
+        _noSearchResults.Text = _text.NoSettingsMatch;
+        _noSearchResults.IsVisible = matches == 0;
+        _contentScrollViewer.IsVisible = matches > 0;
+        _contentScrollViewer.Content = _searchResults;
+        _contentScrollViewer.Offset = new Vector(0, 0);
+        UpdateNavSelectionStyles();
+    }
+
+    private static bool Matches(string text, string[] terms) =>
+        terms.All(term => text.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+    // Put every card that search pulled out back where it came from, and make
+    // every row visible again.
+    private void RestoreSearchedCards()
+    {
+        foreach (var (panel, card, index) in _searchOrigin)
         {
-            var firstMatch = _categoryNavItems.First(c => c.Button.IsVisible);
-            SelectCategory(firstMatch.Category);
+            _searchResults.Children.Remove(card);
+            panel.Children.Insert(Math.Min(index, panel.Children.Count), card);
+            card.Margin = new Thickness(0, 0, 0, 2);
         }
 
-        _noSearchResults.IsVisible = visibleCount == 0;
-        _contentScrollViewer.IsVisible = visibleCount > 0;
+        _searchOrigin.Clear();
+        foreach (var heading in _searchResults.Children.OfType<TextBlock>().ToList())
+        {
+            _textSecondaryElements.Remove(heading);
+        }
+
+        _searchResults.Children.Clear();
+        foreach (var info in _cardInfo.Values)
+        {
+            foreach (var row in info.Rows)
+            {
+                row.IsVisible = true;
+            }
+        }
     }
 
     private void ApplyThemePalette()
     {
         var isLight = ActualThemeVariant == ThemeVariant.Light;
+        _palette = isLight ? SettingsPalette.Light : SettingsPalette.Dark;
 
-        var windowBg = isLight ? SolidColorBrush.Parse("#FFF8FAFC") : SolidColorBrush.Parse("#FF18181B");
-        var sidebarBg = isLight ? SolidColorBrush.Parse("#FFF1F5F9") : SolidColorBrush.Parse("#FF1E1E22");
-        var sidebarBorderBrush = isLight ? SolidColorBrush.Parse("#FFE2E8F0") : SolidColorBrush.Parse("#FF2D2D34");
-        var cardBg = isLight ? SolidColorBrush.Parse("#FFFFFFFF") : SolidColorBrush.Parse("#FF242428");
-        var cardBorderBrush = isLight ? SolidColorBrush.Parse("#FFE2E8F0") : SolidColorBrush.Parse("#FF34343C");
-        var dividerBrush = isLight ? SolidColorBrush.Parse("#FFF1F5F9") : SolidColorBrush.Parse("#FF2F2F37");
-        var footerBg = isLight ? SolidColorBrush.Parse("#FFF1F5F9") : SolidColorBrush.Parse("#FF1E1E22");
-        var footerBorderBrush = isLight ? SolidColorBrush.Parse("#FFE2E8F0") : SolidColorBrush.Parse("#FF2D2D34");
-        var textPrimary = isLight ? SolidColorBrush.Parse("#FF0F172A") : SolidColorBrush.Parse("#FFF4F4F5");
-        var textSecondary = isLight ? SolidColorBrush.Parse("#FF64748B") : SolidColorBrush.Parse("#FFA1A1AA");
-        var primaryButtonBg = SolidColorBrush.Parse("#FF0284C7");
+        Background = _palette.Window;
+        _sidebarBorder.Background = _palette.Sidebar;
+        _sidebarBorder.BorderBrush = _palette.SidebarBorder;
+        _footerBorder.Background = _palette.Sidebar;
+        _footerBorder.BorderBrush = _palette.SidebarBorder;
 
-        Background = windowBg;
-        _sidebarBorder.Background = sidebarBg;
-        _sidebarBorder.BorderBrush = sidebarBorderBrush;
-        _footerBorder.Background = footerBg;
-        _footerBorder.BorderBrush = footerBorderBrush;
+        _categoryTitle.Foreground = _palette.TextPrimary;
+        _categoryDescription.Foreground = _palette.TextSecondary;
+        _noSearchResults.Foreground = _palette.TextSecondary;
 
-        _categoryTitle.Foreground = textPrimary;
-        _categoryDescription.Foreground = textSecondary;
-
-        _save.Background = primaryButtonBg;
+        _save.Background = _palette.PrimaryButton;
         _save.Foreground = Brushes.White;
+
+        // Fluent paints toggles, sliders and focus rings with the system
+        // accent; point them at the app's own so controls match the chrome.
+        var accent = (SolidColorBrush)_palette.Accent;
+        foreach (var key in new[]
+                 {
+                     "ToggleSwitchFillOn", "ToggleSwitchFillOnPointerOver", "ToggleSwitchFillOnPressed",
+                     "ToggleSwitchStrokeOn", "ToggleSwitchStrokeOnPointerOver", "ToggleSwitchStrokeOnPressed",
+                     "SliderTrackValueFill", "SliderTrackValueFillPointerOver", "SliderTrackValueFillPressed",
+                     "SliderThumbBackground", "SliderThumbBackgroundPointerOver", "SliderThumbBackgroundPressed",
+                     "TextControlBorderBrushFocused", "ComboBoxBorderBrushFocused"
+                 })
+        {
+            Resources[key] = accent;
+        }
+
+        Resources["ToggleSwitchKnobFillOn"] = isLight ? Brushes.White : SolidColorBrush.Parse("#FF0F1A15");
+        Resources["ToggleSwitchKnobFillOnPointerOver"] = Resources["ToggleSwitchKnobFillOn"];
+        Resources["ToggleSwitchKnobFillOnPressed"] = Resources["ToggleSwitchKnobFillOn"];
 
         foreach (var card in _cards)
         {
-            card.Background = cardBg;
-            card.BorderBrush = cardBorderBrush;
+            card.Background = _palette.Card;
+            card.BorderBrush = _palette.CardBorder;
         }
 
         foreach (var divider in _dividers)
         {
-            divider.Background = dividerBrush;
+            divider.Background = _palette.Divider;
         }
 
         foreach (var el in _textPrimaryElements)
         {
-            el.Foreground = textPrimary;
+            el.Foreground = _palette.TextPrimary;
         }
 
         foreach (var el in _textSecondaryElements)
         {
-            el.Foreground = textSecondary;
+            el.Foreground = _palette.TextSecondary;
+        }
+
+        foreach (var button in _secondaryButtons)
+        {
+            button.Background = _palette.Control;
+            button.BorderBrush = _palette.ControlBorder;
+            button.Foreground = _palette.TextPrimary;
+            button.BorderThickness = new Thickness(1);
+        }
+
+        foreach (var notice in _notices)
+        {
+            notice.Background = new SolidColorBrush(_palette.NoticeBackground);
+            notice.BorderBrush = new SolidColorBrush(_palette.NoticeBorder);
+            if (notice.Tag is ValueTuple<TextBlock, TextBlock> parts)
+            {
+                parts.Item1.Foreground = _palette.NoticeText;
+                parts.Item2.Foreground = _palette.NoticeText;
+            }
         }
 
         if (_screenBorder is not null)
         {
-            _screenBorder.Background = SolidColorBrush.Parse(isLight ? "#F8FAFC" : "#121214");
-            _screenBorder.BorderBrush = SolidColorBrush.Parse(isLight ? "#94A3B8" : "#4B5563");
-            _screenStandStem.Background = SolidColorBrush.Parse(isLight ? "#CBD5E1" : "#374151");
-            _screenStandBase.Background = SolidColorBrush.Parse(isLight ? "#94A3B8" : "#4B5563");
+            _screenBorder.Background = isLight ? SolidColorBrush.Parse("#FFF8FAFC") : SolidColorBrush.Parse("#FF101315");
+            _screenBorder.BorderBrush = isLight ? SolidColorBrush.Parse("#FF94A3B8") : SolidColorBrush.Parse("#FF4B5563");
+            _screenStandStem.Background = isLight ? SolidColorBrush.Parse("#FFCBD5E1") : SolidColorBrush.Parse("#FF374151");
+            _screenStandBase.Background = isLight ? SolidColorBrush.Parse("#FF94A3B8") : SolidColorBrush.Parse("#FF4B5563");
         }
 
         foreach (var chip in _presetChips)
         {
-            chip.BorderBrush = SolidColorBrush.Parse(isLight ? "#CBD5E1" : "#3F3F46");
-            chip.Foreground = textSecondary;
+            chip.BorderBrush = _palette.ControlBorder;
+            chip.Foreground = _palette.TextSecondary;
         }
 
-        UpdateNavSelectionStyles();
-        if (_position.SelectedItem is string pos)
+        if (_aboutLogoBadge is not null)
         {
-            UpdatePositionGridSelection(pos);
+            _aboutLogoBadge.Background = _palette.AccentSoft;
+            _aboutVersionChip.Background = _palette.AccentSoft;
+            ((TextBlock)_aboutVersionChip.Child!).Foreground = _palette.Accent;
+        }
+
+        _diagnosticsBox.Background = _palette.Window;
+        _diagnosticsBox.BorderBrush = _palette.CardBorder;
+        _diagnosticsBox.Foreground = _palette.TextPrimary;
+        _opacityValue.Foreground = _palette.TextPrimary;
+        _unsavedIndicator.Opacity = 1;
+
+        UpdateNavSelectionStyles();
+        if (_position.SelectedItem is PositionChoice currentPosition)
+        {
+            UpdatePositionGridSelection(currentPosition.Value);
         }
 
         UpdateDateTimeFormatValidation();
@@ -1618,6 +2091,14 @@ public sealed class SettingsWindow : Window
         _language.SelectionChanged += (_, _) => UpdateDirtyState();
         _theme.SelectionChanged += (_, _) => UpdateDirtyState();
         _position.SelectionChanged += (_, _) => UpdateDirtyState();
+        _opacity.PropertyChanged += (_, eventArgs) =>
+        {
+            if (eventArgs.Property == RangeBase.ValueProperty)
+            {
+                UpdateDirtyState();
+            }
+        };
+        _margin.ValueChanged += (_, _) => UpdateDirtyState();
 
         _lowUsageAlert.IsCheckedChanged += (_, _) => UpdateDirtyState();
         _lowUsageAlertThreshold.PropertyChanged += (_, eventArgs) =>
@@ -1707,8 +2188,12 @@ public sealed class SettingsWindow : Window
         _discardPromptOpen = true;
         try
         {
-            var dialog = CreateUnsavedChangesDialog();
-            if (!await dialog.ShowDialog<bool>(this))
+            var discard = await ConfirmAsync(
+                _text.UnsavedChangesTitle,
+                _text.UnsavedChangesMessage,
+                _text.DiscardChangesAction,
+                _text.KeepEditingAction);
+            if (!discard)
             {
                 return;
             }
@@ -1720,65 +2205,6 @@ public sealed class SettingsWindow : Window
         {
             _discardPromptOpen = false;
         }
-    }
-
-    private Window CreateUnsavedChangesDialog()
-    {
-        var dialog = new Window
-        {
-            Title = _text.UnsavedChangesTitle,
-            Width = 420,
-            Height = 180,
-            CanResize = false,
-            ShowInTaskbar = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner
-        };
-        var message = new TextBlock
-        {
-            Text = _text.UnsavedChangesMessage,
-            TextWrapping = TextWrapping.Wrap
-        };
-        var discard = new Button
-        {
-            Content = _text.DiscardChangesAction,
-            MinWidth = 112,
-            HorizontalContentAlignment = HorizontalAlignment.Center
-        };
-        discard.Click += (_, _) => dialog.Close(true);
-        var keepEditing = new Button
-        {
-            Content = _text.KeepEditingAction,
-            MinWidth = 112,
-            HorizontalContentAlignment = HorizontalAlignment.Center
-        };
-        keepEditing.Click += (_, _) => dialog.Close(false);
-        var actions = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 8,
-            Children = { discard, keepEditing }
-        };
-        var layout = new Grid
-        {
-            RowDefinitions = new RowDefinitions("*,Auto"),
-            Margin = new Thickness(24)
-        };
-        Grid.SetRow(actions, 1);
-        layout.Children.Add(message);
-        layout.Children.Add(actions);
-        dialog.Content = layout;
-        dialog.KeyDown += (_, eventArgs) =>
-        {
-            if (eventArgs.Key != Key.Escape)
-            {
-                return;
-            }
-
-            eventArgs.Handled = true;
-            dialog.Close(false);
-        };
-        return dialog;
     }
 
     private void SaveAndClose()
@@ -1832,7 +2258,9 @@ public sealed class SettingsWindow : Window
             ShowCodexWeekly = _showCodexWeekly.IsChecked == true,
             Language = (_language.SelectedItem as LanguageChoice)?.Value ?? "en-US",
             Theme = (_theme.SelectedItem as ThemeChoice)?.Value ?? UiThemeOptions.System,
-            Position = _position.SelectedItem as string ?? WindowPosition.RightBottom,
+            Position = (_position.SelectedItem as PositionChoice)?.Value ?? WindowPosition.RightBottom,
+            Opacity = Math.Round(_opacity.Value / 100d, 2),
+            Margin = (int)(_margin.Value ?? _settings.Margin),
             RefreshIntervalSeconds =
                 (_updateInterval.SelectedItem as UpdateIntervalChoice)?.Seconds ??
                 UpdateIntervalOptions.MinimumSeconds,
@@ -1933,24 +2361,25 @@ public sealed class SettingsWindow : Window
 
     private bool UpdateDateTimeFormatValidation()
     {
-        var sample = new DateTimeOffset(
-            2026,
-            8,
-            6,
-            13,
-            55,
-            9,
-            TimeSpan.Zero);
+        var now = DateTimeOffset.Now;
         var resetValid = UpdateDateTimeFormatStatus(
             CurrentFormat(_resetDateTimeFormat),
             _resetDateTimeFormatStatus,
             _resetFormatBadge,
-            sample);
+            now,
+            format =>
+            {
+                // How a countdown and its reset moment read together on a card.
+                var preview = UiText.For(_text.Language, format, _text.LastUpdatedDateTimeFormat);
+                var reset = now.AddDays(2).AddHours(3);
+                return $"{preview.FormatResetsIn(reset, now)}  ·  {preview.FormatResetMoment(reset, now)}";
+            });
         var lastUpdatedValid = UpdateDateTimeFormatStatus(
             CurrentFormat(_lastUpdatedDateTimeFormat),
             _lastUpdatedDateTimeFormatStatus,
             _lastUpdatedFormatBadge,
-            sample);
+            now,
+            format => UiText.For(_text.Language, _text.ResetDateTimeFormat, format).FormatUpdatedTime(now));
         _save.IsEnabled = resetValid && lastUpdatedValid;
         _apply.IsEnabled = _save.IsEnabled;
         return _save.IsEnabled;
@@ -1960,31 +2389,32 @@ public sealed class SettingsWindow : Window
         string format,
         TextBlock status,
         Border? badge,
-        DateTimeOffset sample)
+        DateTimeOffset sample,
+        Func<string, string> inContext)
     {
         var isLight = ActualThemeVariant == ThemeVariant.Light;
 
         if (_text.TryFormatDateTime(sample, format, out var preview))
         {
-            status.Text = $"✓ {_text.FormatPreview}: {preview}";
-            status.Foreground = SolidColorBrush.Parse(isLight ? "#059669" : "#34D399");
+            status.Text = $"✓ {_text.FormatPreview}: {preview}\n{inContext(format)}";
+            status.Foreground = SolidColorBrush.Parse(isLight ? "#FF0F7A55" : "#FF3DD598");
 
             if (badge is not null)
             {
-                badge.Background = SolidColorBrush.Parse(isLight ? "#ECFDF5" : "#064E3B40");
-                badge.BorderBrush = SolidColorBrush.Parse(isLight ? "#A7F3D0" : "#059669");
+                badge.Background = SolidColorBrush.Parse(isLight ? "#FFEAF7F1" : "#1F3DD598");
+                badge.BorderBrush = SolidColorBrush.Parse(isLight ? "#FFB5E2CD" : "#663DD598");
             }
 
             return true;
         }
 
         status.Text = $"⚠ {_text.InvalidDateTimeFormat}";
-        status.Foreground = SolidColorBrush.Parse(isLight ? "#DC2626" : "#F87171");
+        status.Foreground = SolidColorBrush.Parse(isLight ? "#FFC62828" : "#FFFF8A80");
 
         if (badge is not null)
         {
-            badge.Background = SolidColorBrush.Parse(isLight ? "#FEF2F2" : "#7F1D1D40");
-            badge.BorderBrush = SolidColorBrush.Parse(isLight ? "#FECACA" : "#DC2626");
+            badge.Background = SolidColorBrush.Parse(isLight ? "#FFFDEEEE" : "#26FF6B6B");
+            badge.BorderBrush = SolidColorBrush.Parse(isLight ? "#FFF3C4C4" : "#59FF6B6B");
         }
 
         return false;
@@ -1993,6 +2423,277 @@ public sealed class SettingsWindow : Window
     private static string CurrentFormat(ComboBox comboBox)
     {
         return (comboBox.Text ?? comboBox.SelectedItem as string ?? string.Empty).Trim();
+    }
+
+    private void HandleSearchShortcut(object? sender, KeyEventArgs eventArgs)
+    {
+        if (eventArgs.Key == Key.F && (eventArgs.KeyModifiers & KeyModifiers.Control) != 0)
+        {
+            eventArgs.Handled = true;
+            _searchBox.Focus();
+            _searchBox.SelectAll();
+        }
+    }
+
+    // ---- Usage history file (Logging page) --------------------------------
+
+    private string SelectedLogFormat() =>
+        _usageLogFormat.SelectedItem as string ?? UsageLogOptions.Csv;
+
+    private string CurrentLogPath() =>
+        UsageLogOptions.NormalizeFilePath(_usageLogFilePath.Text, SelectedLogFormat());
+
+    private DispatcherTimer? _historyInfoTimer;
+
+    // Typing a path fires a change per key; wait for a pause before touching the disk.
+    private void ScheduleHistoryFileInfoRefresh()
+    {
+        _historyInfoTimer?.Stop();
+        _historyInfoTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        _historyInfoTimer.Tick += (_, _) =>
+        {
+            _historyInfoTimer?.Stop();
+            _ = RefreshHistoryFileInfoAsync();
+        };
+        _historyInfoTimer.Start();
+    }
+
+    private async Task RefreshHistoryFileInfoAsync()
+    {
+        var version = ++_historyInfoVersion;
+        var path = CurrentLogPath();
+        var info = await Task.Run(() => ReadHistoryFileInfo(path));
+        if (version != _historyInfoVersion)
+        {
+            return;
+        }
+
+        _historyFileInfo.Text = info is { } value
+            ? _text.FormatHistoryFileInfo(value.Bytes, value.Records)
+            : _text.NoHistoryFileYet;
+        _clearHistoryButton.IsEnabled = info is not null;
+        var directory = System.IO.Path.GetDirectoryName(path);
+        _openFolderButton.IsEnabled = !string.IsNullOrEmpty(directory) && System.IO.Directory.Exists(directory);
+        ToolTip.SetTip(_historyFileInfo, path);
+    }
+
+    // Size and record count without parsing: records are lines, less the CSV header.
+    internal static (long Bytes, int Records)? ReadHistoryFileInfo(string path)
+    {
+        try
+        {
+            var file = new System.IO.FileInfo(path);
+            if (!file.Exists)
+            {
+                return null;
+            }
+
+            var lines = 0;
+            using (var stream = new System.IO.FileStream(
+                       path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite))
+            {
+                var buffer = new byte[81920];
+                int read;
+                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    for (var index = 0; index < read; index++)
+                    {
+                        if (buffer[index] == (byte)10)
+                        {
+                            lines++;
+                        }
+                    }
+                }
+            }
+
+            var isCsv = string.Equals(
+                System.IO.Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase);
+            return (file.Length, Math.Max(0, isCsv ? lines - 1 : lines));
+        }
+        catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private void OpenHistoryFolder()
+    {
+        var directory = System.IO.Path.GetDirectoryName(CurrentLogPath());
+        if (string.IsNullOrEmpty(directory) || !System.IO.Directory.Exists(directory))
+        {
+            return;
+        }
+
+        try
+        {
+            var startInfo = new ProcessStartInfo { FileName = "xdg-open", UseShellExecute = false };
+            startInfo.ArgumentList.Add(directory);
+            using var process = Process.Start(startInfo);
+        }
+        catch (Exception exception) when (
+            exception is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            CompanionLog.Shared.Write("settings-open-folder", exception);
+        }
+    }
+
+    private async Task ClearHistoryAsync()
+    {
+        var path = CurrentLogPath();
+        var info = ReadHistoryFileInfo(path);
+        if (info is not { } value)
+        {
+            await RefreshHistoryFileInfoAsync();
+            return;
+        }
+
+        var confirmed = await ConfirmAsync(
+            _text.ClearHistoryConfirmTitle,
+            _text.FormatClearHistoryConfirm(path, _text.FormatHistoryFileInfo(value.Bytes, value.Records)),
+            _text.ClearHistoryConfirmAction);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            System.IO.File.Delete(path);
+            UsageHistoryReader.ClearCache();
+        }
+        catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException)
+        {
+            CompanionLog.Shared.Write("settings-clear-history", exception);
+            _historyFileInfo.Text = exception.Message;
+            return;
+        }
+
+        await RefreshHistoryFileInfoAsync();
+    }
+
+    private async Task<bool> ConfirmAsync(
+        string title,
+        string message,
+        string confirmLabel,
+        string? cancelLabel = null)
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 440,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Background = _palette.Window
+        };
+        var heading = new TextBlock
+        {
+            Text = title,
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = _palette.TextPrimary
+        };
+        var body = new TextBlock
+        {
+            Text = message,
+            FontSize = 12.5,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = _palette.TextSecondary
+        };
+        var cancel = CreateSecondaryButtonCore(cancelLabel ?? _text.CancelAction);
+        cancel.MinWidth = 96;
+        cancel.Background = _palette.Control;
+        cancel.BorderBrush = _palette.ControlBorder;
+        cancel.Foreground = _palette.TextPrimary;
+        cancel.BorderThickness = new Thickness(1);
+        cancel.Click += (_, _) => dialog.Close(false);
+        var confirm = CreateSecondaryButtonCore(confirmLabel);
+        confirm.MinWidth = 96;
+        confirm.Background = SolidColorBrush.Parse("#FFC0392B");
+        confirm.Foreground = Brushes.White;
+        confirm.Click += (_, _) => dialog.Close(true);
+        dialog.Content = new StackPanel
+        {
+            Spacing = 10,
+            Margin = new Thickness(24, 22, 24, 20),
+            Children =
+            {
+                heading,
+                body,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Spacing = 8,
+                    Margin = new Thickness(0, 12, 0, 0),
+                    Children = { cancel, confirm }
+                }
+            }
+        };
+        dialog.KeyDown += (_, eventArgs) =>
+        {
+            if (eventArgs.Key == Key.Escape)
+            {
+                eventArgs.Handled = true;
+                dialog.Close(false);
+            }
+        };
+        return await dialog.ShowDialog<bool>(this);
+    }
+
+    // ---- About page --------------------------------------------------------
+
+    private void RefreshDiagnostics()
+    {
+        var version = typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        long? logBytes = null;
+        try
+        {
+            var path = UsageLogOptions.NormalizeFilePath(_settings.UsageLogFilePath, _settings.UsageLogFormat);
+            if (System.IO.File.Exists(path))
+            {
+                logBytes = new System.IO.FileInfo(path).Length;
+            }
+        }
+        catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException)
+        {
+            // The size is a nicety for the report; leave it out.
+        }
+
+        _diagnosticsBox.Text = SettingsDiagnostics.Build(_settings, version, logBytes);
+    }
+
+    private async Task CopyDiagnosticsAsync()
+    {
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            return;
+        }
+
+        var dataTransfer = new DataTransfer();
+        dataTransfer.Add(DataTransferItem.CreateText(_diagnosticsBox.Text ?? string.Empty));
+        await clipboard.SetDataAsync(dataTransfer);
+        _copyDiagnosticsButton.Content = $"✓ {_text.CopiedNotice}";
+        await Task.Delay(1800);
+        _copyDiagnosticsButton.Content = _text.CopyDiagnosticsAction;
+    }
+
+    private async Task OpenUrlAsync(string url)
+    {
+        try
+        {
+            var launcher = TopLevel.GetTopLevel(this)?.Launcher;
+            if (launcher is not null)
+            {
+                await launcher.LaunchUriAsync(new Uri(url));
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or UriFormatException)
+        {
+            CompanionLog.Shared.Write("settings-open-url", exception);
+        }
     }
 
     private sealed record LanguageChoice(string Value, string DisplayName)

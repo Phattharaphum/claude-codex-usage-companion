@@ -793,6 +793,440 @@ public sealed record UiText(
             : FormatDateTime(localReset, ResetDateTimeFormat);
     }
 
+    // ---- Settings window -------------------------------------------------
+
+    public string TrayTaskbarGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "系統匣與工作列",
+        UiLanguage.SimplifiedChinese => "系统托盘与任务栏",
+        _ => "System tray & taskbar"
+    };
+
+    public string TrayTaskbarGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "除浮動視窗外，應用程式顯示的位置。",
+        UiLanguage.SimplifiedChinese => "除浮动窗口外，应用程序显示的位置。",
+        _ => "Where the companion appears besides its overlay."
+    };
+
+    public string StartupBehaviorGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "啟動與行為",
+        UiLanguage.SimplifiedChinese => "启动与行为",
+        _ => "Startup & behavior"
+    };
+
+    public string StartupBehaviorGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "應用程式如何啟動並在桌面上運作。",
+        UiLanguage.SimplifiedChinese => "应用程序如何启动并在桌面上运行。",
+        _ => "How the app launches and behaves on your desktop."
+    };
+
+    public string ProviderTagClaude => Language switch
+    {
+        UiLanguage.TraditionalChinese => "5 小時 · 每週",
+        UiLanguage.SimplifiedChinese => "5 小时 · 每周",
+        _ => "5-hour · Weekly"
+    };
+
+    public string ProviderTagCodex => Language switch
+    {
+        UiLanguage.TraditionalChinese => "5 小時 · 每週",
+        UiLanguage.SimplifiedChinese => "5 小时 · 每周",
+        _ => "5-hour · Weekly"
+    };
+
+    public string ProviderTagAntigravity => Language switch
+    {
+        UiLanguage.TraditionalChinese => "Gemini · Claude 與 GPT 額度池",
+        UiLanguage.SimplifiedChinese => "Gemini · Claude 与 GPT 额度池",
+        _ => "Gemini · Claude & GPT pools"
+    };
+
+    public string RefreshGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "更新",
+        UiLanguage.SimplifiedChinese => "刷新",
+        _ => "Refresh"
+    };
+
+    public string LanguageThemeGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "語言與主題",
+        UiLanguage.SimplifiedChinese => "语言与主题",
+        _ => "Language & theme"
+    };
+
+    public string LanguageThemeGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "選擇介面語言與色彩主題。",
+        UiLanguage.SimplifiedChinese => "选择界面语言与颜色主题。",
+        _ => "Choose the interface language and colour theme."
+    };
+
+    public string OverlayPlacementGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "浮動視窗位置",
+        UiLanguage.SimplifiedChinese => "浮动窗口位置",
+        _ => "Overlay placement"
+    };
+
+    public string OverlayPlacementGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "浮動視窗在螢幕上的位置與外觀。",
+        UiLanguage.SimplifiedChinese => "浮动窗口在屏幕上的位置与外观。",
+        _ => "Where the overlay sits on screen and how it looks."
+    };
+
+    public string PositionHint => Language switch
+    {
+        UiLanguage.TraditionalChinese => "在此選擇位置，或點選下方的螢幕示意圖。",
+        UiLanguage.SimplifiedChinese => "在此选择位置，或点击下方的屏幕示意图。",
+        _ => "Pick a position here, or click the screen below."
+    };
+
+    public string OpacityOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "視窗不透明度",
+        UiLanguage.SimplifiedChinese => "窗口不透明度",
+        _ => "Overlay opacity"
+    };
+
+    public string OpacityDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "數值越低，越能透出桌面。",
+        UiLanguage.SimplifiedChinese => "数值越低，越能透出桌面。",
+        _ => "Lower values let the desktop show through."
+    };
+
+    public string MarginOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "螢幕邊距",
+        UiLanguage.SimplifiedChinese => "屏幕边距",
+        _ => "Screen margin"
+    };
+
+    public string MarginDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "與螢幕邊緣的距離（像素）。",
+        UiLanguage.SimplifiedChinese => "与屏幕边缘的距离（像素）。",
+        _ => "Distance from the screen edge, in pixels."
+    };
+
+    public string NotificationAlertsGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "提醒",
+        UiLanguage.SimplifiedChinese => "提醒",
+        _ => "Alerts"
+    };
+
+    public string NotificationAlertsGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "額度警告與重置通知。",
+        UiLanguage.SimplifiedChinese => "额度警告与重置通知。",
+        _ => "Quota warnings and reset notices."
+    };
+
+    public string TestNotificationOption => Language switch
+    {
+        UiLanguage.TraditionalChinese => "測試通知",
+        UiLanguage.SimplifiedChinese => "测试通知",
+        _ => "Test notification"
+    };
+
+    public string TestNotificationDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "傳送範例通知，確認桌面是否會顯示。",
+        UiLanguage.SimplifiedChinese => "发送示例通知，确认桌面是否会显示。",
+        _ => "Send a sample notification to check that your desktop shows it."
+    };
+
+    public string TestNotificationAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "傳送測試",
+        UiLanguage.SimplifiedChinese => "发送测试",
+        _ => "Send test"
+    };
+
+    public string TestNotificationTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "用量小幫手",
+        UiLanguage.SimplifiedChinese => "用量助手",
+        _ => "Usage Companion"
+    };
+
+    public string TestNotificationBody => Language switch
+    {
+        UiLanguage.TraditionalChinese => "通知運作正常。",
+        UiLanguage.SimplifiedChinese => "通知运行正常。",
+        _ => "Notifications are working."
+    };
+
+    public string ResetFormatGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "重置時間",
+        UiLanguage.SimplifiedChinese => "重置时间",
+        _ => "Reset time"
+    };
+
+    public string ResetFormatGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "額度重置時間的顯示方式。",
+        UiLanguage.SimplifiedChinese => "额度重置时间的显示方式。",
+        _ => "How a quota's reset time is written."
+    };
+
+    public string LastUpdatedFormatGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "最後更新",
+        UiLanguage.SimplifiedChinese => "最后更新",
+        _ => "Last updated"
+    };
+
+    public string LastUpdatedFormatGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "最近一次更新時間的顯示方式。",
+        UiLanguage.SimplifiedChinese => "最近一次刷新时间的显示方式。",
+        _ => "How the time of the latest refresh is written."
+    };
+
+    public string FormatPreviewLabel => Language switch
+    {
+        UiLanguage.TraditionalChinese => "預覽",
+        UiLanguage.SimplifiedChinese => "预览",
+        _ => "Preview"
+    };
+
+    public string HistoryFileGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "歷史記錄檔",
+        UiLanguage.SimplifiedChinese => "历史记录文件",
+        _ => "History file"
+    };
+
+    public string HistoryFileGroupDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "額度樣本的寫入位置與保留時間。",
+        UiLanguage.SimplifiedChinese => "额度样本的写入位置与保留时间。",
+        _ => "Where quota samples are written and how long they are kept."
+    };
+
+    public string OpenFolderAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "開啟資料夾",
+        UiLanguage.SimplifiedChinese => "打开文件夹",
+        _ => "Open folder"
+    };
+
+    public string ClearHistoryAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "清除歷史…",
+        UiLanguage.SimplifiedChinese => "清除历史…",
+        _ => "Clear history…"
+    };
+
+    public string ClearHistoryConfirmTitle => Language switch
+    {
+        UiLanguage.TraditionalChinese => "清除用量歷史？",
+        UiLanguage.SimplifiedChinese => "清除用量历史？",
+        _ => "Clear usage history?"
+    };
+
+    public string ClearHistoryConfirmAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "清除",
+        UiLanguage.SimplifiedChinese => "清除",
+        _ => "Clear"
+    };
+
+    public string NoHistoryFileYet => Language switch
+    {
+        UiLanguage.TraditionalChinese => "尚未記錄任何歷史",
+        UiLanguage.SimplifiedChinese => "尚未记录任何历史",
+        _ => "No history recorded yet"
+    };
+
+    public string AboutDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "在同一處追蹤 Claude、Codex 與 Antigravity 額度的桌面小幫手。",
+        UiLanguage.SimplifiedChinese => "在同一处跟踪 Claude、Codex 和 Antigravity 额度的桌面助手。",
+        _ => "Desktop companion that tracks Claude, Codex and Antigravity quota in one place."
+    };
+
+    public string ProjectPageAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "專案頁面",
+        UiLanguage.SimplifiedChinese => "项目页面",
+        _ => "Project page"
+    };
+
+    public string ReportIssueAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "回報問題",
+        UiLanguage.SimplifiedChinese => "报告问题",
+        _ => "Report an issue"
+    };
+
+    public string LicenseAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "授權條款",
+        UiLanguage.SimplifiedChinese => "许可证",
+        _ => "License"
+    };
+
+    public string ChangelogAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "更新內容",
+        UiLanguage.SimplifiedChinese => "更新内容",
+        _ => "What's new"
+    };
+
+    public string OriginalProjectAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "原始專案",
+        UiLanguage.SimplifiedChinese => "原始项目",
+        _ => "Original project"
+    };
+
+    public string CopyDiagnosticsAction => Language switch
+    {
+        UiLanguage.TraditionalChinese => "複製診斷資訊",
+        UiLanguage.SimplifiedChinese => "复制诊断信息",
+        _ => "Copy diagnostics"
+    };
+
+    public string CopiedNotice => Language switch
+    {
+        UiLanguage.TraditionalChinese => "已複製",
+        UiLanguage.SimplifiedChinese => "已复制",
+        _ => "Copied"
+    };
+
+    public string DiagnosticsDescription => Language switch
+    {
+        UiLanguage.TraditionalChinese => "供回報問題使用的版本、系統與設定摘要，不含任何憑證。",
+        UiLanguage.SimplifiedChinese => "供报告问题使用的版本、系统与设置摘要，不含任何凭据。",
+        _ => "Version, system and settings summary for bug reports. It contains no credentials."
+    };
+
+    public string NoSettingsMatch => Language switch
+    {
+        UiLanguage.TraditionalChinese => "找不到符合的設定。",
+        UiLanguage.SimplifiedChinese => "找不到匹配的设置。",
+        _ => "No settings match your search."
+    };
+
+    public string SearchResultsHeading => Language switch
+    {
+        UiLanguage.TraditionalChinese => "搜尋結果",
+        UiLanguage.SimplifiedChinese => "搜索结果",
+        _ => "Search results"
+    };
+
+    public string FormatWindowPosition(string position) => WindowPosition.Normalize(position) switch
+    {
+        WindowPosition.LeftTop => Language switch
+        {
+            UiLanguage.TraditionalChinese => "左上",
+            UiLanguage.SimplifiedChinese => "左上",
+            _ => "Top left"
+        },
+        WindowPosition.MiddleTop => Language switch
+        {
+            UiLanguage.TraditionalChinese => "上方置中",
+            UiLanguage.SimplifiedChinese => "顶部居中",
+            _ => "Top center"
+        },
+        WindowPosition.RightTop => Language switch
+        {
+            UiLanguage.TraditionalChinese => "右上",
+            UiLanguage.SimplifiedChinese => "右上",
+            _ => "Top right"
+        },
+        WindowPosition.LeftCenter => Language switch
+        {
+            UiLanguage.TraditionalChinese => "左側置中",
+            UiLanguage.SimplifiedChinese => "左侧居中",
+            _ => "Middle left"
+        },
+        WindowPosition.MiddleCenter => Language switch
+        {
+            UiLanguage.TraditionalChinese => "正中央",
+            UiLanguage.SimplifiedChinese => "正中",
+            _ => "Center"
+        },
+        WindowPosition.RightCenter => Language switch
+        {
+            UiLanguage.TraditionalChinese => "右側置中",
+            UiLanguage.SimplifiedChinese => "右侧居中",
+            _ => "Middle right"
+        },
+        WindowPosition.LeftBottom => Language switch
+        {
+            UiLanguage.TraditionalChinese => "左下",
+            UiLanguage.SimplifiedChinese => "左下",
+            _ => "Bottom left"
+        },
+        WindowPosition.MiddleBottom => Language switch
+        {
+            UiLanguage.TraditionalChinese => "下方置中",
+            UiLanguage.SimplifiedChinese => "底部居中",
+            _ => "Bottom center"
+        },
+        _ => Language switch
+        {
+            UiLanguage.TraditionalChinese => "右下",
+            UiLanguage.SimplifiedChinese => "右下",
+            _ => "Bottom right"
+        }
+    };
+
+    /// <summary>The given moment written in a candidate date format, for live previews.</summary>
+    public string PreviewDateTime(string format, DateTimeOffset value) =>
+        FormatDateTime(value, format);
+
+    public string FormatHistoryFileInfo(long bytes, int records)
+    {
+        var size = bytes >= 1_048_576
+            ? $"{bytes / 1_048_576d:0.0} MB"
+            : bytes >= 1024 ? $"{bytes / 1024d:0.#} KB" : $"{bytes} B";
+        return Language switch
+        {
+            UiLanguage.TraditionalChinese => $"{size} · {records:N0} 筆記錄",
+            UiLanguage.SimplifiedChinese => $"{size} · {records:N0} 条记录",
+            _ => $"{size} · {records:N0} records"
+        };
+    }
+
+    public string FormatClearHistoryConfirm(string path, string info) => Language switch
+    {
+        UiLanguage.TraditionalChinese => $"這會永久刪除 {path}（{info}），並從零開始重新記錄。",
+        UiLanguage.SimplifiedChinese => $"这会永久删除 {path}（{info}），并从零开始重新记录。",
+        _ => $"This permanently deletes {path} ({info}). Recording starts again from scratch."
+    };
+
+    public string NotifySendMissingNotice => Language switch
+    {
+        UiLanguage.TraditionalChinese => "找不到 notify-send，因此不會顯示桌面通知。請安裝 libnotify-bin（或發行版對應的套件）。",
+        UiLanguage.SimplifiedChinese => "找不到 notify-send，因此不会显示桌面通知。请安装 libnotify-bin（或发行版对应的软件包）。",
+        _ => "notify-send was not found, so desktop notifications cannot be shown. Install libnotify-bin (or your distribution's equivalent)."
+    };
+
+    public string TestNotificationSentNotice => Language switch
+    {
+        UiLanguage.TraditionalChinese => "已傳送",
+        UiLanguage.SimplifiedChinese => "已发送",
+        _ => "Sent"
+    };
+
+    public string DiagnosticsGroup => Language switch
+    {
+        UiLanguage.TraditionalChinese => "診斷資訊",
+        UiLanguage.SimplifiedChinese => "诊断信息",
+        _ => "Diagnostics"
+    };
+
     public string EnableCodexUsageOption => Language switch
     {
         UiLanguage.TraditionalChinese => "啟用 Codex 用量顯示",
